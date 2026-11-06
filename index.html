@@ -700,6 +700,25 @@
         }
     }
 
+    function playBeep() {
+        try {
+            if (navigator.vibrate) navigator.vibrate([600, 200, 600]);
+            if (sirenAudio) sirenAudio.play().catch(function() {});
+            
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            setTimeout(function() { osc.stop(); }, 450);
+        } catch(e) {}
+    }
+
     function createWavUrl(freq, durationSec, volume) {
         const sr = 8000;
         const numSamples = sr * durationSec;
@@ -1075,10 +1094,12 @@
         const now = new Date();
         const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
         
-        let ackValues = new Array(COLUMNS_CONFIG.length).fill("-");
-        ackValues.splice(0, 1, "✅ ОЗНАКОМЛЕН");
-        ackValues.splice(1, 1, "ОТ: " + (currentAlertSender || ADMIN_NAME));
-        ackValues.splice(ackValues.length - 1, 1, 'Сообщение: ' + currentAlertText);
+    // Исправлено: заменено с ack на правильные индексы массива:
+    let ackValues = new Array(COLUMNS_CONFIG.length).fill("-");
+    ackValues[0] = "✅ ОЗНАКОМЛЕН";
+    ackValues[1] = "ОТ: " + (currentAlertSender || ADMIN_NAME);
+    ackValues[ackValues.length - 1] = 'Сообщение: ' + currentAlertText;
+
 
         ws.send(JSON.stringify({
             type: 'add_row',
