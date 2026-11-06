@@ -297,6 +297,7 @@
         }
         th { background: var(--table-header); color: #94a3b8; }
         .new-row { animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .time-cell { color: #facc15; font-family: monospace; }
         .user-cell { font-weight: bold; }
         .ack-row td {
@@ -362,7 +363,6 @@
     </style>
 </head>
 <body>
-    <!-- ОКНО ВИДЕОСТРИМА -->
     <div id="stream-window">
         <div style="width: 100%; background: #1e293b; padding: 15px 20px; border-bottom: 2px solid #3b82f6; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; box-sizing: border-box; z-index: 10;">
             <div style="font-size: 18px; font-weight: bold; color: #f1f5f9;">📡 Видеострим МСБ55115</div>
@@ -386,7 +386,6 @@
         </div>
     </div>
 
-    <!-- МОДАЛЬНОЕ ОКНО ТРЕВОГИ -->
     <div id="alert-modal">
         <div class="alert-content">
             <h1 id="alert-target-label" style="margin: 0 0 10px 0; font-size: 32px; font-weight: 900; letter-spacing: 1px;">🛑 ВНИМАНИЕ!</h1>
@@ -406,7 +405,7 @@
                 <button type="button" onclick="selectSubdivision(4, 'АДМИН', '#ef4444')" style="grid-column: span 2; padding: 12px; background: #1e293b; color: #ef4444; border: 2px solid #ef4444; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">🛠️ АДМИНИСТРАТОР</button>
             </div>
             <select id="login-select" style="display: none;"></select>
-            <div id="password-block" style="display: none; animation: fadeIn 0.3s ease;">
+            <div id="password-block" style="display: none;">
                 <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px; font-weight: bold;">2. ВВЕДИТЕ ПАРОЛЬ ДЛЯ <span id="selected-user-label" style="text-transform: uppercase;"></span>:</div>
                 <input type="password" id="login-pass" placeholder="••••" autocomplete="off" oninput="document.getElementById('login-error').style.display='none'">
                 <button type="button" onclick="attemptLogin()">ВОЙТИ В СИСТЕМУ</button>
@@ -417,7 +416,6 @@
             <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none; font-weight: bold;">❌ Неверный пароль</div>
         </div>
     </div>
-
     <div class="input-panel" id="input-panel">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
             <h3 style="margin:0;">📝 ПОДРАЗДЕЛЕНИЕ: <span id="my-name"></span></h3>
@@ -430,7 +428,6 @@
         <div class="inputs-grid" id="dynamic-inputs"></div>
         <button type="button" class="send-btn" onclick="submitRow()">📤 ЗАПИСАТЬ В ЖУРНАЛ</button>
         <button type="button" class="stream-btn" onclick="openStream()">📺 ВИДЕОСТРИМ МСБ55115</button>
-        
         <div id="admin-zone">
             <h3 style="color: #ef4444; margin-top: 0;">⚡ УПРАВЛЕНИЕ И СВЯЗЬ</h3>
             <div style="color: #fca5a5; margin-bottom: 10px; font-size: 14px;">Отправить уведомление подразделению:</div>
@@ -484,22 +481,24 @@
     ];
     const ADMIN_NAME = "АДМИН";
     const COLUMNS_CONFIG = [
-        { label: "ГРУППА", options: ["1", "2", "3", "4", "5"] },
-        { label: "ИСХОДНИКИ", options: [
+        { label: "ГРУППА", options: Array.of("1", "2", "3", "4", "5") },
+        { label: "ИСХОДНИКИ", options: Array.of(
             "НАЧАЛИ ДВИЖЕНИЕ", "ЖДУТ", "ИДУТ", "ПЕРЕСЕКАЮТ ОТКРЫТКУ",
             "ПРОШЛИ ИСХОДНЫЙ ПУНКТ", "ЗАНЯТИЕ Р-НА ФОР-Я ГРУПП",
             "ЗАНЯТИЕ ПЕРЕФОР-Я Р-НА ГРУПП", "ВЫХОД НА РУБЕЖ АТАКИ",
             "ВЫХОД НА РУБЕЖ ШТУРМА", "ЗАНИМАЮТСЯ МЕДИЦИНОЙ",
             "ЗАНИМАЮТСЯ СВЯЗЬЮ", "ОБОРОНА", "РАБОТАЮТ В ОБОРОНЕ",
             "ШТУРМУЮТ", "РВБС"
-        ]},
-        { label: "ЦВЕТ ТОЧКИ", options: [
+        )},
+        { label: "ЦВЕТ ТОЧКИ", options: Array.of(
             "ФИОЛЕТОВЫЙ", "БИРЮЗОВАЯ", "БИРЮЗОВАЯ-А", "СЕРАЯ", "ЗЕЛЕНАЯ",
             "СИНИЯ", "ЖЕЛТАЯ", "ОРАНЖЕВАЯ", "КРАСНАЯ", "РОЗОВАЯ",
             "РОЗОВАЯ-А", "БЕЖЕВАЯ", "КОРИЧНЕВАЯ", "ЧЕРНАЯ", "БОРДОВАЯ"
-        ]},
+        )}
+    ];
+    const EXT_COLUMNS_CONFIG = [
         { label: "НОМЕР ТОЧКИ", options: new Array(), allowSlashFraction: true },
-        { label: "ЛЕСОПОЛОСА", options: [
+        { label: "ЛЕСОПОЛОСА", options: Array.of(
             "ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "ЗАМЕНА", "КРАСКА",
             "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7",
             "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1",
@@ -516,24 +515,17 @@
             "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1",
             "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН",
             "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"
-        ]},
-        { label: "ПРИМЕЧАЯНИЯ", options: new Array() }
+        )},
+        { label: "ПРИМЕЧАНИЯ", options: new Array() }
     ];
+    EXT_COLUMNS_CONFIG.forEach(function(c) { COLUMNS_CONFIG.push(c); });
 
-    let ws = null;
-    let currentUser = null;
-    let userColor = '#fff';
-    let currentAlertText = "";
-    let currentAlertTarget = "";
-    let currentAlertSender = "";
-    let pendingAlerts = {};
-    let titleInterval = null;
-    let soundInterval = null;
-    let audioCtx = null;
-    let keepAliveAudio = null;
-    let sirenAudio = null;
-    let publicVapidKey = null;
-    let deferredPrompt = null;
+    let ws = null; let currentUser = null; let userColor = '#fff';
+    let currentAlertText = ""; let currentAlertTarget = ""; let currentAlertSender = "";
+    let pendingAlerts = {}; let titleInterval = null; let soundInterval = null;
+    let audioCtx = null; let keepAliveAudio = null; let sirenAudio = null;
+    let publicVapidKey = null; let deferredPrompt = null;
+    window.currentSharedStreamUrl = localStorage.getItem('msb_stream_url') || ''; window.streamWs = null;
     function selectSubdivision(index, name, color) {
         const selectEl = document.getElementById('login-select');
         if (selectEl) { selectEl.value = index; }
@@ -541,8 +533,7 @@
         buttons.forEach(function(btn) {
             btn.style.background = '#1e293b';
             if (btn.innerText.indexOf(name) !== -1 || (name === 'АДМИН' && btn.innerText.indexOf('АДМИНИСТРАТОР') !== -1)) {
-                btn.style.background = color;
-                btn.style.color = '#ffffff';
+                btn.style.background = color; btn.style.color = '#ffffff';
             } else {
                 if (btn.innerText.indexOf('ШР') !== -1) btn.style.color = '#3b82f6';
                 if (btn.innerText.indexOf('РОТА-1') !== -1) btn.style.color = '#a855f7';
@@ -557,73 +548,43 @@
         document.getElementById('login-error').style.display = 'none';
         setTimeout(function() { document.getElementById('login-pass').focus(); }, 50);
     }
-    function toggleTheme() {
-        const isLight = document.body.classList.toggle('light-theme');
-        localStorage.setItem('journal_theme', isLight ? 'light' : 'dark');
-    }
-    function initTheme() {
-        const saved = localStorage.getItem('journal_theme');
-        if (saved === 'light') { document.body.classList.add('light-theme'); }
-    }
-    function openStream() {
-        const win = document.getElementById('stream-window');
-        if (win) {
-            win.style.display = 'flex';
-            const savedUrl = localStorage.getItem('msb_stream_url');
-            if (savedUrl) { document.getElementById('stream-url-input').value = savedUrl; }
-        }
-    }
-    function closeStream() { const win = document.getElementById('stream-window'); if (win) win.style.display = 'none'; }
+    function toggleTheme() { const isLight = document.body.classList.toggle('light-theme'); localStorage.setItem('journal_theme', isLight ? 'light' : 'dark'); }
+    function initTheme() { const saved = localStorage.getItem('journal_theme'); if (saved === 'light') { document.body.classList.add('light-theme'); } }
+    function closeStream() { if (sirenAudio && !soundInterval) { sirenAudio.pause(); sirenAudio.currentTime = 0; } var win = document.getElementById('stream-window'); if (win) win.style.display = 'none'; }
     function launchStreamUrl() {
-        let url = document.getElementById('stream-url-input').value.trim();
-        if (!url) return alert("Сначала вставьте ссылку в поле ввода!");
-        if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
-        localStorage.setItem('msb_stream_url', url);
-        document.getElementById('stream-placeholder').style.display = 'none';
-        const iframe = document.getElementById('stream-iframe');
-        iframe.style.display = 'block'; iframe.src = url;
+        let url = document.getElementById('stream-url-input').value.trim(); if (!url) return alert("Сначала вставьте ссылку в поле ввода!");
+        if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; } localStorage.setItem('msb_stream_url', url);
+        document.getElementById('stream-placeholder').style.display = 'none'; const iframe = document.getElementById('stream-iframe'); iframe.style.display = 'block'; iframe.src = url;
     }
     function openStreamExternal() {
-        let url = document.getElementById('stream-url-input').value.trim();
-        if (!url) return alert("Сначала вставьте ссылку в поле ввода!");
-        if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
-        localStorage.setItem('msb_stream_url', url);
+        let url = document.getElementById('stream-url-input').value.trim(); if (!url) return alert("Сначала вставьте ссылку в поле ввода!");
+        if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; } localStorage.setItem('msb_stream_url', url);
         window.open(url, 'SaluteJazzStream', 'width=' + screen.availWidth + ',height=' + screen.availHeight + ',top=0,left=0');
     }
-    window.addEventListener('appinstalled', function() {
-        deferredPrompt = null;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; });
-    });
-    async function installPWA() {
-        if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; });
-    }
+    window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); deferredPrompt = e; document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'block'; }); });
+    window.addEventListener('appinstalled', function() { deferredPrompt = null; document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; }); });
+    async function installPWA() { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; }); }
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
         const rawData = window.atob(base64); const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-        return outputArray;
+        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i); return outputArray;
     }
     async function subscribeToWebPush() {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
         try {
-            if (Notification.permission === 'denied') return;
-            const permission = await Notification.requestPermission();
+            let permission = Notification.permission; if (permission === 'default') { permission = await Notification.requestPermission(); }
             if (permission !== 'granted') return;
-            const reg = await navigator.serviceWorker.register('/sw.js');
-            await reg.update();
-            const readyReg = await navigator.serviceWorker.ready;
+            const reg = await navigator.serviceWorker.register('/sw.js'); await reg.update(); const readyReg = await navigator.serviceWorker.ready;
+            if (!publicVapidKey) { try { const res = await fetch('/vapidPublicKey'); publicVapidKey = (await res.text()).trim(); } catch (err) {} }
             if ('PushManager' in window && publicVapidKey) {
-                let sub = await readyReg.pushManager.getSubscription();
-                if (!sub) {
-                    sub = await readyReg.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-                }
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'save_sub', user: currentUser || 'ГОСТЬ', sub: sub }));
+                let sub = await readyReg.pushManager.getSubscription(); const savedKey = localStorage.getItem('vapid_pub_key');
+                if (sub && savedKey !== publicVapidKey) { try { await sub.unsubscribe(); } catch (e) {} sub = null; }
+                if (!sub) { sub = await readyReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicVapidKey) }); localStorage.setItem('vapid_pub_key', publicVapidKey); }
+                if (sub) {
+                    const userName = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
+                    if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ type: 'save_sub', user: userName, sub: sub })); }
+                    fetch('/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: userName, sub: sub }) }).catch(function() {});
                 }
             }
         } catch (e) { console.error('Push error:', e); }
@@ -632,10 +593,7 @@
         const fromWho = sender || 'АДМИН'; const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!'; const body = fromWho + ': ' + text;
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then(function(reg) {
-                reg.showNotification(title, {
-                    body: body, vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
-                    silent: false, requireInteraction: true, renotify: true, tag: 'admin-alert'
-                }).catch(function() {});
+                reg.showNotification(title, { body: body, vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000), silent: false, requireInteraction: true, renotify: true, tag: 'admin-alert' }).catch(function() {});
             });
         }
     }
@@ -658,18 +616,14 @@
             keepAliveAudio.play().catch(function() {});
             if (!sirenAudio) { sirenAudio = new Audio(createWavUrl(880, 1, 0.9)); sirenAudio.loop = true; }
             if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: '🟢 Дежурный режим активен', artist: 'Журнал Работ (Ожидание команд)', album: 'Нажмите, чтобы открыть'
-                });
+                navigator.mediaSession.metadata = new MediaMetadata({ title: '🟢 Дежурный режим активен', artist: 'Журнал Работ (Ожидание команд)' });
             }
         } catch(e) {}
         if ('wakeLock' in navigator) { navigator.wakeLock.request('screen').catch(function() {}); }
     }
     function updateLockScreenAlert(target, text, sender) {
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: '🛑 ТРЕВОГА ДЛЯ [' + target + '] ОТ [' + (sender || 'АДМИН') + ']!', artist: text, album: 'СРОЧНО ОТКРОЙТЕ БРАУЗЕР!'
-            });
+            navigator.mediaSession.metadata = new MediaMetadata({ title: '🛑 ТРЕВОГА ДЛЯ [' + target + '] ОТ [' + (sender || 'АДМИН') + ']!', artist: text });
         }
     }
     function playBeep() {
@@ -681,78 +635,53 @@
             osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
+    function playStreamSignal() {
+        try {
+            if (navigator.vibrate) navigator.vibrate(Array.of(300, 150, 300));
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.18);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); setTimeout(function() { osc.stop(); }, 400);
+        } catch (e) {}
+    }
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
         ws.onmessage = function(event) {
             const msg = JSON.parse(event.data);
             if (msg.type === 'init') {
-                document.getElementById('table-body').innerHTML = '';
-                document.getElementById('notif-table-body').innerHTML = '';
+                document.getElementById('table-body').innerHTML = ''; document.getElementById('notif-table-body').innerHTML = '';
                 if (Array.isArray(msg.data)) { msg.data.forEach(appendRow); }
                 if (msg.vapidPublicKey) { publicVapidKey = msg.vapidPublicKey; subscribeToWebPush(); }
                 if (msg.alerts) { pendingAlerts = msg.alerts; checkAndShowAlerts(false); }
             }
             if (msg.type === 'new_row') appendRow(msg.row);
-            if (msg.type === 'history_cleared') {
-                document.getElementById('table-body').innerHTML = '';
-                document.getElementById('notif-table-body').innerHTML = '';
-            }
-            if (msg.type === 'admin_alert') {
-                pendingAlerts[msg.target] = { text: msg.text, sender: msg.sender || ADMIN_NAME };
-                checkAndShowAlerts(true);
-            }
-            if (msg.type === 'alert_cleared') {
-                delete pendingAlerts[msg.target];
-                if (currentAlertTarget === msg.target) stopAlertVisuals();
-                checkAndShowAlerts(false);
-            }
+            if (msg.type === 'history_cleared') { document.getElementById('table-body').innerHTML = ''; document.getElementById('notif-table-body').innerHTML = ''; }
+            if (msg.type === 'admin_alert') { pendingAlerts[msg.target] = { text: msg.text, sender: msg.sender || ADMIN_NAME }; checkAndShowAlerts(true); }
+            if (msg.type === 'alert_cleared') { delete pendingAlerts[msg.target]; if (currentAlertTarget === msg.target) stopAlertVisuals(); checkAndShowAlerts(false); }
         };
         ws.onclose = function() { setTimeout(connectWS, 1500); };
     }
-    setInterval(function() {
-        if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ type: 'ping' })); } else { connectWS(); }
-    }, 4000);
+    setInterval(function() { if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ type: 'ping' })); } else { connectWS(); } }, 4000);
     function populateTargetSelect() {
-        const adminSelect = document.getElementById('admin-target');
-        if (!adminSelect) return; adminSelect.innerHTML = '';
-        let optAll = document.createElement('option');
-        optAll.value = "ВСЕМ"; optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ";
-        adminSelect.appendChild(optAll);
-        USERS_CONFIG.forEach(function(u) {
-            if (u.name !== currentUser) {
-                let opt2 = document.createElement('option');
-                opt2.value = u.name; opt2.innerText = u.name; adminSelect.appendChild(opt2);
-            }
-        });
+        const adminSelect = document.getElementById('admin-target'); if (!adminSelect) return; adminSelect.innerHTML = '';
+        let optAll = document.createElement('option'); optAll.value = "ВСЕМ"; optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ"; adminSelect.appendChild(optAll);
+        USERS_CONFIG.forEach(function(u) { if (u.name !== currentUser) { let opt2 = document.createElement('option'); opt2.value = u.name; opt2.innerText = u.name; adminSelect.appendChild(opt2); } });
     }
     function applyUserUI() {
-        document.getElementById('login-overlay').style.display = 'none';
-        document.getElementById('input-panel').style.display = 'block';
-        document.getElementById('my-name').innerText = currentUser;
-        document.getElementById('my-name').style.color = userColor;
-        document.getElementById('admin-zone').style.display = 'block';
-        populateTargetSelect();
-        if (currentUser === ADMIN_NAME) {
-            document.getElementById('clear-history-box').style.display = 'block';
-        } else {
-            document.getElementById('clear-history-box').style.display = 'none';
-        }
+        document.getElementById('login-overlay').style.display = 'none'; document.getElementById('input-panel').style.display = 'block';
+        document.getElementById('my-name').innerText = currentUser; document.getElementById('my-name').style.color = userColor;
+        document.getElementById('admin-zone').style.display = 'block'; populateTargetSelect();
+        if (currentUser === ADMIN_NAME) { document.getElementById('clear-history-box').style.display = 'block'; } else { document.getElementById('clear-history-box').style.display = 'none'; }
     }
     function initApp() {
-        initTheme();
-        document.getElementById('login-error').style.display = 'none';
+        initTheme(); document.getElementById('login-error').style.display = 'none';
         if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function() {}); }
-        document.body.addEventListener('click', function firstTouch() {
-            unlockMobileFeatures(); subscribeToWebPush(); document.body.removeEventListener('click', firstTouch);
-        }, { once: true });
+        document.body.addEventListener('click', function firstTouch() { unlockMobileFeatures(); subscribeToWebPush(); document.body.removeEventListener('click', firstTouch); }, { once: true });
         const loginSelect = document.getElementById('login-select'); loginSelect.innerHTML = '';
-        USERS_CONFIG.forEach(function(u, index) {
-            let opt = document.createElement('option'); opt.value = index; opt.innerText = u.name; loginSelect.appendChild(opt);
-        });
+        USERS_CONFIG.forEach(function(u, index) { let opt = document.createElement('option'); opt.value = index; opt.innerText = u.name; loginSelect.appendChild(opt); });
         const headerRow = document.getElementById('table-headers'); const inputContainer = document.getElementById('dynamic-inputs');
-        headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
-        inputContainer.innerHTML = '';
+        headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>'; inputContainer.innerHTML = '';
         COLUMNS_CONFIG.forEach(function(col, index) {
             let th = document.createElement('th'); th.innerText = col.label; headerRow.appendChild(th);
             let div = document.createElement('div'); div.className = 'field-group'; let inputHtml = '';
@@ -786,10 +715,7 @@
         ws.send(JSON.stringify({ type: 'admin_alert', sender: currentUser, color: userColor, time: timeString, target: target, text: msg }));
         alert("Уведомление отправлено и записано в отдельное окно!"); document.getElementById('admin-msg').value = '';
     }
-    function clearHistoryAdmin() {
-        if (currentUser !== ADMIN_NAME) return;
-        if (confirm("⚠️ Вы уверены, что хотите ПОЛНОСТЬЮ очистить все журналы и уведомления у всех?")) { ws.send(JSON.stringify({ type: 'clear_history' })); }
-    }
+    function clearHistoryAdmin() { if (currentUser !== ADMIN_NAME) return; if (confirm("⚠️ Вы уверены, что хотите ПОЛНОСТЬЮ очистить все журналы и уведомления у всех?")) { ws.send(JSON.stringify({ type: 'clear_history' })); } }
     function getAlertObj(raw) { if (!raw) return null; if (typeof raw === 'string') return { text: raw, sender: ADMIN_NAME }; return raw; }
     function checkAndShowAlerts(isNew) {
         let targetToShow = null; const allAlert = getAlertObj(pendingAlerts["ВСЕМ"]);
@@ -829,345 +755,55 @@
         ws.send(JSON.stringify({ type: 'update', user: currentUser, color: userColor, time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5), values: values }));
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
     }
-         function appendRow(row) {
+    function appendRow(row) {
         if (!row || !row.values) return;
         if (row.values.at(0)) {
-            const firstCol = String(row.values.at(0));
-            const isAck = firstCol.indexOf("ОЗНАКОМЛЕН") !== -1;
-            const isNotif = firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1;
+            const firstCol = String(row.values.at(0)); const isAck = firstCol.indexOf("ОЗНАКОМЛЕН") !== -1; const isNotif = firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1;
             if (isAck || isNotif) {
-                const notifBody = document.getElementById('notif-table-body');
-                const tr = document.createElement('tr');
-                tr.className = isNotif ? 'alert-row new-row' : 'ack-row new-row';
-                let sender = row.user;
-                let target = "ВСЕМ";
-                let text = "-";
-                if (isNotif) {
-                    target = String(row.values.at(1) || '').replace("КОМУ: ", "");
-                    text = String(row.values.at(row.values.length - 1) || '').replace("Текст: ", "");
-                } else {
-                    sender = row.user;
-                    target = String(row.values.at(1) || '').replace("ОТ: ", "");
-                    text = String(row.values.at(row.values.length - 1) || '').replace("Сообщение: ", "");
-                }
+                const notifBody = document.getElementById('notif-table-body'); const tr = document.createElement('tr'); tr.className = isNotif ? 'alert-row new-row' : 'ack-row new-row';
+                let sender = row.user; let target = "ВСЕМ"; let text = "-";
+                if (isNotif) { target = String(row.values.at(1) || '').replace("КОМУ: ", ""); text = String(row.values.at(row.values.length - 1) || '').replace("Текст: ", ""); }
+                else { sender = row.user; target = String(row.values.at(1) || '').replace("ОТ: ", ""); text = String(row.values.at(row.values.length - 1) || '').replace("Сообщение: ", ""); }
                 tr.innerHTML = '<td class="time-cell">' + row.time + '</td><td style="color:' + row.color + '; font-weight:bold;">' + sender + '</td><td style="font-weight:bold; color:#ef4444;">' + target + '</td><td style="text-align:left; padding-left:15px;">' + text + '</td>';
-                notifBody.appendChild(tr);
-                requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
-                return;
+                notifBody.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); return;
             }
         }
-        const tbody = document.getElementById('table-body');
-        const tr = document.createElement('tr');
-        tr.className = 'new-row';
+        const tbody = document.getElementById('table-body'); const tr = document.createElement('tr'); tr.className = 'new-row';
         let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            const val = (row.values.at(i) !== undefined) ? row.values.at(i) : '-';
-            html += '<td>' + (val || '-') + '</td>';
-        }
-        tr.innerHTML = html;
-        tbody.appendChild(tr);
-        requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
-    }
-
-    // Надежная перерегистрация Web Push (работает при закрытом браузере)
-    subscribeToWebPush = async function() {
-        if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
-        try {
-            let permission = Notification.permission;
-            if (permission === 'default') {
-                permission = await Notification.requestPermission();
-            }
-            if (permission !== 'granted') return;
-
-            const reg = await navigator.serviceWorker.register('/sw.js');
-            await reg.update();
-            const readyReg = await navigator.serviceWorker.ready;
-
-            if (!publicVapidKey) {
-                try {
-                    const res = await fetch('/vapidPublicKey');
-                    publicVapidKey = (await res.text()).trim();
-                } catch (err) {}
-            }
-
-            if ('PushManager' in window && publicVapidKey) {
-                let sub = await readyReg.pushManager.getSubscription();
-                const savedKey = localStorage.getItem('vapid_pub_key');
-
-                // Если ключ на сервере сменился — принудительно удаляем старую зависшую подписку
-                if (sub && savedKey !== publicVapidKey) {
-                    try { await sub.unsubscribe(); } catch (e) {}
-                    sub = null;
-                }
-
-                if (!sub) {
-                    sub = await readyReg.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-                    localStorage.setItem('vapid_pub_key', publicVapidKey);
-                }
-
-                if (sub) {
-                    const userName = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'save_sub', user: userName, sub: sub }));
-                    }
-                    fetch('/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user: userName, sub: sub })
-                    }).catch(function() {});
-                }
-            }
-        } catch (e) { console.error('Push error:', e); }
-    };
-
-
-            if ('PushManager' in window && publicVapidKey) {
-                let sub = await readyReg.pushManager.getSubscription();
-                if (!sub) {
-                    try {
-                        sub = await readyReg.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                        });
-                    } catch (subErr) {
-                        const oldSub = await readyReg.pushManager.getSubscription();
-                        if (oldSub) await oldSub.unsubscribe();
-                        sub = await readyReg.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                        });
-                    }
-                }
-                if (sub) {
-                    const userName = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'save_sub', user: userName, sub: sub }));
-                    }
-                    fetch('/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user: userName, sub: sub })
-                    }).catch(function() {});
-                }
-            }
-        } catch (e) { console.error('Push error:', e); }
-    };
-    // Короткий сигнал специально для запуска видеострима (без вечной сирены)
-    function playStreamSignal() {
-        try {
-            if (navigator.vibrate) navigator.vibrate(Array.of(300, 150, 300));
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
-            osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.18);
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            setTimeout(function() { osc.stop(); }, 400);
-        } catch (e) {}
-    }
-
-    window.currentSharedStreamUrl = localStorage.getItem('msb_stream_url') || '';
-    window.streamWs = null;
-
-    function isUserAdmin() {
-        return currentUser === ADMIN_NAME;
-    }
-
-    function openAppPopupWindow(url) {
-        if (!url) return;
-        if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) {
-            url = 'https://' + url;
-        }
-        window.open(
-            url,
-            'SaluteJazzStream',
-            'width=' + screen.availWidth + ',height=' + screen.availHeight + ',top=0,left=0,toolbar=no,menubar=no,location=no,status=no'
-        );
-    }
-
-    function closeStream() {
-        if (sirenAudio && !soundInterval) {
-            sirenAudio.pause();
-            sirenAudio.currentTime = 0;
-        }
-        var win = document.getElementById('stream-window');
-        if (win) win.style.display = 'none';
-    }
-
-    function initDedicatedStreamWs() {
-        try {
-            var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';
-            window.streamWs = new WebSocket(proto + window.location.host);
-            window.streamWs.onopen = function() {
-                window.streamWs.send(JSON.stringify({ type: 'get_stream' }));
-                subscribeToWebPush();
-            };
-            window.streamWs.onmessage = function(event) {
-                try {
-                    var msg = JSON.parse(event.data);
-                    if (msg.type === 'stream_url') {
-                        window.currentSharedStreamUrl = msg.url || '';
-                        if (msg.url) {
-                            localStorage.setItem('msb_stream_url', msg.url);
-                        } else {
-                            localStorage.removeItem('msb_stream_url');
-                        }
-                        if (msg.forceOpen && msg.url) {
-                            if (!isUserAdmin()) {
-                                playStreamSignal();
-                                showUserJoinPrompt(msg.url);
-                            }
-                        } else if (!msg.url) {
-                            if (!isUserAdmin()) closeStream();
-                        }
-                    }
-                } catch (e) {}
-            };
-            window.streamWs.onclose = function() {
-                setTimeout(initDedicatedStreamWs, 2000);
-            };
-        } catch (e) {}
-    }
-
-    initDedicatedStreamWs();
-
-    function sendStreamWsMessage(data) {
-        if (window.streamWs && window.streamWs.readyState === 1) {
-            window.streamWs.send(JSON.stringify(data));
-        } else if (ws && ws.readyState === 1) {
-            ws.send(JSON.stringify(data));
-        }
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) { const val = (row.values.at(i) !== undefined) ? row.values.at(i) : '-'; html += '<td>' + (val || '-') + '</td>'; }
+        tr.innerHTML = html; tbody.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
     }
     function showUserJoinPrompt(url) {
-        var win = document.getElementById('stream-window');
-        if (!win) {
-            win = document.createElement('div');
-            win.id = 'stream-window';
-            document.body.appendChild(win);
-        }
-        win.innerHTML = '';
-        win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
-
-        var box = document.createElement('div');
-        box.style.cssText = 'background:#1e293b;border:3px solid #22c55e;border-radius:16px;padding:35px 25px;text-align:center;max-width:460px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
-
-        var title = document.createElement('h2');
-        title.innerText = '📡 НАЧАЛСЯ ВИДЕОСТРИМ!';
-        title.style.cssText = 'margin:0 0 10px 0;color:#ffffff;font-size:24px;';
-
-        var desc = document.createElement('p');
-        desc.innerText = 'Администратор запустил трансляцию. Нажмите кнопку ниже для перехода в новое окно:';
-        desc.style.cssText = 'color:#94a3b8;font-size:15px;margin:0 0 25px 0;line-height:1.4;';
-
-        var btnOpen = document.createElement('button');
-        btnOpen.innerText = '🚀 ПЕРЕЙТИ К СТРИМУ (В НОВОМ ОКНЕ)';
-        btnOpen.style.cssText = 'width:100%;padding:18px 20px;background:#22c55e;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:12px;';
-        btnOpen.onclick = function() {
-            openAppPopupWindow(url);
-            closeStream();
-        };
-
-        var btnClose = document.createElement('button');
-        btnClose.innerText = 'Скрыть окно';
-        btnClose.style.cssText = 'width:100%;padding:10px;background:transparent;color:#94a3b8;border:none;cursor:pointer;font-size:14px;';
-        btnClose.onclick = closeStream;
-
-        box.appendChild(title);
-        box.appendChild(desc);
-        box.appendChild(btnOpen);
-        box.appendChild(btnClose);
-        win.appendChild(box);
+        var win = document.getElementById('stream-window'); if (!win) { win = document.createElement('div'); win.id = 'stream-window'; document.body.appendChild(win); }
+        win.innerHTML = ''; win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
+        var box = document.createElement('div'); box.style.cssText = 'background:#1e293b;border:3px solid #22c55e;border-radius:16px;padding:35px 25px;text-align:center;max-width:460px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
+        var title = document.createElement('h2'); title.innerText = '🎥 ВИДЕОСТРИМ ЗАПУЩЕН'; title.style.cssText = 'margin:0 0 10px 0;color:#ffffff;font-size:24px;';
+        var desc = document.createElement('p'); desc.innerText = 'Администратор запустил трансляцию. Нажмите кнопку ниже для перехода в новое окно:'; desc.style.cssText = 'color:#94a3b8;font-size:15px;margin:0 0 25px 0;line-height:1.4;';
+        var btnOpen = document.createElement('button'); btnOpen.innerText = '🚀 ПЕРЕЙТИ К СТРИМУ (В НОВОМ ОКНЕ)'; btnOpen.style.cssText = 'width:100%;padding:18px 20px;background:#22c55e;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:12px;';
+        btnOpen.onclick = function() { openAppPopupWindow(url); closeStream(); };
+        var btnClose = document.createElement('button'); btnClose.innerText = 'Скрыть окно'; btnClose.style.cssText = 'width:100%;padding:10px;background:transparent;color:#94a3b8;border:none;cursor:pointer;font-size:14px;'; btnClose.onclick = closeStream;
+        box.appendChild(title); box.appendChild(desc); box.appendChild(btnOpen); box.appendChild(btnClose); win.appendChild(box);
     }
-
     function openStream() {
         var activeUrl = window.currentSharedStreamUrl || localStorage.getItem('msb_stream_url') || '';
-
-        if (!isUserAdmin()) {
-            if (activeUrl) {
-                showUserJoinPrompt(activeUrl);
-            } else {
-                alert('🎥 Стрим еще не начался. Когда Администратор запустит трансляцию, у вас появится окно с кнопкой перехода.');
-            }
-            return;
-        }
-
-        var win = document.getElementById('stream-window');
-        if (!win) {
-            win = document.createElement('div');
-            win.id = 'stream-window';
-            document.body.appendChild(win);
-        }
-        win.innerHTML = '';
-        win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
-
-        var box = document.createElement('div');
-        box.style.cssText = 'background:#1e293b;border:2px solid #3b82f6;border-radius:16px;padding:30px 25px;text-align:center;max-width:520px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
-
-        var lbl = document.createElement('h2');
-        lbl.innerText = '📡 Управление видеостримом (АДМИН)';
-        lbl.style.cssText = 'margin:0 0 15px 0;font-size:20px;color:#f1f5f9;';
-
-        var inp = document.createElement('input');
-        inp.type = 'text';
-        inp.id = 'stream-url-input';
-        inp.value = activeUrl;
-        inp.placeholder = 'Вставьте ссылку SaluteJazz...';
-        inp.style.cssText = 'width:100%;padding:14px 15px;border-radius:8px;border:2px solid #3b82f6;background:#0f172a;color:#ffffff;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:15px;';
-
-        var btnStart = document.createElement('button');
-        btnStart.innerText = '🚀 ЗАПУСТИТЬ СТРИМ (В НОВОМ ОКНЕ)';
-        btnStart.style.cssText = 'width:100%;padding:16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:10px;';
-        btnStart.onclick = broadcastStreamUrl;
-
-        var btnStop = document.createElement('button');
-        btnStop.innerText = '⏹ ОСТАНОВИТЬ СТРИМ У ВСЕХ';
-        btnStop.style.cssText = 'width:100%;padding:14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;margin-bottom:10px;';
-        btnStop.onclick = stopBroadcastStream;
-
-        var btnBack = document.createElement('button');
-        btnBack.innerText = '⬅️ НАЗАД В ЖУРНАЛ';
-        btnBack.style.cssText = 'width:100%;padding:12px;background:#ef4444;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;';
-        btnBack.onclick = closeStream;
-
-        box.appendChild(lbl);
-        box.appendChild(inp);
-        box.appendChild(btnStart);
-        box.appendChild(btnStop);
-        box.appendChild(btnBack);
-        win.appendChild(box);
+        if (!isUserAdmin()) { if (activeUrl) { showUserJoinPrompt(activeUrl); } else { alert('🎥 Стрим еще не начался. Когда Администратор запустит трансляцию, у вас появится окно с кнопкой перехода.'); } return; }
+        var win = document.getElementById('stream-window'); if (!win) { win = document.createElement('div'); win.id = 'stream-window'; document.body.appendChild(win); }
+        win.innerHTML = ''; win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
+        var box = document.createElement('div'); box.style.cssText = 'background:#1e293b;border:2px solid #3b82f6;border-radius:16px;padding:30px 25px;text-align:center;max-width:520px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
+        var lbl = document.createElement('h2'); lbl.innerText = '📡 Управление видеостримом (АДМИН)'; lbl.style.cssText = 'margin:0 0 15px 0;font-size:20px;color:#f1f5f9;';
+        var inp = document.createElement('input'); inp.type = 'text'; inp.id = 'stream-url-input'; inp.value = activeUrl; inp.placeholder = 'Вставьте ссылку SaluteJazz...'; inp.style.cssText = 'width:100%;padding:14px 15px;border-radius:8px;border:2px solid #3b82f6;background:#0f172a;color:#ffffff;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:15px;';
+        var btnStart = document.createElement('button'); btnStart.innerText = '🚀 ЗАПУСТИТЬ СТРИМ (В НОВОМ ОКНЕ)'; btnStart.style.cssText = 'width:100%;padding:16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:10px;'; btnStart.onclick = broadcastStreamUrl;
+        var btnStop = document.createElement('button'); btnStop.innerText = '⏹ ОСТАНОВИТЬ СТРИМ У ВСЕХ'; btnStop.style.cssText = 'width:100%;padding:14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;margin-bottom:10px;'; btnStop.onclick = stopBroadcastStream;
+        var btnBack = document.createElement('button'); btnBack.innerText = '⬅️ НАЗАД В ЖУРНАЛ'; btnBack.style.cssText = 'width:100%;padding:12px;background:#ef4444;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;'; btnBack.onclick = closeStream;
+        box.appendChild(lbl); box.appendChild(inp); box.appendChild(btnStart); box.appendChild(btnStop); box.appendChild(btnBack); win.appendChild(box);
     }
-
     function broadcastStreamUrl() {
-        var input = document.getElementById('stream-url-input');
-        var url = input ? input.value.trim() : '';
-        if (!url) return alert('Сначала вставьте ссылку в поле ввода!');
-        if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) {
-            url = 'https://' + url;
-        }
-        window.currentSharedStreamUrl = url;
-        localStorage.setItem('msb_stream_url', url);
-        sendStreamWsMessage({ type: 'set_stream', url: url, forceOpen: true });
-        openAppPopupWindow(url);
-        closeStream();
+        var input = document.getElementById('stream-url-input'); var url = input ? input.value.trim() : ''; if (!url) return alert('Сначала вставьте ссылку в поле ввода!');
+        if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) { url = 'https://' + url; }
+        window.currentSharedStreamUrl = url; localStorage.setItem('msb_stream_url', url); sendStreamWsMessage({ type: 'set_stream', url: url, forceOpen: true }); openAppPopupWindow(url); closeStream();
     }
-
-    function stopBroadcastStream() {
-        window.currentSharedStreamUrl = '';
-        localStorage.removeItem('msb_stream_url');
-        var input = document.getElementById('stream-url-input');
-        if (input) input.value = '';
-        sendStreamWsMessage({ type: 'set_stream', url: '', forceOpen: false });
-        alert('⏹ Видеострим остановлен для всех подразделений.');
-        closeStream();
-    }
+    function stopBroadcastStream() { window.currentSharedStreamUrl = ''; localStorage.removeItem('msb_stream_url'); var input = document.getElementById('stream-url-input'); if (input) input.value = ''; sendStreamWsMessage({ type: 'set_stream', url: '', forceOpen: false }); alert('⏹ Видеострим остановлен для всех подразделений.'); closeStream(); }
+    document.addEventListener('click', function(e) { var btn = e.target.closest('button, a, div'); if (btn && btn.innerText && btn.innerText.toLowerCase().indexOf('видеострим') !== -1 && (!btn.id || btn.id.indexOf('stream') === -1)) { openStream(); } });
 </script>
 </body>
 </html>
