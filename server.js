@@ -14,17 +14,27 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const SUBS_FILE = path.join(__dirname, 'subscriptions.json');
 const VAPID_FILE = path.join(__dirname, 'vapid.json');
 
-let vapidKeys = { publicKey: '', privateKey: '' };
+// Постоянные ключи, которые не сбрасываются при перезапуске контейнера S3
+const FIXED_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+const FIXED_PRIVATE_KEY = 'UUxI4O8-FbRouAevSmBQ6o18hgE4nSG3qwvJTfKc-ls';
+
+let vapidKeys = {
+    publicKey: FIXED_PUBLIC_KEY,
+    privateKey: FIXED_PRIVATE_KEY
+};
+
 if (webpush) {
     try {
         if (fs.existsSync(VAPID_FILE)) {
-            vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
+            const savedVapid = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
+            if (savedVapid && savedVapid.publicKey && savedVapid.privateKey) {
+                vapidKeys = savedVapid;
+            }
         } else {
-            vapidKeys = webpush.generateVAPIDKeys();
             fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys, null, 2));
         }
         webpush.setVapidDetails(
-            'mailto:admin@msb55115.local',
+            'mailto:admin@msb55115.com',
             vapidKeys.publicKey,
             vapidKeys.privateKey
         );
@@ -75,7 +85,7 @@ const SW_CODE = Array.of(
     "self.addEventListener('install', function(event) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(event) { event.waitUntil(self.clients.claim()); });",
     "self.addEventListener('push', function(event) {",
-    "    let data = { title: '🚨 ВНИМАНИЕ!', body: 'Новое уведомление в журнале' };",
+    "    let data = { title: '🚨 ТРЕВОГА МСБ55115!', body: 'Срочное уведомление в журнале' };",
     "    if (event.data) {",
     "        try { data = Object.assign(data, event.data.json()); }",
     "        catch (e) { data.body = event.data.text(); }",
@@ -85,6 +95,7 @@ const SW_CODE = Array.of(
     "        icon: '/icon.svg',",
     "        badge: '/icon.svg',",
     "        vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),",
+    "        silent: false,",
     "        requireInteraction: true,",
     "        tag: data.tag || 'alert-' + Date.now(),",
     "        renotify: true,",
@@ -150,7 +161,7 @@ const server = http.createServer(function(req, res) {
             try {
                 const parsed = JSON.parse(body);
                 const sub = parsed.subscription || parsed.sub || parsed;
-                const user = parsed.user || 'АДМИН';
+                const user = parsed.user || 'ГОСТЬ';
                 if (sub && sub.endpoint) {
                     const idx = pushSubscriptions.findIndex(function(item) {
                         return item.sub && item.sub.endpoint === sub.endpoint;
@@ -161,7 +172,7 @@ const server = http.createServer(function(req, res) {
                         pushSubscriptions.push({ sub: sub, user: user });
                     }
                     fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
-                    console.log('✅ Телефон подключен к шторке уведомлений: ' + user);
+                    console.log('✅ HTTP Подписка сохранена: ' + user);
                 }
                 res.writeHead(201, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ status: 'ok' }));
@@ -202,7 +213,7 @@ wss.on('connection', function(ws) {
             forceOpen: false
         }));
     }
-       ws.on('message', function(message) {
+    ws.on('message', function(message) {
         try {
             const msg = JSON.parse(message.toString());
 
@@ -244,18 +255,23 @@ wss.on('connection', function(ws) {
                 if (msg.forceOpen && currentStreamUrl && webpush && pushSubscriptions.length > 0) {
                     const streamPayload = JSON.stringify({
                         title: '📡 НАЧАЛСЯ ВИДЕОСТРИМ!',
-                        body: 'Администратор запустил трансляцию. Нажмите для перехода в журнал.',
-                        tag: 'stream-alert'
+                        body: 'Администратор запустил трансляцию. Нажмите для перехода.',
+                        tag: 'stream-' + Date.now()
                     });
                     const pushOptions = { TTL: 3600, urgency: 'high' };
-                    const toRemove = new Array();
 
                     pushSubscriptions.forEach(function(item) {
                         if (item.user !== 'АДМИН') {
                             webpush.sendNotification(item.sub, streamPayload, pushOptions)
                                 .catch(function(err) {
-                                    if (err.statusCode === 410 || err.statusCode === 404) {
-                                        toRemove.push(item.sub.endpoint);
+                                    if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403 || err.statusCode === 401) {
+                                        const rmIdx = pushSubscriptions.findIndex(function(s) {
+                                            return s.sub && s.sub.endpoint === item.sub.endpoint;
+                                        });
+                                        if (rmIdx !== -1) {
+                                            pushSubscriptions.splice(rmIdx, 1);
+                                            fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
+                                        }
                                     }
                                 });
                         }
@@ -334,20 +350,22 @@ wss.on('connection', function(ws) {
                     const payload = JSON.stringify({
                         title: '🚨 ТРЕВОГА ДЛЯ: ' + target,
                         body: sender + ': ' + text,
-                        tag: 'alert-' + target
+                        tag: 'alert-' + Date.now()
                     });
                     const pushOptions = { TTL: 86400, urgency: 'high' };
 
                     pushSubscriptions.forEach(function(item) {
                         const isForAll = (target === 'ВСЕМ' || target === 'ВСЕ' || target === 'ALL');
                         const isExactTarget = (item.user === target);
+                        const isGuest = (!item.user || item.user === 'ГОСТЬ');
                         const isNotSender = (item.user !== sender);
 
-                        if ((isForAll && isNotSender) || isExactTarget) {
+                        if ((isForAll && isNotSender) || isExactTarget || isGuest) {
                             webpush.sendNotification(item.sub, payload, pushOptions)
                                 .then(function() { console.log('---> Доставлено в шторку: ' + (item.user || 'Гость')); })
                                 .catch(function(err) {
-                                    if (err.statusCode === 410 || err.statusCode === 404) {
+                                    console.error('Ошибка WebPush (' + err.statusCode + ') для ' + item.user);
+                                    if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403 || err.statusCode === 401) {
                                         const rmIdx = pushSubscriptions.findIndex(function(s) {
                                             return s.sub && s.sub.endpoint === item.sub.endpoint;
                                         });
