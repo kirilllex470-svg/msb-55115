@@ -7,7 +7,7 @@ let webpush = null;
 try {
     webpush = require('web-push');
 } catch (e) {
-    console.log('Модуль web-push не найден, работаем через WebSocket');
+    console.log('Модуль web-push не найден');
 }
 
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -33,42 +33,45 @@ if (webpush) {
     }
 }
 
-let pushSubscriptions = Array.of();
+let pushSubscriptions = [];
 try {
     if (fs.existsSync(SUBS_FILE)) {
         pushSubscriptions = JSON.parse(fs.readFileSync(SUBS_FILE, 'utf8'));
-        if (!Array.isArray(pushSubscriptions)) pushSubscriptions = Array.of();
     }
 } catch (e) {
-    pushSubscriptions = Array.of();
+    pushSubscriptions = [];
 }
 
-let journalState = {};
-try {
-    if (fs.existsSync(DATA_FILE)) {
-        journalState = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    }
-} catch (e) {
-    journalState = {};
-}
-
-function saveJournalState() {
-    try {
-        fs.writeFile(DATA_FILE, JSON.stringify(journalState, null, 2), function(err) {
-            if (err) console.error('Ошибка сохранения data.json:', err);
-        });
-    } catch (e) {}
-}
-
+let tableState = [];
 let activeAlerts = {};
 let currentStreamUrl = '';
+
+try {
+    if (fs.existsSync(DATA_FILE)) {
+        const saved = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        if (Array.isArray(saved)) {
+            tableState = saved;
+        } else if (saved && Array.isArray(saved.tableState)) {
+            tableState = saved.tableState;
+            if (saved.activeAlerts) activeAlerts = saved.activeAlerts;
+        }
+    }
+} catch (e) {
+    tableState = [];
+}
+
+function saveState() {
+    try {
+        fs.writeFile(DATA_FILE, JSON.stringify(tableState), function() {});
+    } catch (e) {}
+}
 const ICON_SVG = '<svg xmlns="http://w3.org" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" rx="36" fill="#0f172a"/><rect x="16" y="16" width="160" height="160" rx="24" fill="#1e293b" stroke="#3b82f6" stroke-width="6"/><text x="96" y="115" font-family="Arial, sans-serif" font-size="64" font-weight="bold" fill="#ffffff" text-anchor="middle">МСБ</text></svg>';
 
 const SW_CODE = [
     "self.addEventListener('install', function(event) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(event) { event.waitUntil(self.clients.claim()); });",
     "self.addEventListener('push', function(event) {",
-    "    let data = { title: '🚨 ВНИМАНИЕ!', body: 'Новое уведомление в журнале МСБ55115' };",
+    "    let data = { title: '🚨 ВНИМАНИЕ!', body: 'Новое уведомление в журнале' };",
     "    if (event.data) {",
     "        try { data = Object.assign(data, event.data.json()); }",
     "        catch (e) { data.body = event.data.text(); }",
@@ -77,9 +80,9 @@ const SW_CODE = [
     "        body: data.body,",
     "        icon: '/icon.svg',",
     "        badge: '/icon.svg',",
-    "        vibrate: Array.of(500, 200, 500, 200, 800),",
+    "        vibrate: [800, 200, 800, 200, 800, 200, 1000],",
     "        requireInteraction: true,",
-    "        tag: data.tag || 'msb-alert-' + Date.now(),",
+    "        tag: data.tag || 'alert-' + Date.now(),",
     "        renotify: true,",
     "        data: { url: '/' }",
     "    };",
@@ -89,9 +92,8 @@ const SW_CODE = [
     "    event.notification.close();",
     "    event.waitUntil(",
     "        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
-    "            if (clientList.length > 0) {",
-    "                const firstClient = clientList.find(function(c) { return 'focus' in c; });",
-    "                if (firstClient) return firstClient.focus();",
+    "            for (var i = 0; i < clientList.length; i++) {",
+    "                if ('focus' in clientList[i]) return clientList[i].focus();",
     "            }",
     "            if (clients.openWindow) return clients.openWindow('/');",
     "        })",
@@ -100,7 +102,7 @@ const SW_CODE = [
 ].join('\n');
 
 const server = http.createServer(function(req, res) {
-    const urlPath = String(req.url || '/').split('?').shift();
+    const urlPath = req.url.split('?')[0];
 
     if (urlPath === '/manifest.json') {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -111,19 +113,16 @@ const server = http.createServer(function(req, res) {
             display: 'standalone',
             background_color: '#0f172a',
             theme_color: '#1e293b',
-            icons: Array.of(
+            icons: [
                 { src: '/icon.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
                 { src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
-            )
+            ]
         }));
         return;
     }
 
     if (urlPath === '/sw.js') {
-        res.writeHead(200, {
-            'Content-Type': 'application/javascript; charset=utf-8',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-        });
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache' });
         res.end(SW_CODE);
         return;
     }
@@ -149,10 +148,14 @@ const server = http.createServer(function(req, res) {
                 const sub = parsed.subscription || parsed.sub || parsed;
                 const user = parsed.user || 'АДМИН';
                 if (sub && sub.endpoint) {
-                    pushSubscriptions = pushSubscriptions.filter(function(item) {
-                        return item.sub && item.sub.endpoint !== sub.endpoint;
+                    const idx = pushSubscriptions.findIndex(function(item) {
+                        return item.sub && item.sub.endpoint === sub.endpoint;
                     });
-                    pushSubscriptions.push({ sub: sub, user: user });
+                    if (idx !== -1) {
+                        pushSubscriptions[idx] = { sub: sub, user: user };
+                    } else {
+                        pushSubscriptions.push({ sub: sub, user: user });
+                    }
                     fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
                     console.log('✅ Телефон подключен к шторке уведомлений: ' + user);
                 }
@@ -166,88 +169,55 @@ const server = http.createServer(function(req, res) {
         return;
     }
 
-    if (urlPath === '/' || urlPath === '/index.html') {
-        const indexPath = path.join(__dirname, 'index.html');
-        fs.readFile(indexPath, function(err, content) {
-            if (err) {
-                res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-                res.end('Ошибка загрузки index.html');
-            } else {
-                res.writeHead(200, {
-                    'Content-Type': 'text/html; charset=utf-8',
-                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                });
-                res.end(content);
-            }
-        });
-        return;
-    }
-
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Не найдено');
+    const indexPath = path.join(__dirname, 'index.html');
+    fs.readFile(indexPath, function(err, content) {
+        if (err) {
+            res.writeHead(500);
+            res.end('Error loading index.html');
+        } else {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+            res.end(content);
+        }
+    });
 });
 const wss = new WebSocket.Server({ server: server });
 
-function broadcastAll(dataObj, excludeWs) {
-    const raw = typeof dataObj === 'string' ? dataObj : JSON.stringify(dataObj);
-    wss.clients.forEach(function(client) {
-        if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-            client.send(raw);
-        }
-    });
-}
-
 wss.on('connection', function(ws) {
-    try {
-        // Отправляем клиенту все сохраненные данные журнала в любом формате, который ожидает ваш index.html
-        const initPacket = Object.assign({}, journalState, {
-            type: 'init',
-            data: journalState.data !== undefined ? journalState.data : journalState,
-            tableData: journalState.tableData || journalState.cells || {},
-            rowsData: journalState.rowsData || journalState.rows || Array.of(),
-            activeAlerts: activeAlerts,
-            vapidPublicKey: vapidKeys.publicKey,
-            streamUrl: currentStreamUrl
-        });
-        ws.send(JSON.stringify(initPacket));
+    ws.send(JSON.stringify({
+        type: 'init',
+        data: tableState,
+        alerts: activeAlerts,
+        vapidPublicKey: vapidKeys.publicKey
+    }));
 
-        // Дополнительно отправляем активные тревоги, если они есть
-        Object.keys(activeAlerts).forEach(function(targetKey) {
-            const al = activeAlerts[targetKey];
-            if (al) {
-                ws.send(JSON.stringify({
-                    type: 'alert',
-                    target: al.target,
-                    text: al.text,
-                    message: al.text,
-                    sender: al.sender
-                }));
-            }
-        });
-
-        if (currentStreamUrl) {
-            ws.send(JSON.stringify({
-                type: 'stream_url',
-                url: currentStreamUrl,
-                forceOpen: false
-            }));
-        }
-    } catch (e) {}
+    if (currentStreamUrl) {
+        ws.send(JSON.stringify({
+            type: 'stream_url',
+            url: currentStreamUrl,
+            forceOpen: false
+        }));
+    }
 
     ws.on('message', function(message) {
         try {
-            const rawStr = message.toString();
-            const msg = JSON.parse(rawStr);
+            const msg = JSON.parse(message.toString());
 
-            // 1. ВИДЕОСТРИМ
+            if (msg.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+                return;
+            }
+
             if (msg.type === 'set_stream') {
                 currentStreamUrl = msg.url || '';
-                console.log('📡 Видеострим обновлен админом: ' + (currentStreamUrl || 'ОСТАНОВЛЕН'));
-                broadcastAll({
-                    type: 'stream_url',
-                    url: currentStreamUrl,
-                    forceOpen: msg.forceOpen || false
-                }, null);
+                wss.clients.forEach(function(client) {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'stream_url',
+                            url: currentStreamUrl,
+                            forceOpen: msg.forceOpen || false
+                        }));
+                    }
+                });
                 return;
             }
 
@@ -262,101 +232,67 @@ wss.on('connection', function(ws) {
                 return;
             }
 
-            // 2. ПОДПИСКА НА ШТОРКУ УВЕДОМЛЕНИЙ
-            if (msg.type === 'push_subscribe' || msg.type === 'register_push' || msg.type === 'subscribe') {
-                const sub = msg.subscription || msg.sub;
-                const user = msg.user || 'АДМИН';
-                if (sub && sub.endpoint) {
-                    pushSubscriptions = pushSubscriptions.filter(function(item) {
-                        return item.sub && item.sub.endpoint !== sub.endpoint;
-                    });
-                    pushSubscriptions.push({ sub: sub, user: user });
-                    fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
-                    console.log('✅ Телефон подключен к шторке уведомлений: ' + user);
-                }
-                return;
+            if (msg.type === 'update') {
+                tableState = msg.data;
+                saveState();
+                wss.clients.forEach(function(client) {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'update', data: tableState }));
+                    }
+                });
             }
 
-            // 3. ОТПРАВКА УВЕДОМЛЕНИЙ / ТРЕВОГИ АДМИНОМ
-            if (msg.type === 'alert' || msg.type === 'send_alert' || msg.type === 'notify' || msg.type === 'admin_alert') {
-                const target = msg.target || msg.to || 'ВСЕ';
-                const text = msg.text || msg.message || 'Внимание! Проверьте журнал!';
-                const sender = msg.sender || msg.from || 'АДМИН';
+            if (msg.type === 'alert') {
+                const target = msg.target || 'ВСЕ';
+                const text = msg.text || msg.message || 'Срочное уведомление от Админа!';
+                activeAlerts[target] = text;
 
-                activeAlerts[target] = { target: target, text: text, sender: sender, time: Date.now() };
+                wss.clients.forEach(function(client) {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'alert',
+                            target: target,
+                            text: text,
+                            message: text
+                        }));
+                    }
+                });
 
-                // Рассылаем всем открытым браузерам
-                broadcastAll({
-                    type: 'alert',
-                    target: target,
-                    text: text,
-                    message: text,
-                    sender: sender
-                }, null);
-
-                // Отправляем в шторку телефонов (даже если браузер закрыт)
                 if (webpush && pushSubscriptions.length > 0) {
                     const payload = JSON.stringify({
-                        title: '🚨 ' + sender + ' -> ' + target,
+                        title: '🚨 ВНИМАНИЕ: ' + target,
                         body: text,
                         tag: 'alert-' + target
                     });
                     const pushOptions = { TTL: 86400, urgency: 'high' };
 
-                    pushSubscriptions.forEach(function(item) {
-                        const isForAll = (target === 'ВСЕ' || target === 'ALL' || !target);
-                        const isExactTarget = (item.user === target || item.user === 'АДМИН');
-
+                    pushSubscriptions.forEach(function(item, index) {
+                        const isForAll = (target === 'ВСЕ' || target === 'ALL');
+                        const isExactTarget = (item.user === target);
                         if (isForAll || isExactTarget) {
                             webpush.sendNotification(item.sub, payload, pushOptions)
                                 .then(function() { console.log('---> Доставлено в шторку (' + (item.user || 'Гость') + ')'); })
                                 .catch(function(err) {
                                     if (err.statusCode === 410 || err.statusCode === 404) {
-                                        pushSubscriptions = pushSubscriptions.filter(function(s) {
-                                            return s.sub.endpoint !== item.sub.endpoint;
-                                        });
+                                        pushSubscriptions.splice(index, 1);
                                         fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
                                     }
                                 });
                         }
                     });
                 }
-                return;
             }
 
-            // 4. СБРОС ТРЕВОГИ
-            if (msg.type === 'clear_alert' || msg.type === 'dismiss_alert') {
-                const t = msg.target || 'ВСЕ';
-                delete activeAlerts[t];
-                broadcastAll({ type: 'alert_cleared', target: t }, null);
-                return;
+            if (msg.type === 'clear_alert') {
+                delete activeAlerts[msg.target];
+                wss.clients.forEach(function(client) {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'alert_cleared', target: msg.target }));
+                    }
+                });
             }
 
-            // 5. ЗАПИСЬ В ЖУРНАЛ / ОБНОВЛЕНИЕ ЯЧЕЕК И ТАБЛИЦЫ (сохраняем абсолютно любые поля!)
-            if (msg.data !== undefined && typeof msg.data === 'object' && !Array.isArray(msg.data)) {
-                journalState = Object.assign(journalState, msg.data);
-            }
-            Object.keys(msg).forEach(function(key) {
-                if (key !== 'type') {
-                    journalState[key] = msg[key];
-                }
-            });
-            if (msg.id !== undefined && msg.value !== undefined) {
-                if (!journalState.tableData) journalState.tableData = {};
-                journalState.tableData[msg.id] = msg.value;
-            }
-            if (msg.row !== undefined && msg.col !== undefined) {
-                if (!journalState.cells) journalState.cells = {};
-                journalState.cells[msg.row + '_' + msg.col] = msg.value !== undefined ? msg.value : msg.val;
-            }
-
-            saveJournalState();
-            // Пересылаем изменения всем подключенным участникам
-            broadcastAll(rawStr, ws);
-
-        } catch (e) {
-            console.error('Ошибка обработки сообщения:', e);
-        }
+        } catch (e) { console.error("Ошибка:", e); }
     });
 });
 
