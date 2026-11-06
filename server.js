@@ -202,7 +202,7 @@ wss.on('connection', function(ws) {
             forceOpen: false
         }));
     }
-    ws.on('message', function(message) {
+       ws.on('message', function(message) {
         try {
             const msg = JSON.parse(message.toString());
 
@@ -240,6 +240,27 @@ wss.on('connection', function(ws) {
                         }));
                     }
                 });
+
+                if (msg.forceOpen && currentStreamUrl && webpush && pushSubscriptions.length > 0) {
+                    const streamPayload = JSON.stringify({
+                        title: '📡 НАЧАЛСЯ ВИДЕОСТРИМ!',
+                        body: 'Администратор запустил трансляцию. Нажмите для перехода в журнал.',
+                        tag: 'stream-alert'
+                    });
+                    const pushOptions = { TTL: 3600, urgency: 'high' };
+                    const toRemove = new Array();
+
+                    pushSubscriptions.forEach(function(item) {
+                        if (item.user !== 'АДМИН') {
+                            webpush.sendNotification(item.sub, streamPayload, pushOptions)
+                                .catch(function(err) {
+                                    if (err.statusCode === 410 || err.statusCode === 404) {
+                                        toRemove.push(item.sub.endpoint);
+                                    }
+                                });
+                        }
+                    });
+                }
                 return;
             }
 
@@ -317,16 +338,23 @@ wss.on('connection', function(ws) {
                     });
                     const pushOptions = { TTL: 86400, urgency: 'high' };
 
-                    pushSubscriptions.forEach(function(item, index) {
+                    pushSubscriptions.forEach(function(item) {
                         const isForAll = (target === 'ВСЕМ' || target === 'ВСЕ' || target === 'ALL');
                         const isExactTarget = (item.user === target);
-                        if (isForAll || isExactTarget) {
+                        const isNotSender = (item.user !== sender);
+
+                        if ((isForAll && isNotSender) || isExactTarget) {
                             webpush.sendNotification(item.sub, payload, pushOptions)
                                 .then(function() { console.log('---> Доставлено в шторку: ' + (item.user || 'Гость')); })
                                 .catch(function(err) {
                                     if (err.statusCode === 410 || err.statusCode === 404) {
-                                        pushSubscriptions.splice(index, 1);
-                                        fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
+                                        const rmIdx = pushSubscriptions.findIndex(function(s) {
+                                            return s.sub && s.sub.endpoint === item.sub.endpoint;
+                                        });
+                                        if (rmIdx !== -1) {
+                                            pushSubscriptions.splice(rmIdx, 1);
+                                            fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
+                                        }
                                     }
                                 });
                         }
