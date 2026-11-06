@@ -829,7 +829,7 @@
         ws.send(JSON.stringify({ type: 'update', user: currentUser, color: userColor, time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5), values: values }));
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
     }
-       function appendRow(row) {
+         function appendRow(row) {
         if (!row || !row.values) return;
         if (row.values.at(0)) {
             const firstCol = String(row.values.at(0));
@@ -869,6 +869,77 @@
         requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
     }
 
+    // Надежная перерегистрация Web Push (работает при закрытом браузере)
+    subscribeToWebPush = async function() {
+        if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+        try {
+            let permission = Notification.permission;
+            if (permission === 'default') {
+                permission = await Notification.requestPermission();
+            }
+            if (permission !== 'granted') return;
+
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            await reg.update();
+            const readyReg = await navigator.serviceWorker.ready;
+
+            if (!publicVapidKey) {
+                try {
+                    const res = await fetch('/vapidPublicKey');
+                    publicVapidKey = (await res.text()).trim();
+                } catch (err) {}
+            }
+
+            if ('PushManager' in window && publicVapidKey) {
+                let sub = await readyReg.pushManager.getSubscription();
+                if (!sub) {
+                    try {
+                        sub = await readyReg.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                        });
+                    } catch (subErr) {
+                        const oldSub = await readyReg.pushManager.getSubscription();
+                        if (oldSub) await oldSub.unsubscribe();
+                        sub = await readyReg.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                        });
+                    }
+                }
+                if (sub) {
+                    const userName = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'save_sub', user: userName, sub: sub }));
+                    }
+                    fetch('/subscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user: userName, sub: sub })
+                    }).catch(function() {});
+                }
+            }
+        } catch (e) { console.error('Push error:', e); }
+    };
+    // Короткий сигнал специально для запуска видеострима (без вечной сирены)
+    function playStreamSignal() {
+        try {
+            if (navigator.vibrate) navigator.vibrate(Array.of(300, 150, 300));
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.18);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            setTimeout(function() { osc.stop(); }, 400);
+        } catch (e) {}
+    }
+
     window.currentSharedStreamUrl = localStorage.getItem('msb_stream_url') || '';
     window.streamWs = null;
 
@@ -889,15 +960,21 @@
     }
 
     function closeStream() {
+        if (sirenAudio && !soundInterval) {
+            sirenAudio.pause();
+            sirenAudio.currentTime = 0;
+        }
         var win = document.getElementById('stream-window');
         if (win) win.style.display = 'none';
     }
+
     function initDedicatedStreamWs() {
         try {
             var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';
             window.streamWs = new WebSocket(proto + window.location.host);
             window.streamWs.onopen = function() {
                 window.streamWs.send(JSON.stringify({ type: 'get_stream' }));
+                subscribeToWebPush();
             };
             window.streamWs.onmessage = function(event) {
                 try {
@@ -911,7 +988,7 @@
                         }
                         if (msg.forceOpen && msg.url) {
                             if (!isUserAdmin()) {
-                                playBeep();
+                                playStreamSignal();
                                 showUserJoinPrompt(msg.url);
                             }
                         } else if (!msg.url) {
@@ -935,7 +1012,6 @@
             ws.send(JSON.stringify(data));
         }
     }
-
     function showUserJoinPrompt(url) {
         var win = document.getElementById('stream-window');
         if (!win) {
@@ -976,6 +1052,7 @@
         box.appendChild(btnClose);
         win.appendChild(box);
     }
+
     function openStream() {
         var activeUrl = window.currentSharedStreamUrl || localStorage.getItem('msb_stream_url') || '';
 
