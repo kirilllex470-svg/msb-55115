@@ -829,72 +829,234 @@
         ws.send(JSON.stringify({ type: 'update', user: currentUser, color: userColor, time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5), values: values }));
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
     }
-    function appendRow(row) {
+       function appendRow(row) {
         if (!row || !row.values) return;
         if (row.values.at(0)) {
-            const firstCol = String(row.values.at(0)); const isAck = firstCol.indexOf("ОЗНАКОМЛЕН") !== -1; const isNotif = firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1;
+            const firstCol = String(row.values.at(0));
+            const isAck = firstCol.indexOf("ОЗНАКОМЛЕН") !== -1;
+            const isNotif = firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1;
             if (isAck || isNotif) {
-                const notifBody = document.getElementById('notif-table-body'); const tr = document.createElement('tr'); tr.className = isNotif ? 'alert-row new-row' : 'ack-row new-row';
-                let sender = row.user; let target = "ВСЕМ"; let text = "-";
-                if (isNotif) { target = String(row.values.at(1) || '').replace("КОМУ: ", ""); text = String(row.values.at(row.values.length - 1) || '').replace("Текст: ", ""); }
-                else { sender = row.user; target = String(row.values.at(1) || '').replace("ОТ: ", ""); text = String(row.values.at(row.values.length - 1) || '').replace("Сообщение: ", ""); }
+                const notifBody = document.getElementById('notif-table-body');
+                const tr = document.createElement('tr');
+                tr.className = isNotif ? 'alert-row new-row' : 'ack-row new-row';
+                let sender = row.user;
+                let target = "ВСЕМ";
+                let text = "-";
+                if (isNotif) {
+                    target = String(row.values.at(1) || '').replace("КОМУ: ", "");
+                    text = String(row.values.at(row.values.length - 1) || '').replace("Текст: ", "");
+                } else {
+                    sender = row.user;
+                    target = String(row.values.at(1) || '').replace("ОТ: ", "");
+                    text = String(row.values.at(row.values.length - 1) || '').replace("Сообщение: ", "");
+                }
                 tr.innerHTML = '<td class="time-cell">' + row.time + '</td><td style="color:' + row.color + '; font-weight:bold;">' + sender + '</td><td style="font-weight:bold; color:#ef4444;">' + target + '</td><td style="text-align:left; padding-left:15px;">' + text + '</td>';
-                notifBody.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); return;
+                notifBody.appendChild(tr);
+                requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+                return;
             }
         }
-        const tbody = document.getElementById('table-body'); const tr = document.createElement('tr'); tr.className = 'new-row';
+        const tbody = document.getElementById('table-body');
+        const tr = document.createElement('tr');
+        tr.className = 'new-row';
         let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) { const val = (row.values.at(i) !== undefined) ? row.values.at(i) : '-'; html += '<td>' + (val || '-') + '</td>'; }
-        tr.innerHTML = html; tbody.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
+            const val = (row.values.at(i) !== undefined) ? row.values.at(i) : '-';
+            html += '<td>' + (val || '-') + '</td>';
+        }
+        tr.innerHTML = html;
+        tbody.appendChild(tr);
+        requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
     }
-    window.currentSharedStreamUrl = localStorage.getItem('msb_stream_url') || ''; window.streamWs = null;
+
+    window.currentSharedStreamUrl = localStorage.getItem('msb_stream_url') || '';
+    window.streamWs = null;
+
     function isUserAdmin() {
-        try {
-            if (typeof currentUser !== 'undefined' && String(currentUser).toUpperCase().indexOf('АДМИН') !== -1) return true;
-            for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); var val = String(localStorage.getItem(k) || '').toUpperCase(); if (val === 'АДМИН' || val === 'ADMIN') return true; }
-        } catch (e) {} return false;
+        return currentUser === ADMIN_NAME;
     }
-    function openAppPopupWindow(url) { if (!url) return; if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) { url = 'https://' + url; } window.open(url, 'SaluteJazzStream', 'width=' + screen.availWidth + ',height=' + screen.availHeight + ',top=0,left=0,toolbar=no,menubar=no,location=no,status=no'); }
+
+    function openAppPopupWindow(url) {
+        if (!url) return;
+        if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) {
+            url = 'https://' + url;
+        }
+        window.open(
+            url,
+            'SaluteJazzStream',
+            'width=' + screen.availWidth + ',height=' + screen.availHeight + ',top=0,left=0,toolbar=no,menubar=no,location=no,status=no'
+        );
+    }
+
+    function closeStream() {
+        var win = document.getElementById('stream-window');
+        if (win) win.style.display = 'none';
+    }
     function initDedicatedStreamWs() {
         try {
-            var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://'; window.streamWs = new WebSocket(proto + window.location.host);
-            window.streamWs.onopen = function() { window.streamWs.send(JSON.stringify({ type: 'get_stream' })); };
+            var proto = (window.location.protocol === 'https:') ? 'wss://' : 'ws://';
+            window.streamWs = new WebSocket(proto + window.location.host);
+            window.streamWs.onopen = function() {
+                window.streamWs.send(JSON.stringify({ type: 'get_stream' }));
+            };
             window.streamWs.onmessage = function(event) {
                 try {
                     var msg = JSON.parse(event.data);
                     if (msg.type === 'stream_url') {
-                        window.currentSharedStreamUrl = msg.url || ''; if (msg.url) { localStorage.setItem('msb_stream_url', msg.url); } else { localStorage.removeItem('msb_stream_url'); }
-                        if (msg.forceOpen && msg.url) { openAppPopupWindow(msg.url); if (!isUserAdmin()) { showUserJoinPrompt(msg.url); } } else if (!msg.url) { closeStream(); }
+                        window.currentSharedStreamUrl = msg.url || '';
+                        if (msg.url) {
+                            localStorage.setItem('msb_stream_url', msg.url);
+                        } else {
+                            localStorage.removeItem('msb_stream_url');
+                        }
+                        if (msg.forceOpen && msg.url) {
+                            if (!isUserAdmin()) {
+                                playBeep();
+                                showUserJoinPrompt(msg.url);
+                            }
+                        } else if (!msg.url) {
+                            if (!isUserAdmin()) closeStream();
+                        }
                     }
                 } catch (e) {}
             };
-            window.streamWs.onclose = function() { setTimeout(initDedicatedStreamWs, 2000); };
+            window.streamWs.onclose = function() {
+                setTimeout(initDedicatedStreamWs, 2000);
+            };
         } catch (e) {}
     }
+
     initDedicatedStreamWs();
-    function sendStreamWsMessage(data) { if (window.streamWs && window.streamWs.readyState === 1) { window.streamWs.send(JSON.stringify(data)); } }
+
+    function sendStreamWsMessage(data) {
+        if (window.streamWs && window.streamWs.readyState === 1) {
+            window.streamWs.send(JSON.stringify(data));
+        } else if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify(data));
+        }
+    }
+
     function showUserJoinPrompt(url) {
-        var win = document.getElementById('stream-window'); if (!win) { win = document.createElement('div'); win.id = 'stream-window'; document.body.appendChild(win); }
-        win.innerHTML = ''; win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.95);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;';
-        var box = document.createElement('div'); box.style.cssText = 'background:#1e293b;border:3px solid #22c55e;border-radius:16px;padding:35px 25px;text-align:center;max-width:460px;width:90%;';
-        var title = document.createElement('h2'); title.innerText = '🎥 ВИДЕОСТРИМ ЗАПУЩЕН'; title.style.cssText = 'margin:0 0 20px 0;color:#ffffff;';
-        var btnOpen = document.createElement('button'); btnOpen.innerText = '🚀 ОТКРЫТЬ СТРИМ'; btnOpen.style.cssText = 'width:100%;padding:18px 24px;background:#22c55e;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:18px;margin-bottom:12px;';
-        btnOpen.onclick = function() { openAppPopupWindow(url); closeStream(); };
-        var btnClose = document.createElement('button'); btnClose.innerText = 'Закрыть'; btnClose.style.cssText = 'width:100%;padding:10px;background:transparent;color:#94a3b8;border:none;cursor:pointer;font-size:14px;'; btnClose.onclick = closeStream;
-        box.appendChild(title); box.appendChild(btnOpen); box.appendChild(btnClose); win.appendChild(box);
+        var win = document.getElementById('stream-window');
+        if (!win) {
+            win = document.createElement('div');
+            win.id = 'stream-window';
+            document.body.appendChild(win);
+        }
+        win.innerHTML = '';
+        win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
+
+        var box = document.createElement('div');
+        box.style.cssText = 'background:#1e293b;border:3px solid #22c55e;border-radius:16px;padding:35px 25px;text-align:center;max-width:460px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
+
+        var title = document.createElement('h2');
+        title.innerText = '📡 НАЧАЛСЯ ВИДЕОСТРИМ!';
+        title.style.cssText = 'margin:0 0 10px 0;color:#ffffff;font-size:24px;';
+
+        var desc = document.createElement('p');
+        desc.innerText = 'Администратор запустил трансляцию. Нажмите кнопку ниже для перехода в новое окно:';
+        desc.style.cssText = 'color:#94a3b8;font-size:15px;margin:0 0 25px 0;line-height:1.4;';
+
+        var btnOpen = document.createElement('button');
+        btnOpen.innerText = '🚀 ПЕРЕЙТИ К СТРИМУ (В НОВОМ ОКНЕ)';
+        btnOpen.style.cssText = 'width:100%;padding:18px 20px;background:#22c55e;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:12px;';
+        btnOpen.onclick = function() {
+            openAppPopupWindow(url);
+            closeStream();
+        };
+
+        var btnClose = document.createElement('button');
+        btnClose.innerText = 'Скрыть окно';
+        btnClose.style.cssText = 'width:100%;padding:10px;background:transparent;color:#94a3b8;border:none;cursor:pointer;font-size:14px;';
+        btnClose.onclick = closeStream;
+
+        box.appendChild(title);
+        box.appendChild(desc);
+        box.appendChild(btnOpen);
+        box.appendChild(btnClose);
+        win.appendChild(box);
     }
+    function openStream() {
+        var activeUrl = window.currentSharedStreamUrl || localStorage.getItem('msb_stream_url') || '';
+
+        if (!isUserAdmin()) {
+            if (activeUrl) {
+                showUserJoinPrompt(activeUrl);
+            } else {
+                alert('🎥 Стрим еще не начался. Когда Администратор запустит трансляцию, у вас появится окно с кнопкой перехода.');
+            }
+            return;
+        }
+
+        var win = document.getElementById('stream-window');
+        if (!win) {
+            win = document.createElement('div');
+            win.id = 'stream-window';
+            document.body.appendChild(win);
+        }
+        win.innerHTML = '';
+        win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
+
+        var box = document.createElement('div');
+        box.style.cssText = 'background:#1e293b;border:2px solid #3b82f6;border-radius:16px;padding:30px 25px;text-align:center;max-width:520px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
+
+        var lbl = document.createElement('h2');
+        lbl.innerText = '📡 Управление видеостримом (АДМИН)';
+        lbl.style.cssText = 'margin:0 0 15px 0;font-size:20px;color:#f1f5f9;';
+
+        var inp = document.createElement('input');
+        inp.type = 'text';
+        inp.id = 'stream-url-input';
+        inp.value = activeUrl;
+        inp.placeholder = 'Вставьте ссылку SaluteJazz...';
+        inp.style.cssText = 'width:100%;padding:14px 15px;border-radius:8px;border:2px solid #3b82f6;background:#0f172a;color:#ffffff;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:15px;';
+
+        var btnStart = document.createElement('button');
+        btnStart.innerText = '🚀 ЗАПУСТИТЬ СТРИМ (В НОВОМ ОКНЕ)';
+        btnStart.style.cssText = 'width:100%;padding:16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:10px;';
+        btnStart.onclick = broadcastStreamUrl;
+
+        var btnStop = document.createElement('button');
+        btnStop.innerText = '⏹ ОСТАНОВИТЬ СТРИМ У ВСЕХ';
+        btnStop.style.cssText = 'width:100%;padding:14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;margin-bottom:10px;';
+        btnStop.onclick = stopBroadcastStream;
+
+        var btnBack = document.createElement('button');
+        btnBack.innerText = '⬅️ НАЗАД В ЖУРНАЛ';
+        btnBack.style.cssText = 'width:100%;padding:12px;background:#ef4444;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;';
+        btnBack.onclick = closeStream;
+
+        box.appendChild(lbl);
+        box.appendChild(inp);
+        box.appendChild(btnStart);
+        box.appendChild(btnStop);
+        box.appendChild(btnBack);
+        win.appendChild(box);
+    }
+
     function broadcastStreamUrl() {
-        var input = document.getElementById('stream-url-input'); var url = input ? input.value.trim() : '';
-        if (!url) return alert('Сначала вставьте ссылку в поле ввода!'); if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) { url = 'https://' + url; }
-        window.currentSharedStreamUrl = url; localStorage.setItem('msb_stream_url', url); sendStreamWsMessage({ type: 'set_stream', url: url, forceOpen: true }); openAppPopupWindow(url);
+        var input = document.getElementById('stream-url-input');
+        var url = input ? input.value.trim() : '';
+        if (!url) return alert('Сначала вставьте ссылку в поле ввода!');
+        if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) {
+            url = 'https://' + url;
+        }
+        window.currentSharedStreamUrl = url;
+        localStorage.setItem('msb_stream_url', url);
+        sendStreamWsMessage({ type: 'set_stream', url: url, forceOpen: true });
+        openAppPopupWindow(url);
+        closeStream();
     }
+
     function stopBroadcastStream() {
-        window.currentSharedStreamUrl = ''; localStorage.removeItem('msb_stream_url'); var input = document.getElementById('stream-url-input'); if (input) input.value = '';
+        window.currentSharedStreamUrl = '';
+        localStorage.removeItem('msb_stream_url');
+        var input = document.getElementById('stream-url-input');
+        if (input) input.value = '';
         sendStreamWsMessage({ type: 'set_stream', url: '', forceOpen: false });
+        alert('⏹ Видеострим остановлен для всех подразделений.');
+        closeStream();
     }
-    document.addEventListener('click', function(e) {
-        var btn = e.target.closest('button, a, div'); if (btn && btn.innerText && btn.innerText.toLowerCase().indexOf('видеострим') !== -1 && (!btn.id || btn.id.indexOf('stream') === -1)) { openStream(); }
-    });
 </script>
 </body>
 </html>
