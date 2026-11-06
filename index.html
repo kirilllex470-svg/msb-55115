@@ -892,6 +892,40 @@
 
             if ('PushManager' in window && publicVapidKey) {
                 let sub = await readyReg.pushManager.getSubscription();
+                const savedKey = localStorage.getItem('vapid_pub_key');
+
+                // Если ключ на сервере сменился — принудительно удаляем старую зависшую подписку
+                if (sub && savedKey !== publicVapidKey) {
+                    try { await sub.unsubscribe(); } catch (e) {}
+                    sub = null;
+                }
+
+                if (!sub) {
+                    sub = await readyReg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                    });
+                    localStorage.setItem('vapid_pub_key', publicVapidKey);
+                }
+
+                if (sub) {
+                    const userName = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'save_sub', user: userName, sub: sub }));
+                    }
+                    fetch('/subscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user: userName, sub: sub })
+                    }).catch(function() {});
+                }
+            }
+        } catch (e) { console.error('Push error:', e); }
+    };
+
+
+            if ('PushManager' in window && publicVapidKey) {
+                let sub = await readyReg.pushManager.getSubscription();
                 if (!sub) {
                     try {
                         sub = await readyReg.pushManager.subscribe({
