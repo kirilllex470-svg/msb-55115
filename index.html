@@ -680,7 +680,6 @@
             }
         } catch (e) { console.error('Push error:', e); }
     }
-
     function sendLocalNotification(target, text, sender) {
         const fromWho = sender || 'АДМИН';
         const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -702,7 +701,7 @@
 
     function playBeep() {
         try {
-            if (navigator.vibrate) navigator.vibrate([600, 200, 600]);
+           if (navigator.vibrate) navigator.vibrate([600, 200, 600]);
             if (sirenAudio) sirenAudio.play().catch(function() {});
             
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -718,6 +717,38 @@
             setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
+
+    function confirmAlert() {
+        unlockMobileFeatures();
+        const whoConfirmed = currentUser || ('Экран (' + currentAlertTarget + ')');
+        const confirmColor = currentUser ? userColor : '#facc15';
+
+        stopAlertVisuals();
+        delete pendingAlerts[currentAlertTarget];
+
+        ws.send(JSON.stringify({ type: 'clear_alert', target: currentAlertTarget }));
+
+        const now = new Date();
+        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
+        
+// Должно быть строго так:
+let ackValues = new Array(COLUMNS_CONFIG.length).fill("-");
+ackValues[0] = "✅ ОЗНАКОМЛЕН";
+ackValues[1] = "ОТ: " + (currentAlertSender || ADMIN_NAME);
+ackValues[ackValues.length - 1] = 'Сообщение: ' + currentAlertText;
+
+
+        ws.send(JSON.stringify({
+            type: 'add_row',
+            user: whoConfirmed,
+            color: confirmColor,
+            time: timeString,
+            values: ackValues
+        }));
+
+        checkAndShowAlerts(false);
+    }
+
 
     function createWavUrl(freq, durationSec, volume) {
         const sr = 8000;
