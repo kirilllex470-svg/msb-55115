@@ -13,421 +13,85 @@
     <link rel="apple-touch-icon" href="/icon-192.png">
     <title>МСБ55115</title>
     <style>
-        :root {
-            --bg: #0f172a;
-            --panel: #1e293b;
-            --accent: #3b82f6;
-            --text: #f1f5f9;
-            --border: #334155;
-            --danger: #ef4444;
-            --input-bg: #0f172a;
-            --table-header: #1e293b;
-            --notif-bg-wrapper: rgba(30, 41, 59, 0.7);
-        }
-        body.light-theme {
-            --bg: #f1f5f9;
-            --panel: #ffffff;
-            --accent: #2563eb;
-            --text: #0f172a;
-            --border: #cbd5e1;
-            --danger: #dc2626;
-            --input-bg: #ffffff;
-            --table-header: #e2e8f0;
-            --notif-bg-wrapper: rgba(255, 255, 255, 0.95);
-        }
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Segoe UI', monospace;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            box-sizing: border-box;
-            transition: background 0.2s, color 0.2s;
-        }
-        #login-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(15, 23, 42, 0.98);
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 15px;
-            box-sizing: border-box;
-        }
-        .login-box {
-            background: var(--panel);
-            padding: 30px 20px;
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            width: 100%;
-            max-width: 360px;
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
-            box-sizing: border-box;
-        }
-        .login-box select, .login-box input {
-            width: 100%;
-            padding: 14px;
-            margin-bottom: 15px;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            border-radius: 8px;
-            font-size: 16px;
-            outline: none;
-            box-sizing: border-box;
-        }
-        .login-box button {
-            width: 100%;
-            padding: 14px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-        }
+        :root { --bg: #0f172a; --panel: #1e293b; --accent: #3b82f6; --text: #f1f5f9; --border: #334155; --danger: #ef4444; }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.98); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
+        .login-box { background: var(--panel); padding: 40px; border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 320px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.7); box-sizing: border-box; }
+        .login-box select, .login-box input { width: 100%; padding: 14px; margin-bottom: 20px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
+        .login-box button { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .login-box button:hover { background: #2563eb; }
-        .viewer-btn {
-            background: transparent !important;
-            border: 1px solid #475569 !important;
-            color: #94a3b8 !important;
-            margin-top: 15px;
-        }
+        .viewer-btn { background: transparent !important; border: 1px solid #475569 !important; color: #94a3b8 !important; margin-top: 15px; }
         .viewer-btn:hover { background: #1e293b !important; color: white !important; }
-        .install-btn {
-            display: block;
-            width: 100%;
-            background: #10b981 !important;
-            color: white !important;
-            border: none !important;
-            margin-top: 15px;
-            padding: 12px 15px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
+        .install-btn { display: none; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
         .error-msg { color: var(--danger); font-size: 14px; margin-top: 10px; display: none; }
-        .input-panel {
-            background: var(--panel);
-            padding: 25px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            width: 100%;
-            max-width: 1400px;
-            margin-bottom: 30px;
-            display: none;
-            box-sizing: border-box;
-        }
-        .inputs-grid {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .field-group label {
-            display: block;
-            font-size: 13px;
-            color: #94a3b8;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        .field-group select, .field-group input {
-            width: 100%;
-            padding: 12px;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            border-radius: 6px;
-            font-size: 16px;
-            outline: none;
-            box-sizing: border-box;
-        }
-        .send-btn {
-            width: 100%;
-            padding: 15px;
-            background: #22c55e;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .stream-btn {
-            width: 100%;
-            padding: 15px;
-            background: #6366f1;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 15px;
-            text-align: center;
-        }
-        #admin-zone {
-            display: none;
-            margin-top: 30px;
-            padding: 20px;
-            border: 2px solid var(--danger);
-            border-radius: 10px;
-            background: rgba(239, 68, 68, 0.1);
-        }
+        .input-panel { background: var(--panel); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 1200px; margin-bottom: 30px; display: none; box-sizing: border-box; }
+        .inputs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 20px; }
+        .field-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; font-weight: bold; }
+        .field-group select, .field-group input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 16px; outline: none; box-sizing: border-box; }
+        .send-btn { width: 100%; padding: 15px; background: #22c55e; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        #admin-zone { display: none; margin-top: 30px; padding: 20px; border: 2px solid var(--danger); border-radius: 10px; background: rgba(239, 68, 68, 0.1); }
         .admin-controls { display: flex; gap: 10px; }
-        .admin-controls select {
-            width: 200px;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            font-size: 16px;
-            background: var(--input-bg);
-            color: var(--text);
-        }
-        .admin-controls input {
-            flex-grow: 1;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            font-size: 16px;
-            background: var(--input-bg);
-            color: var(--text);
-        }
-        .admin-controls button {
-            padding: 12px 20px;
-            background: var(--danger);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        #clear-history-box {
-            display: none;
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid rgba(239, 68, 68, 0.3);
-        }
-        #alert-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(185, 28, 28, 0.98);
-            z-index: 99999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 15px;
-            box-sizing: border-box;
-        }
-        .alert-content {
-            background: white;
-            color: #b91c1c;
-            padding: 30px;
-            border-radius: 20px;
-            width: 100%;
-            max-width: 600px;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5);
-            animation: shake 0.5s infinite;
-            box-sizing: border-box;
-        }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
-        }
-        .alert-btn {
-            margin-top: 20px;
-            width: 100%;
-            padding: 18px;
-            font-size: 20px;
-            background: #b91c1c;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .history-container, .notif-container {
-            width: 100%;
-            max-width: 1400px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            border-radius: 8px;
-            margin-bottom: 25px;
-        }
-        .notif-box-wrapper {
-            width: 100%;
-            max-width: 1400px;
-            background: var(--notif-bg-wrapper);
-            border: 2px solid var(--accent);
-            border-radius: 12px;
-            padding: 20px;
-            box-sizing: border-box;
-            margin-bottom: 25px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 850px;
-            background: var(--panel);
-        }
-        th, td {
-            border: 1px solid var(--border);
-            padding: 10px;
-            text-align: center;
-            font-size: 14px;
-        }
-        th { background: var(--table-header); color: #94a3b8; }
+        .admin-controls select { width: 200px; padding: 12px; border-radius: 6px; border: none; font-size: 16px; }
+        .admin-controls input { flex-grow: 1; padding: 12px; border-radius: 6px; border: none; font-size: 16px; }
+        .admin-controls button { padding: 12px 20px; background: var(--danger); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        #alert-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(185, 28, 28, 0.98); z-index: 99999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 15px; box-sizing: border-box; }
+        .alert-content { background: white; color: #b91c1c; padding: 30px; border-radius: 20px; width: 100%; max-width: 600px; box-shadow: 0 0 50px rgba(0,0,0,0.5); animation: shake 0.5s infinite; box-sizing: border-box; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .alert-btn { margin-top: 20px; width: 100%; padding: 18px; font-size: 20px; background: #b91c1c; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .history-container { width: 100%; max-width: 1400px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; min-width: 850px; }
+        th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 14px; }
+        th { background: #1e293b; color: #94a3b8; }
         .new-row { animation: fadeIn 0.5s ease; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .time-cell { color: #facc15; font-family: monospace; }
         .user-cell { font-weight: bold; }
-        .ack-row td {
-            background: rgba(34, 197, 94, 0.1);
-            color: #86efac;
-            font-style: italic;
-        }
-        body.light-theme .ack-row td {
-            background: rgba(34, 197, 94, 0.15);
-            color: #16a34a;
-        }
-        .alert-row td {
-            background: rgba(239, 68, 68, 0.15);
-            color: #fca5a5;
-            font-weight: bold;
-        }
-        body.light-theme .alert-row td {
-            background: rgba(239, 68, 68, 0.08);
-            color: #b91c1c;
-        }
-        #stream-window {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: #0f172a;
-            z-index: 99999;
-            color: white;
-            flex-direction: column;
-            box-sizing: border-box;
-        }
-        .theme-btn {
-            background: #475569;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-        }
+        .ack-row td { background: rgba(34, 197, 94, 0.1); color: #86efac; font-style: italic; }
+        .alert-row td { background: rgba(239, 68, 68, 0.15); color: #fca5a5; font-weight: bold; }
         @media (max-width: 768px) {
             body { padding: 10px; }
             .login-box { padding: 25px 20px; }
             .input-panel { padding: 15px; margin-bottom: 20px; }
             .inputs-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .admin-controls { flex-direction: column; }
-            .admin-controls select, .admin-controls input, .admin-controls button {
-                width: 100%;
-                box-sizing: border-box;
-            }
+            .admin-controls select, .admin-controls input, .admin-controls button { width: 100%; box-sizing: border-box; }
             .alert-content h1 { font-size: 28px !important; }
-            #alert-text {
-                font-size: 22px !important;
-                padding: 15px !important;
-                word-break: break-word;
-            }
+            #alert-text { font-size: 22px !important; padding: 15px !important; word-break: break-word; }
         }
-        @media (max-width: 480px) {
-            .inputs-grid { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 480px) { .inputs-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-    <div id="stream-window">
-        <div style="width: 100%; background: #1e293b; padding: 15px 20px; border-bottom: 2px solid #3b82f6; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; box-sizing: border-box; z-index: 10;">
-            <div style="font-size: 18px; font-weight: bold; color: #f1f5f9;">📡 Видеострим МСБ55115</div>
-            <div style="display: flex; flex-grow: 1; max-width: 700px; gap: 8px; flex-wrap: wrap;">
-                <input type="text" id="stream-url-input" placeholder="Вставьте ссылку: https://salutejazz.ru..." style="flex-grow: 1; min-width: 220px; padding: 12px 15px; border-radius: 8px; border: 2px solid #3b82f6; background: #0f172a; color: #ffffff; font-size: 15px; outline: none; box-sizing: border-box;">
-                <button type="button" onclick="launchStreamUrl()" style="padding: 12px 20px; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">▶️ ОТКРЫТЬ В ОКНЕ</button>
-                <button type="button" onclick="openStreamExternal()" style="padding: 12px 16px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">🚀 НА ВЕСЬ ЭКРАН</button>
-            </div>
-            <button type="button" onclick="closeStream()" style="padding: 12px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">⬅️ НАЗАД В ЖУРНАЛ</button>
-        </div>
-        <div style="flex-grow: 1; width: 100%; position: relative; background: #000000; display: flex; flex-direction: column; justify-content: center; align-items: center;">
-            <div id="stream-placeholder" style="text-align: center; padding: 20px; max-width: 500px;">
-                <div style="font-size: 50px; margin-bottom: 15px;">🎥</div>
-                <h3 style="margin: 0 0 10px 0; color: #f1f5f9;">Вставьте ссылку в поле сверху</h3>
-                <p style="color: #94a3b8; font-size: 14px; line-height: 1.5;">
-                    Нажмите <b>«▶️ ОТКРЫТЬ В ОКНЕ»</b>, чтобы развернуть стрим прямо здесь.<br>
-                    <i>Если экран остаётся пустым из-за защиты сайта, нажмите <b>«🚀 НА ВЕСЬ ЭКРАН»</b>.</i>
-                </p>
-            </div>
-            <iframe id="stream-iframe" src="" allow="camera *; microphone *; fullscreen *; display-capture *; autoplay *" allowfullscreen style="display: none; width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0;"></iframe>
-        </div>
-    </div>
-
     <div id="alert-modal">
         <div class="alert-content">
-            <h1 id="alert-target-label" style="margin: 0 0 10px 0; font-size: 32px; font-weight: 900; letter-spacing: 1px;">🛑 ВНИМАНИЕ!</h1>
-            <div id="alert-text" style="font-size: 26px; font-weight: bold; background: #fef2f2; border: 2px dashed #b91c1c; padding: 20px; border-radius: 12px; margin: 15px 0; min-height: 60px; display: flex; align-items: center; justify-content: center; line-height: 1.4;">-</div>
-            <button type="button" class="alert-btn" onclick="confirmAlert()">🟢 ОЗНАКОМЛЕН И ПРИНЯЛ</button>
+            <h1 style="font-size: 40px; margin: 0;">🛑 СООБЩЕНИЕ!</h1>
+            <p id="alert-target-label" style="font-size: 18px; margin-top: 10px; font-weight: bold;">ВАМ ПИШУТ:</p>
+            <h2 id="alert-text" style="font-size: 32px; border-top: 2px solid #b91c1c; border-bottom: 2px solid #b91c1c; padding: 20px;">...</h2>
+            <button type="button" class="alert-btn" onclick="confirmAlert()">ДА, Я ПОНЯЛ</button>
         </div>
     </div>
     <div id="login-overlay">
         <div class="login-box">
-            <h2 style="color:var(--text); margin-top:0; font-size: 22px;">🔐 Доступ в МСБ55115</h2>
-            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 8px; font-weight: bold;">1. ВЫБЕРИТЕ ВАШЕ ПОДРАЗДЕЛЕНИЕ:</div>
-            <div id="user-badges-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
-                <button type="button" onclick="selectSubdivision(0, 'ШР', '#3b82f6')" style="padding: 12px; background: #1e293b; color: #3b82f6; border: 2px solid #3b82f6; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">ШР</button>
-                <button type="button" onclick="selectSubdivision(1, 'РОТА-1', '#a855f7')" style="padding: 12px; background: #1e293b; color: #a855f7; border: 2px solid #a855f7; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">РОТА-1</button>
-                <button type="button" onclick="selectSubdivision(2, 'РОТА-2', '#22c55e')" style="padding: 12px; background: #1e293b; color: #22c55e; border: 2px solid #22c55e; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">РОТА-2</button>
-                <button type="button" onclick="selectSubdivision(3, 'РОТА-3', '#eab308')" style="padding: 12px; background: #1e293b; color: #eab308; border: 2px solid #eab308; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">РОТА-3</button>
-                <button type="button" onclick="selectSubdivision(4, 'АДМИН', '#ef4444')" style="grid-column: span 2; padding: 12px; background: #1e293b; color: #ef4444; border: 2px solid #ef4444; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">🛠️ АДМИНИСТРАТОР</button>
-            </div>
-            <select id="login-select" style="display: none;"></select>
-            <div id="password-block" style="display: none;">
-                <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px; font-weight: bold;">2. ВВЕДИТЕ ПАРОЛЬ ДЛЯ <span id="selected-user-label" style="text-transform: uppercase;"></span>:</div>
-                <input type="password" id="login-pass" placeholder="••••" autocomplete="off" oninput="document.getElementById('login-error').style.display='none'">
-                <button type="button" onclick="attemptLogin()">ВОЙТИ В СИСТЕМУ</button>
-            </div>
+            <h2 style="color:white; margin-top:0;">🔐 Доступ в МСБ55115</h2>
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Подразделение:</div>
+            <select id="login-select" onchange="document.getElementById('login-error').style.display='none'"></select>
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Пароль:</div>
+            <input type="password" id="login-pass" placeholder="••••" autocomplete="off" oninput="document.getElementById('login-error').style.display='none'">
+            <button type="button" onclick="attemptLogin()">ВОЙТИ</button>
             <button type="button" class="viewer-btn" onclick="loginAsViewer()">Просто смотреть</button>
-            <button type="button" id="pwa-main-btn" class="install-btn pwa-install-btn" onclick="installPWA()">📲 УСТАНОВИТЬ ПРИЛОЖЕНИЕ</button>
-            <div id="pwa-help-text" style="color: #64748b; font-size: 11px; margin-top: 8px; line-height: 1.3;">Если кнопка не реагирует: нажмите меню браузера <br><strong>«Добавить на гл. экран»</strong> или <strong>«Установить»</strong>.</div>
-            <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none; font-weight: bold;">❌ Неверный пароль</div>
+            <button type="button" class="install-btn pwa-install-btn" onclick="installPWA()">📲 УСТАНОВИТЬ ПРИЛОЖЕНИЕ</button>
+            <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none;">❌ Неверный пароль</div>
         </div>
     </div>
     <div class="input-panel" id="input-panel">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
             <h3 style="margin:0;">📝 ПОДРАЗДЕЛЕНИЕ: <span id="my-name"></span></h3>
             <div style="display:flex; gap:10px;">
-                <button type="button" class="theme-btn" onclick="toggleTheme()">🌓 Смена темы</button>
-                <button type="button" class="install-btn pwa-install-btn" style="width:auto; margin-top:0; padding:8px 15px; display:none;" onclick="installPWA()">📲 Установить</button>
+                <button type="button" class="install-btn pwa-install-btn" style="width:auto; margin-top:0; padding:8px 15px;" onclick="installPWA()">📲 Установить</button>
                 <button type="button" onclick="logoutUser()" style="background:#334155; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer; font-weight:bold;">Выход</button>
             </div>
         </div>
         <div class="inputs-grid" id="dynamic-inputs"></div>
         <button type="button" class="send-btn" onclick="submitRow()">📤 ЗАПИСАТЬ В ЖУРНАЛ</button>
-        <button type="button" class="stream-btn" onclick="openStream()">📺 ВИДЕОСТРИМ МСБ55115</button>
         <div id="admin-zone">
             <h3 style="color: #ef4444; margin-top: 0;">⚡ УПРАВЛЕНИЕ И СВЯЗЬ</h3>
             <div style="color: #fca5a5; margin-bottom: 10px; font-size: 14px;">Отправить уведомление подразделению:</div>
@@ -441,24 +105,7 @@
             </div>
         </div>
     </div>
-    
-    <div class="notif-box-wrapper" id="notif-box-wrapper">
-        <h3 style="margin: 0 0 15px 0; color: #ef4444; font-size: 16px;">🚨 ОКНО ОПЕРАТИВНЫХ УВЕДОМЛЕНИЙ (КТО КОМУ ПИШЕТ)</h3>
-        <div class="notif-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 130px;">🕒 Время</th>
-                        <th style="width: 130px;">👤 Отправитель</th>
-                        <th style="width: 130px;">🎯 Получатель</th>
-                        <th>💬 Текст сообщения / Статус ознакомления</th>
-                    </tr>
-                </thead>
-                <tbody id="notif-table-body"></tbody>
-            </table>
-        </div>
-    </div>
-    <h3 style="color:#94a3b8; width: 100%; max-width: 1400px; margin: 10px 0;">📊 Журнал боевых событий</h3>
+    <h3 style="color:#94a3b8; width: 100%; max-width: 1400px; margin: 10px 0;">📊 Журнал событий</h3>
     <div class="history-container">
         <table>
             <thead>
@@ -470,7 +117,6 @@
             <tbody id="table-body"></tbody>
         </table>
     </div>
-
 <script>
     const USERS_CONFIG = [
         { name: "ШР", pass: "551151111", color: "#3b82f6" },
@@ -480,25 +126,24 @@
         { name: "АДМИН", pass: "5555", color: "#ef4444" }
     ];
     const ADMIN_NAME = "АДМИН";
+
     const COLUMNS_CONFIG = [
-        { label: "ГРУППА", options: Array.of("1", "2", "3", "4", "5") },
-        { label: "ИСХОДНИКИ", options: Array.of(
+        { label: "ГРУППА", options: ["1", "2", "3", "4", "5"] },
+        { label: "ИСХОДНИКИ", options: [
             "НАЧАЛИ ДВИЖЕНИЕ", "ЖДУТ", "ИДУТ", "ПЕРЕСЕКАЮТ ОТКРЫТКУ",
             "ПРОШЛИ ИСХОДНЫЙ ПУНКТ", "ЗАНЯТИЕ Р-НА ФОР-Я ГРУПП",
             "ЗАНЯТИЕ ПЕРЕФОР-Я Р-НА ГРУПП", "ВЫХОД НА РУБЕЖ АТАКИ",
             "ВЫХОД НА РУБЕЖ ШТУРМА", "ЗАНИМАЮТСЯ МЕДИЦИНОЙ",
             "ЗАНИМАЮТСЯ СВЯЗЬЮ", "ОБОРОНА", "РАБОТАЮТ В ОБОРОНЕ",
             "ШТУРМУЮТ", "РВБС"
-        )},
-        { label: "ЦВЕТ ТОЧКИ", options: Array.of(
+        ]},
+        { label: "ЦВЕТ ТОЧКИ", options: [
             "ФИОЛЕТОВЫЙ", "БИРЮЗОВАЯ", "БИРЮЗОВАЯ-А", "СЕРАЯ", "ЗЕЛЕНАЯ",
             "СИНИЯ", "ЖЕЛТАЯ", "ОРАНЖЕВАЯ", "КРАСНАЯ", "РОЗОВАЯ",
             "РОЗОВАЯ-А", "БЕЖЕВАЯ", "КОРИЧНЕВАЯ", "ЧЕРНАЯ", "БОРДОВАЯ"
-        )}
-    ];
-    const EXT_COLUMNS_CONFIG = [
-        { label: "НОМЕР ТОЧКИ", options: new Array(), allowSlashFraction: true },
-        { label: "ЛЕСОПОЛОСА", options: Array.of(
+        ]},
+        { label: "НОМЕР ТОЧКИ", options: new Array(), digitsOnly: true },
+        { label: "ЛЕСОПОЛОСА", options: [
             "ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "ЗАМЕНА", "КРАСКА",
             "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7",
             "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1",
@@ -515,295 +160,538 @@
             "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1",
             "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН",
             "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"
-        )},
+        ]},
         { label: "ПРИМЕЧАНИЯ", options: new Array() }
     ];
-    EXT_COLUMNS_CONFIG.forEach(function(c) { COLUMNS_CONFIG.push(c); });
 
-    let ws = null; let currentUser = null; let userColor = '#fff';
-    let currentAlertText = ""; let currentAlertTarget = ""; let currentAlertSender = "";
-    let pendingAlerts = {}; let titleInterval = null; let soundInterval = null;
-    let audioCtx = null; let keepAliveAudio = null; let sirenAudio = null;
-    let publicVapidKey = null; let deferredPrompt = null;
-    window.currentSharedStreamUrl = localStorage.getItem('msb_stream_url') || ''; window.streamWs = null;
-    function selectSubdivision(index, name, color) {
-        const selectEl = document.getElementById('login-select');
-        if (selectEl) { selectEl.value = index; }
-        const buttons = document.querySelectorAll('#user-badges-grid button');
-        buttons.forEach(function(btn) {
-            btn.style.background = '#1e293b';
-            if (btn.innerText.indexOf(name) !== -1 || (name === 'АДМИН' && btn.innerText.indexOf('АДМИНИСТРАТОР') !== -1)) {
-                btn.style.background = color; btn.style.color = '#ffffff';
-            } else {
-                if (btn.innerText.indexOf('ШР') !== -1) btn.style.color = '#3b82f6';
-                if (btn.innerText.indexOf('РОТА-1') !== -1) btn.style.color = '#a855f7';
-                if (btn.innerText.indexOf('РОТА-2') !== -1) btn.style.color = '#22c55e';
-                if (btn.innerText.indexOf('РОТА-3') !== -1) btn.style.color = '#eab308';
-                if (btn.innerText.indexOf('АДМИНИСТРАТОР') !== -1) btn.style.color = '#ef4444';
-            }
+    let ws = null;
+    let currentUser = null;
+    let userColor = '#fff';
+    let currentAlertText = "";
+    let currentAlertTarget = "";
+    let currentAlertSender = "";
+    let pendingAlerts = {};
+    let titleInterval = null;
+    let soundInterval = null;
+    let audioCtx = null;
+    let keepAliveAudio = null;
+    let sirenAudio = null;
+    let publicVapidKey = null;
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
+            btn.style.display = 'inline-block';
         });
-        document.getElementById('selected-user-label').innerText = name;
-        document.getElementById('selected-user-label').style.color = color;
-        document.getElementById('password-block').style.display = 'block';
-        document.getElementById('login-error').style.display = 'none';
-        setTimeout(function() { document.getElementById('login-pass').focus(); }, 50);
+    });
+
+    window.addEventListener('appinstalled', function() {
+        deferredPrompt = null;
+        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
+            btn.style.display = 'none';
+        });
+    });
+
+    async function installPWA() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
+            btn.style.display = 'none';
+        });
     }
-    function toggleTheme() { const isLight = document.body.classList.toggle('light-theme'); localStorage.setItem('journal_theme', isLight ? 'light' : 'dark'); }
-    function initTheme() { const saved = localStorage.getItem('journal_theme'); if (saved === 'light') { document.body.classList.add('light-theme'); } }
-    function closeStream() { if (sirenAudio && !soundInterval) { sirenAudio.pause(); sirenAudio.currentTime = 0; } var win = document.getElementById('stream-window'); if (win) win.style.display = 'none'; }
-    function launchStreamUrl() {
-        let url = document.getElementById('stream-url-input').value.trim(); if (!url) return alert("Сначала вставьте ссылку в поле ввода!");
-        if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; } localStorage.setItem('msb_stream_url', url);
-        document.getElementById('stream-placeholder').style.display = 'none'; const iframe = document.getElementById('stream-iframe'); iframe.style.display = 'block'; iframe.src = url;
-    }
-    function openStreamExternal() {
-        let url = document.getElementById('stream-url-input').value.trim(); if (!url) return alert("Сначала вставьте ссылку в поле ввода!");
-        if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; } localStorage.setItem('msb_stream_url', url);
-        window.open(url, 'SaluteJazzStream', 'width=' + screen.availWidth + ',height=' + screen.availHeight + ',top=0,left=0');
-    }
-    window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); deferredPrompt = e; document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'block'; }); });
-    window.addEventListener('appinstalled', function() { deferredPrompt = null; document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; }); });
-    async function installPWA() { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; }); }
+
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64); const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i); return outputArray;
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+        return outputArray;
     }
+
     async function subscribeToWebPush() {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
         try {
-            let permission = Notification.permission; if (permission === 'default') { permission = await Notification.requestPermission(); }
+            if (Notification.permission === 'denied') return;
+            const permission = await Notification.requestPermission();
             if (permission !== 'granted') return;
-            const reg = await navigator.serviceWorker.register('/sw.js'); await reg.update(); const readyReg = await navigator.serviceWorker.ready;
-            if (!publicVapidKey) { try { const res = await fetch('/vapidPublicKey'); publicVapidKey = (await res.text()).trim(); } catch (err) {} }
+
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            await reg.update();
+            const readyReg = await navigator.serviceWorker.ready;
+
             if ('PushManager' in window && publicVapidKey) {
-                let sub = await readyReg.pushManager.getSubscription(); const savedKey = localStorage.getItem('vapid_pub_key');
-                if (sub && savedKey !== publicVapidKey) { try { await sub.unsubscribe(); } catch (e) {} sub = null; }
-                if (!sub) { sub = await readyReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicVapidKey) }); localStorage.setItem('vapid_pub_key', publicVapidKey); }
-                if (sub) {
-                    const userName = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
-                    if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ type: 'save_sub', user: userName, sub: sub })); }
-                    fetch('/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: userName, sub: sub }) }).catch(function() {});
+                let sub = await readyReg.pushManager.getSubscription();
+                if (!sub) {
+                    sub = await readyReg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                    });
+                }
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'save_sub', user: currentUser || 'ГОСТЬ', sub: sub }));
                 }
             }
         } catch (e) { console.error('Push error:', e); }
     }
     function sendLocalNotification(target, text, sender) {
-        const fromWho = sender || 'АДМИН'; const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!'; const body = fromWho + ': ' + text;
+        const fromWho = sender || 'АДМИН';
+        const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
+        const body = fromWho + ': ' + text;
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then(function(reg) {
-                reg.showNotification(title, { body: body, vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000), silent: false, requireInteraction: true, renotify: true, tag: 'admin-alert' }).catch(function() {});
+                reg.showNotification(title, {
+                    body: body,
+                    vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
+                    silent: false,
+                    requireInteraction: true,
+                    renotify: true,
+                    tag: 'admin-alert'
+                }).catch(function() {});
             });
         }
     }
+
     function createWavUrl(freq, durationSec, volume) {
-        const sr = 8000; const numSamples = sr * durationSec; const buf = new ArrayBuffer(44 + numSamples * 2); const view = new DataView(buf);
+        const sr = 8000;
+        const numSamples = sr * durationSec;
+        const buf = new ArrayBuffer(44 + numSamples * 2);
+        const view = new DataView(buf);
         const writeStr = function(off, s) { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
         writeStr(0, 'RIFF'); view.setUint32(4, 36 + numSamples * 2, true); writeStr(8, 'WAVE');
         writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
         view.setUint16(22, 1, true); view.setUint32(24, sr, true); view.setUint32(28, sr * 2, true);
-        view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeStr(36, 'data'); view.setUint32(40, numSamples * 2, true);
+        view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeStr(36, 'data');
+        view.setUint32(40, numSamples * 2, true);
         for (let i = 0; i < numSamples; i++) {
-            let sample = 0; if (volume > 0) { const f = (i % sr < sr / 2) ? freq : freq * 1.3; sample = Math.sin(2 * Math.PI * f * (i / sr)) * volume * 32767; }
+            let sample = 0;
+            if (volume > 0) {
+                const f = (i % sr < sr / 2) ? freq : freq * 1.3;
+                sample = Math.sin(2 * Math.PI * f * (i / sr)) * volume * 32767;
+            }
             view.setInt16(44 + i * 2, sample, true);
         }
         return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
     }
+
     function unlockMobileFeatures() {
         try {
-            if (!keepAliveAudio) { keepAliveAudio = new Audio(createWavUrl(100, 1, 0.0001)); keepAliveAudio.loop = true; }
+            if (!keepAliveAudio) {
+                keepAliveAudio = new Audio(createWavUrl(100, 1, 0.0001));
+                keepAliveAudio.loop = true;
+            }
             keepAliveAudio.play().catch(function() {});
-            if (!sirenAudio) { sirenAudio = new Audio(createWavUrl(880, 1, 0.9)); sirenAudio.loop = true; }
+
+            if (!sirenAudio) {
+                sirenAudio = new Audio(createWavUrl(880, 1, 0.9));
+                sirenAudio.loop = true;
+            }
+
             if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({ title: '🟢 Дежурный режим активен', artist: 'Журнал Работ (Ожидание команд)' });
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: '🟢 Дежурный режим активен',
+                    artist: 'Журнал Работ (Ожидание команд)',
+                    album: 'Нажмите, чтобы открыть'
+                });
             }
         } catch(e) {}
-        if ('wakeLock' in navigator) { navigator.wakeLock.request('screen').catch(function() {}); }
-    }
-    function updateLockScreenAlert(target, text, sender) {
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({ title: '🛑 ТРЕВОГА ДЛЯ [' + target + '] ОТ [' + (sender || 'АДМИН') + ']!', artist: text });
+
+        if ('wakeLock' in navigator) {
+            navigator.wakeLock.request('screen').catch(function() {});
         }
     }
+
+    function updateLockScreenAlert(target, text, sender) {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: '🛑 ТРЕВОГА ДЛЯ [' + target + '] ОТ [' + (sender || 'АДМИН') + ']!',
+                artist: text,
+                album: 'СРОЧНО ОТКРОЙТЕ БРАУЗЕР!'
+            });
+        }
+    }
+
     function playBeep() {
         try {
-            if (navigator.vibrate) navigator.vibrate(Array.of(600, 200, 600)); if (sirenAudio) sirenAudio.play().catch(function() {});
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(880, audioCtx.currentTime); gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); setTimeout(function() { osc.stop(); }, 450);
+            if (navigator.vibrate) navigator.vibrate(Array.of(600, 200, 600));
+            if (sirenAudio) sirenAudio.play().catch(function() {});
+            
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
-    function playStreamSignal() {
-        try {
-            if (navigator.vibrate) navigator.vibrate(Array.of(300, 150, 300));
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-            osc.type = 'sine'; osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.18);
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); setTimeout(function() { osc.stop(); }, 400);
-        } catch (e) {}
-    }
+
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
+
         ws.onmessage = function(event) {
             const msg = JSON.parse(event.data);
             if (msg.type === 'init') {
-                document.getElementById('table-body').innerHTML = ''; document.getElementById('notif-table-body').innerHTML = '';
-                if (Array.isArray(msg.data)) { msg.data.forEach(appendRow); }
-                if (msg.vapidPublicKey) { publicVapidKey = msg.vapidPublicKey; subscribeToWebPush(); }
-                if (msg.alerts) { pendingAlerts = msg.alerts; checkAndShowAlerts(false); }
+                document.getElementById('table-body').innerHTML = '';
+                msg.data.forEach(appendRow);
+                if (msg.vapidPublicKey) {
+                    publicVapidKey = msg.vapidPublicKey;
+                    subscribeToWebPush();
+                }
+                if (msg.alerts) {
+                    pendingAlerts = msg.alerts;
+                    checkAndShowAlerts(false);
+                }
             }
             if (msg.type === 'new_row') appendRow(msg.row);
-            if (msg.type === 'history_cleared') { document.getElementById('table-body').innerHTML = ''; document.getElementById('notif-table-body').innerHTML = ''; }
-            if (msg.type === 'admin_alert') { pendingAlerts[msg.target] = { text: msg.text, sender: msg.sender || ADMIN_NAME }; checkAndShowAlerts(true); }
-            if (msg.type === 'alert_cleared') { delete pendingAlerts[msg.target]; if (currentAlertTarget === msg.target) stopAlertVisuals(); checkAndShowAlerts(false); }
+            if (msg.type === 'history_cleared') {
+                document.getElementById('table-body').innerHTML = '';
+            }
+            if (msg.type === 'admin_alert') {
+                pendingAlerts[msg.target] = {
+                    text: msg.text,
+                    sender: msg.sender || ADMIN_NAME
+                };
+                checkAndShowAlerts(true);
+            }
+            if (msg.type === 'alert_cleared') {
+                delete pendingAlerts[msg.target];
+                if (currentAlertTarget === msg.target) stopAlertVisuals();
+                checkAndShowAlerts(false);
+            }
         };
+
         ws.onclose = function() { setTimeout(connectWS, 1500); };
     }
-    setInterval(function() { if (ws && ws.readyState === WebSocket.OPEN) { ws.send(JSON.stringify({ type: 'ping' })); } else { connectWS(); } }, 4000);
+    setInterval(function() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+        } else {
+            connectWS();
+        }
+    }, 4000);
     function populateTargetSelect() {
-        const adminSelect = document.getElementById('admin-target'); if (!adminSelect) return; adminSelect.innerHTML = '';
-        let optAll = document.createElement('option'); optAll.value = "ВСЕМ"; optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ"; adminSelect.appendChild(optAll);
-        USERS_CONFIG.forEach(function(u) { if (u.name !== currentUser) { let opt2 = document.createElement('option'); opt2.value = u.name; opt2.innerText = u.name; adminSelect.appendChild(opt2); } });
+        const adminSelect = document.getElementById('admin-target');
+        adminSelect.innerHTML = '';
+
+        let optAll = document.createElement('option');
+        optAll.value = "ВСЕМ";
+        optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ";
+        adminSelect.appendChild(optAll);
+
+        USERS_CONFIG.forEach(function(u) {
+            if (u.name !== currentUser) {
+                let opt2 = document.createElement('option');
+                opt2.value = u.name;
+                opt2.innerText = u.name;
+                adminSelect.appendChild(opt2);
+            }
+        });
     }
+
     function applyUserUI() {
-        document.getElementById('login-overlay').style.display = 'none'; document.getElementById('input-panel').style.display = 'block';
-        document.getElementById('my-name').innerText = currentUser; document.getElementById('my-name').style.color = userColor;
-        document.getElementById('admin-zone').style.display = 'block'; populateTargetSelect();
-        if (currentUser === ADMIN_NAME) { document.getElementById('clear-history-box').style.display = 'block'; } else { document.getElementById('clear-history-box').style.display = 'none'; }
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('input-panel').style.display = 'block';
+        document.getElementById('my-name').innerText = currentUser;
+        document.getElementById('my-name').style.color = userColor;
+        
+        document.getElementById('admin-zone').style.display = 'block';
+        populateTargetSelect();
+
+        if (currentUser === ADMIN_NAME) {
+            document.getElementById('clear-history-box').style.display = 'block';
+        } else {
+            document.getElementById('clear-history-box').style.display = 'none';
+        }
     }
+
     function initApp() {
-        initTheme(); document.getElementById('login-error').style.display = 'none';
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(function() {}); }
-        document.body.addEventListener('click', function firstTouch() { unlockMobileFeatures(); subscribeToWebPush(); document.body.removeEventListener('click', firstTouch); }, { once: true });
-        const loginSelect = document.getElementById('login-select'); loginSelect.innerHTML = '';
-        USERS_CONFIG.forEach(function(u, index) { let opt = document.createElement('option'); opt.value = index; opt.innerText = u.name; loginSelect.appendChild(opt); });
-        const headerRow = document.getElementById('table-headers'); const inputContainer = document.getElementById('dynamic-inputs');
-        headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>'; inputContainer.innerHTML = '';
+        document.getElementById('login-error').style.display = 'none';
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function() {});
+        }
+
+        document.body.addEventListener('click', function firstTouch() {
+            unlockMobileFeatures();
+            subscribeToWebPush();
+            document.body.removeEventListener('click', firstTouch);
+        }, { once: true });
+
+        const loginSelect = document.getElementById('login-select');
+        loginSelect.innerHTML = '';
+
+        USERS_CONFIG.forEach(function(u, index) {
+            let opt = document.createElement('option');
+            opt.value = index; opt.innerText = u.name;
+            loginSelect.appendChild(opt);
+        });
+
+        const headerRow = document.getElementById('table-headers');
+        const inputContainer = document.getElementById('dynamic-inputs');
+        
+        headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
+        inputContainer.innerHTML = '';
+
         COLUMNS_CONFIG.forEach(function(col, index) {
-            let th = document.createElement('th'); th.innerText = col.label; headerRow.appendChild(th);
-            let div = document.createElement('div'); div.className = 'field-group'; let inputHtml = '';
+            let th = document.createElement('th'); 
+            th.innerText = col.label; 
+            headerRow.appendChild(th);
+            
+            let div = document.createElement('div'); 
+            div.className = 'field-group';
+            let inputHtml = '';
+
             if (col.options && col.options.length > 0) {
                 let opts = col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('');
                 inputHtml = '<select id="in-' + index + '"><option value="" disabled selected>-</option>' + opts + '</select>';
-            } else if (col.allowSlashFraction) {
-                inputHtml = '<input type="text" id="in-' + index + '" placeholder="Цифры, дробь, /..." oninput="this.value = this.value.replace(/[^0-9\\/\\\\.,-]/g, \'\')">';
-            } else { inputHtml = '<input type="text" id="in-' + index + '" placeholder="...">'; }
-            div.innerHTML = '<label>' + col.label + '</label>' + inputHtml; inputContainer.appendChild(div);
+            } else if (col.digitsOnly) {
+                inputHtml = '<input type="text" inputmode="numeric" pattern="[0-9]*" id="in-' + index + '" placeholder="Только цифры..." oninput="this.value = this.value.replace(/[^0-9]/g, \'\')">';
+            } else {
+                inputHtml = '<input type="text" id="in-' + index + '" placeholder="...">';
+            }
+            div.innerHTML = '<label>' + col.label + '</label>' + inputHtml;
+            inputContainer.appendChild(div);
         });
-        const savedUser = localStorage.getItem('journal_user'); const savedColor = localStorage.getItem('journal_color');
-        if (savedUser) { currentUser = savedUser; userColor = savedColor || '#fff'; applyUserUI(); }
+
+        const savedUser = localStorage.getItem('journal_user');
+        const savedColor = localStorage.getItem('journal_color');
+        if (savedUser) {
+            currentUser = savedUser;
+            userColor = savedColor || '#fff';
+            applyUserUI();
+        }
+
         connectWS();
     }
+    
     window.onload = initApp;
+
     function attemptLogin() {
-        unlockMobileFeatures(); const userIndex = Number(document.getElementById('login-select').value);
-        const pass = document.getElementById('login-pass').value.trim(); const user = USERS_CONFIG.at(userIndex);
+        unlockMobileFeatures();
+        const userIndex = Number(document.getElementById('login-select').value);
+        const pass = document.getElementById('login-pass').value.trim();
+        const user = USERS_CONFIG.at(userIndex);
+
         if (user && pass === user.pass) {
-            document.getElementById('login-error').style.display = 'none'; currentUser = user.name; userColor = user.color;
-            localStorage.setItem('journal_user', currentUser); localStorage.setItem('journal_color', userColor);
-            applyUserUI(); subscribeToWebPush(); checkAndShowAlerts(false);
-        } else { document.getElementById('login-error').style.display = 'block'; }
-    }
-    function logoutUser() { localStorage.removeItem('journal_user'); localStorage.removeItem('journal_color'); location.reload(); }
-    function loginAsViewer() { unlockMobileFeatures(); document.getElementById('login-overlay').style.display = 'none'; subscribeToWebPush(); checkAndShowAlerts(false); }
-    function sendAdminAlert() {
-        if (!currentUser) return; const target = document.getElementById('admin-target').value; const msg = document.getElementById('admin-msg').value.trim();
-        if (!msg) return alert("Напишите текст!"); const now = new Date(); const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-        ws.send(JSON.stringify({ type: 'admin_alert', sender: currentUser, color: userColor, time: timeString, target: target, text: msg }));
-        alert("Уведомление отправлено и записано в отдельное окно!"); document.getElementById('admin-msg').value = '';
-    }
-    function clearHistoryAdmin() { if (currentUser !== ADMIN_NAME) return; if (confirm("⚠️ Вы уверены, что хотите ПОЛНОСТЬЮ очистить все журналы и уведомления у всех?")) { ws.send(JSON.stringify({ type: 'clear_history' })); } }
-    function getAlertObj(raw) { if (!raw) return null; if (typeof raw === 'string') return { text: raw, sender: ADMIN_NAME }; return raw; }
-    function checkAndShowAlerts(isNew) {
-        let targetToShow = null; const allAlert = getAlertObj(pendingAlerts["ВСЕМ"]);
-        if (allAlert) { if (!currentUser || allAlert.sender !== currentUser) { targetToShow = "ВСЕМ"; } }
-        if (!targetToShow && currentUser) { const myAlert = getAlertObj(pendingAlerts[currentUser]); if (myAlert && myAlert.sender !== currentUser) { targetToShow = currentUser; } }
-        if (targetToShow) { const alertObj = getAlertObj(pendingAlerts[targetToShow]); showAlert(targetToShow, alertObj.text, alertObj.sender, isNew); }
-    }
-    function showAlert(target, text, sender, isNew) {
-        currentAlertTarget = target; currentAlertText = text; currentAlertSender = sender || ADMIN_NAME;
-        document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']:';
-        document.getElementById('alert-text').innerText = text; document.getElementById('alert-modal').style.display = 'flex';
-        updateLockScreenAlert(target, text, currentAlertSender); if (isNew || document.visibilityState === 'hidden') { sendLocalNotification(target, text, currentAlertSender); }
-        if (!titleInterval) { let flag = false; titleInterval = setInterval(function() { document.title = flag ? "🛑 ТРЕВОГА! СООБЩЕНИЕ!" : "⚠️ ПРОЧИТАЙТЕ СООБЩЕНИЕ!"; flag = !flag; }, 600); }
-        playBeep(); if (!soundInterval) { soundInterval = setInterval(playBeep, 2000); }
-    }
-    function stopAlertVisuals() {
-        document.getElementById('alert-modal').style.display = 'none'; if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
-        if (soundInterval) { clearInterval(soundInterval); soundInterval = null; } if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
-        if (navigator.vibrate) navigator.vibrate(0); document.title = "МСБ55115";
-        if ('mediaSession' in navigator) { navigator.mediaSession.metadata = new MediaMetadata({ title: '🟢 Дежурный режим активен', artist: 'Журнал Работ (Ожидание команд)' }); }
-    }
-    function confirmAlert() {
-        unlockMobileFeatures(); const whoConfirmed = currentUser || ('Экран (' + currentAlertTarget + ')'); const confirmColor = currentUser ? userColor : '#facc15';
-        stopAlertVisuals(); delete pendingAlerts[currentAlertTarget]; ws.send(JSON.stringify({ type: 'clear_alert', target: currentAlertTarget }));
-        const now = new Date(); const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-        let ackValues = new Array(COLUMNS_CONFIG.length).fill("-"); ackValues.splice(0, 1, "✅ ОЗНАКОМЛЕН"); ackValues.splice(1, 1, "ОТ: " + (currentAlertSender || ADMIN_NAME));
-        ackValues.splice(ackValues.length - 1, 1, 'Сообщение: ' + currentAlertText);
-        ws.send(JSON.stringify({ type: 'update', user: whoConfirmed, color: confirmColor, time: timeString, values: ackValues })); checkAndShowAlerts(false);
-    }
-    function submitRow() {
-        if (!currentUser) return; let values = new Array(); let isEmpty = true;
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            let val = document.getElementById('in-' + i).value; if (COLUMNS_CONFIG.at(i).allowSlashFraction && val) { val = val.replace(/[^0-9\\/\\\\.,-]/g, ''); }
-            values.push(val); if(val) isEmpty = false;
+            document.getElementById('login-error').style.display = 'none';
+            currentUser = user.name;
+            userColor = user.color;
+            localStorage.setItem('journal_user', currentUser);
+            localStorage.setItem('journal_color', userColor);
+
+            applyUserUI();
+            subscribeToWebPush();
+            checkAndShowAlerts(false);
+        } else {
+            document.getElementById('login-error').style.display = 'block';
         }
-        if (isEmpty) { alert("Пустая строка!"); return; } const now = new Date();
-        ws.send(JSON.stringify({ type: 'update', user: currentUser, color: userColor, time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5), values: values }));
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
     }
-    function appendRow(row) {
-        if (!row || !row.values) return;
-        if (row.values.at(0)) {
-            const firstCol = String(row.values.at(0)); const isAck = firstCol.indexOf("ОЗНАКОМЛЕН") !== -1; const isNotif = firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1;
-            if (isAck || isNotif) {
-                const notifBody = document.getElementById('notif-table-body'); const tr = document.createElement('tr'); tr.className = isNotif ? 'alert-row new-row' : 'ack-row new-row';
-                let sender = row.user; let target = "ВСЕМ"; let text = "-";
-                if (isNotif) { target = String(row.values.at(1) || '').replace("КОМУ: ", ""); text = String(row.values.at(row.values.length - 1) || '').replace("Текст: ", ""); }
-                else { sender = row.user; target = String(row.values.at(1) || '').replace("ОТ: ", ""); text = String(row.values.at(row.values.length - 1) || '').replace("Сообщение: ", ""); }
-                tr.innerHTML = '<td class="time-cell">' + row.time + '</td><td style="color:' + row.color + '; font-weight:bold;">' + sender + '</td><td style="font-weight:bold; color:#ef4444;">' + target + '</td><td style="text-align:left; padding-left:15px;">' + text + '</td>';
-                notifBody.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); return;
+    function logoutUser() {
+        localStorage.removeItem('journal_user');
+        localStorage.removeItem('journal_color');
+        location.reload();
+    }
+
+    function loginAsViewer() {
+        unlockMobileFeatures();
+        document.getElementById('login-overlay').style.display = 'none';
+        subscribeToWebPush();
+        checkAndShowAlerts(false);
+    }
+
+    function sendAdminAlert() {
+        if (!currentUser) return;
+        const target = document.getElementById('admin-target').value;
+        const msg = document.getElementById('admin-msg').value.trim();
+        if (!msg) return alert("Напишите текст!");
+
+        const now = new Date();
+        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
+
+        ws.send(JSON.stringify({ 
+            type: 'admin_alert', 
+            sender: currentUser,
+            color: userColor,
+            time: timeString,
+            target: target, 
+            text: msg 
+        }));
+
+        alert("Уведомление отправлено и записано в журнал!");
+        document.getElementById('admin-msg').value = '';
+    }
+
+    function clearHistoryAdmin() {
+        if (currentUser !== ADMIN_NAME) return;
+        if (confirm("⚠️ Вы уверены, что хотите ПОЛНОСТЬЮ очистить весь журнал событий у всех участников?")) {
+            ws.send(JSON.stringify({ type: 'clear_history' }));
+        }
+    }
+
+    function getAlertObj(raw) {
+        if (!raw) return null;
+        if (typeof raw === 'string') return { text: raw, sender: ADMIN_NAME };
+        return raw;
+    }
+    function checkAndShowAlerts(isNew) {
+        let targetToShow = null;
+
+        const allAlert = getAlertObj(pendingAlerts["ВСЕМ"]);
+        if (allAlert) {
+            if (!currentUser || allAlert.sender !== currentUser) {
+                targetToShow = "ВСЕМ";
             }
         }
-        const tbody = document.getElementById('table-body'); const tr = document.createElement('tr'); tr.className = 'new-row';
+
+        if (!targetToShow) {
+            if (currentUser) {
+                const myAlert = getAlertObj(pendingAlerts[currentUser]);
+                if (myAlert && myAlert.sender !== currentUser) {
+                    targetToShow = currentUser;
+                }
+            } else {
+                const targets = Object.keys(pendingAlerts);
+                if (targets.length > 0) targetToShow = targets.at(0);
+            }
+        }
+
+        if (targetToShow) {
+            const alertObj = getAlertObj(pendingAlerts[targetToShow]);
+            showAlert(targetToShow, alertObj.text, alertObj.sender, isNew);
+        }
+    }
+
+    function showAlert(target, text, sender, isNew) {
+        currentAlertTarget = target;
+        currentAlertText = text;
+        currentAlertSender = sender || ADMIN_NAME;
+
+        document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']:';
+        document.getElementById('alert-text').innerText = text;
+        document.getElementById('alert-modal').style.display = 'flex';
+
+        updateLockScreenAlert(target, text, currentAlertSender);
+        if (isNew || document.visibilityState === 'hidden') {
+            sendLocalNotification(target, text, currentAlertSender);
+        }
+
+        if (!titleInterval) {
+            let flag = false;
+            titleInterval = setInterval(function() {
+                document.title = flag ? "🛑 ТРЕВОГА! СООБЩЕНИЕ!" : "⚠️ ПРОЧИТАЙТЕ СООБЩЕНИЕ!";
+                flag = !flag;
+            }, 600);
+        }
+        playBeep();
+        if (!soundInterval) {
+            soundInterval = setInterval(playBeep, 2000);
+        }
+    }
+
+    function stopAlertVisuals() {
+        document.getElementById('alert-modal').style.display = 'none';
+        if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
+        if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
+        if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
+        if (navigator.vibrate) navigator.vibrate(0);
+        document.title = "МСБ55115";
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: '🟢 Дежурный режим активен',
+                artist: 'Журнал Работ (Ожидание команд)'
+            });
+        }
+    }
+
+    function confirmAlert() {
+        unlockMobileFeatures();
+        const whoConfirmed = currentUser || ('Экран (' + currentAlertTarget + ')');
+        const confirmColor = currentUser ? userColor : '#facc15';
+
+        stopAlertVisuals();
+        delete pendingAlerts[currentAlertTarget];
+
+        ws.send(JSON.stringify({ type: 'clear_alert', target: currentAlertTarget }));
+
+        const now = new Date();
+        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
+        
+        let ackValues = new Array(COLUMNS_CONFIG.length).fill("-");
+        ackValues.splice(0, 1, "✅ ОЗНАКОМЛЕН");
+        ackValues.splice(1, 1, "ОТ: " + (currentAlertSender || ADMIN_NAME));
+        ackValues.splice(ackValues.length - 1, 1, 'Сообщение: ' + currentAlertText);
+
+        ws.send(JSON.stringify({
+            type: 'add_row',
+            user: whoConfirmed,
+            color: confirmColor,
+            time: timeString,
+            values: ackValues
+        }));
+
+        checkAndShowAlerts(false);
+    }
+
+    function submitRow() {
+        if (!currentUser) return;
+        let values = new Array();
+        let isEmpty = true;
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
+            let val = document.getElementById('in-' + i).value;
+            if (COLUMNS_CONFIG.at(i).digitsOnly && val) {
+                val = val.replace(/[^0-9]/g, '');
+            }
+            values.push(val);
+            if(val) isEmpty = false;
+        }
+        if (isEmpty) { alert("Пустая строка!"); return; }
+
+        const now = new Date();
+        ws.send(JSON.stringify({
+            type: 'add_row',
+            user: currentUser,
+            color: userColor,
+            time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5),
+            values: values
+        }));
+        
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
+    }
+
+    function appendRow(row) {
+        const tbody = document.getElementById('table-body');
+        const tr = document.createElement('tr');
+        tr.className = 'new-row';
+        if (row.values && row.values.at(0)) {
+            const firstCol = String(row.values.at(0));
+            if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1) {
+                tr.classList.add('ack-row');
+            } else if (firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
+                tr.classList.add('alert-row');
+            }
+        }
         let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) { const val = (row.values.at(i) !== undefined) ? row.values.at(i) : '-'; html += '<td>' + (val || '-') + '</td>'; }
-        tr.innerHTML = html; tbody.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+        
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
+            const val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
+            html += '<td>' + (val || '-') + '</td>';
+        }
+        
+        tr.innerHTML = html;
+        tbody.appendChild(tr);
+        requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
     }
-    function showUserJoinPrompt(url) {
-        var win = document.getElementById('stream-window'); if (!win) { win = document.createElement('div'); win.id = 'stream-window'; document.body.appendChild(win); }
-        win.innerHTML = ''; win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
-        var box = document.createElement('div'); box.style.cssText = 'background:#1e293b;border:3px solid #22c55e;border-radius:16px;padding:35px 25px;text-align:center;max-width:460px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
-        var title = document.createElement('h2'); title.innerText = '🎥 ВИДЕОСТРИМ ЗАПУЩЕН'; title.style.cssText = 'margin:0 0 10px 0;color:#ffffff;font-size:24px;';
-        var desc = document.createElement('p'); desc.innerText = 'Администратор запустил трансляцию. Нажмите кнопку ниже для перехода в новое окно:'; desc.style.cssText = 'color:#94a3b8;font-size:15px;margin:0 0 25px 0;line-height:1.4;';
-        var btnOpen = document.createElement('button'); btnOpen.innerText = '🚀 ПЕРЕЙТИ К СТРИМУ (В НОВОМ ОКНЕ)'; btnOpen.style.cssText = 'width:100%;padding:18px 20px;background:#22c55e;color:white;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:12px;';
-        btnOpen.onclick = function() { openAppPopupWindow(url); closeStream(); };
-        var btnClose = document.createElement('button'); btnClose.innerText = 'Скрыть окно'; btnClose.style.cssText = 'width:100%;padding:10px;background:transparent;color:#94a3b8;border:none;cursor:pointer;font-size:14px;'; btnClose.onclick = closeStream;
-        box.appendChild(title); box.appendChild(desc); box.appendChild(btnOpen); box.appendChild(btnClose); win.appendChild(box);
-    }
-    function openStream() {
-        var activeUrl = window.currentSharedStreamUrl || localStorage.getItem('msb_stream_url') || '';
-        if (!isUserAdmin()) { if (activeUrl) { showUserJoinPrompt(activeUrl); } else { alert('🎥 Стрим еще не начался. Когда Администратор запустит трансляцию, у вас появится окно с кнопкой перехода.'); } return; }
-        var win = document.getElementById('stream-window'); if (!win) { win = document.createElement('div'); win.id = 'stream-window'; document.body.appendChild(win); }
-        win.innerHTML = ''; win.style.cssText = 'display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.96);z-index:999999;color:white;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:15px;';
-        var box = document.createElement('div'); box.style.cssText = 'background:#1e293b;border:2px solid #3b82f6;border-radius:16px;padding:30px 25px;text-align:center;max-width:520px;width:100%;box-shadow:0 0 50px rgba(0,0,0,0.8);box-sizing:border-box;';
-        var lbl = document.createElement('h2'); lbl.innerText = '📡 Управление видеостримом (АДМИН)'; lbl.style.cssText = 'margin:0 0 15px 0;font-size:20px;color:#f1f5f9;';
-        var inp = document.createElement('input'); inp.type = 'text'; inp.id = 'stream-url-input'; inp.value = activeUrl; inp.placeholder = 'Вставьте ссылку SaluteJazz...'; inp.style.cssText = 'width:100%;padding:14px 15px;border-radius:8px;border:2px solid #3b82f6;background:#0f172a;color:#ffffff;font-size:15px;outline:none;box-sizing:border-box;margin-bottom:15px;';
-        var btnStart = document.createElement('button'); btnStart.innerText = '🚀 ЗАПУСТИТЬ СТРИМ (В НОВОМ ОКНЕ)'; btnStart.style.cssText = 'width:100%;padding:16px;background:#22c55e;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:16px;margin-bottom:10px;'; btnStart.onclick = broadcastStreamUrl;
-        var btnStop = document.createElement('button'); btnStop.innerText = '⏹ ОСТАНОВИТЬ СТРИМ У ВСЕХ'; btnStop.style.cssText = 'width:100%;padding:14px;background:#f59e0b;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;margin-bottom:10px;'; btnStop.onclick = stopBroadcastStream;
-        var btnBack = document.createElement('button'); btnBack.innerText = '⬅️ НАЗАД В ЖУРНАЛ'; btnBack.style.cssText = 'width:100%;padding:12px;background:#ef4444;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;'; btnBack.onclick = closeStream;
-        box.appendChild(lbl); box.appendChild(inp); box.appendChild(btnStart); box.appendChild(btnStop); box.appendChild(btnBack); win.appendChild(box);
-    }
-    function broadcastStreamUrl() {
-        var input = document.getElementById('stream-url-input'); var url = input ? input.value.trim() : ''; if (!url) return alert('Сначала вставьте ссылку в поле ввода!');
-        if (url.indexOf('http://') !== 0 && url.indexOf('https://') !== 0) { url = 'https://' + url; }
-        window.currentSharedStreamUrl = url; localStorage.setItem('msb_stream_url', url); sendStreamWsMessage({ type: 'set_stream', url: url, forceOpen: true }); openAppPopupWindow(url); closeStream();
-    }
-    function stopBroadcastStream() { window.currentSharedStreamUrl = ''; localStorage.removeItem('msb_stream_url'); var input = document.getElementById('stream-url-input'); if (input) input.value = ''; sendStreamWsMessage({ type: 'set_stream', url: '', forceOpen: false }); alert('⏹ Видеострим остановлен для всех подразделений.'); closeStream(); }
-    document.addEventListener('click', function(e) { var btn = e.target.closest('button, a, div'); if (btn && btn.innerText && btn.innerText.toLowerCase().indexOf('видеострим') !== -1 && (!btn.id || btn.id.indexOf('stream') === -1)) { openStream(); } });
 </script>
 </body>
 </html>
