@@ -14,7 +14,6 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 const SUBS_FILE = path.join(__dirname, 'subscriptions.json');
 const VAPID_FILE = path.join(__dirname, 'vapid.json');
 
-// Постоянные ключи, которые не сбрасываются при перезапуске контейнера S3
 const FIXED_PUBLIC_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
 const FIXED_PRIVATE_KEY = 'UUxI4O8-FbRouAevSmBQ6o18hgE4nSG3qwvJTfKc-ls';
 
@@ -81,41 +80,23 @@ function saveState() {
 
 const ICON_SVG = '<svg xmlns="http://w3.org" viewBox="0 0 192 192" width="192" height="192"><rect width="192" height="192" rx="36" fill="#0f172a"/><rect x="16" y="16" width="160" height="160" rx="24" fill="#1e293b" stroke="#3b82f6" stroke-width="6"/><text x="96" y="115" font-family="Arial, sans-serif" font-size="64" font-weight="bold" fill="#ffffff" text-anchor="middle">МСБ</text></svg>';
 
-const SW_CODE = Array.of(
-    "self.addEventListener('install', function(event) { self.skipWaiting(); });",
-    "self.addEventListener('activate', function(event) { event.waitUntil(self.clients.claim()); });",
-    "self.addEventListener('push', function(event) {",
-    "    let data = { title: '🚨 ТРЕВОГА МСБ55115!', body: 'Срочное уведомление в журнале' };",
-    "    if (event.data) {",
-    "        try { data = Object.assign(data, event.data.json()); }",
-    "        catch (e) { data.body = event.data.text(); }",
-    "    }",
-    "    const options = {",
-    "        body: data.body,",
-    "        icon: '/icon.svg',",
-    "        badge: '/icon.svg',",
-    "        vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),",
-    "        silent: false,",
-    "        requireInteraction: true,",
-    "        tag: data.tag || 'alert-' + Date.now(),",
-    "        renotify: true,",
-    "        data: { url: '/' }",
-    "    };",
-    "    event.waitUntil(self.registration.showNotification(data.title, options));",
-    "});",
-    "self.addEventListener('notificationclick', function(event) {",
-    "    event.notification.close();",
-    "    event.waitUntil(",
-    "        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
-    "            for (var i = 0; i < clientList.length; i++) {",
-    "                var c = clientList.at(i);",
-    "                if (c && 'focus' in c) return c.focus();",
-    "            }",
-    "            if (clients.openWindow) return clients.openWindow('/');",
-    "        })",
-    "    );",
-    "});"
-).join('\n');
+const SW_CODE = "self.addEventListener('install', function(e) { self.skipWaiting(); });\n" +
+"self.addEventListener('activate', function(e) { e.waitUntil(self.clients.claim()); });\n" +
+"self.addEventListener('push', function(e) {\n" +
+"    let d = { title: '🚨 ТРЕВОГА МСБ55115!', body: 'Срочное уведомление в журнале' };\n" +
+"    if (e.data) { try { d = Object.assign(d, e.data.json()); } catch(err) { d.body = e.data.text(); } }\n" +
+"    e.waitUntil(self.registration.showNotification(d.title, {\n" +
+"        body: d.body, icon: '/icon.svg', badge: '/icon.svg', requireInteraction: true,\n" +
+"        tag: d.tag || 'alert-' + Date.now(), renotify: true, data: { url: '/' }\n" +
+"    }));\n" +
+"});\n" +
+"self.addEventListener('notificationclick', function(e) {\n" +
+"    e.notification.close();\n" +
+"    e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(list) {\n" +
+"        for (var i = 0; i < list.length; i++) { var c = list.at(i); if (c && 'focus' in c) return c.focus(); }\n" +
+"        if (clients.openWindow) return clients.openWindow('/');\n" +
+"    }));\n" +
+"});";
 const server = http.createServer(function(req, res) {
     const urlPath = req.url.split('?').at(0);
 
@@ -364,7 +345,6 @@ wss.on('connection', function(ws) {
                             webpush.sendNotification(item.sub, payload, pushOptions)
                                 .then(function() { console.log('---> Доставлено в шторку: ' + (item.user || 'Гость')); })
                                 .catch(function(err) {
-                                    console.error('Ошибка WebPush (' + err.statusCode + ') для ' + item.user);
                                     if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403 || err.statusCode === 401) {
                                         const rmIdx = pushSubscriptions.findIndex(function(s) {
                                             return s.sub && s.sub.endpoint === item.sub.endpoint;
