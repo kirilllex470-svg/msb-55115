@@ -162,6 +162,7 @@ const SW_CODE = [
     "});"
 ].join('\n');
 
+
 const server = http.createServer(function(req, res) {
     const rawUrl = req.url || '/';
     const qIndex = rawUrl.indexOf('?');
