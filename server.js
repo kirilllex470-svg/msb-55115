@@ -92,6 +92,33 @@ if (fs.existsSync(NOTIFS_FILE)) {
     catch (e) { notificationsHistory = new Array(); }
 }
 
+function triggerAlertBroadcast(sender, color, target, text, timeStr) {
+    const now = new Date();
+    const tStr = timeStr || (now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5));
+    const notifId = Date.now() + Math.floor(Math.random() * 1000);
+    const newNotif = { id: notifId, time: tStr, sender: sender, color: color, target: target, text: text, read: false, readBy: '' };
+    notificationsHistory.push(newNotif);
+    if (notificationsHistory.length > 200) notificationsHistory = notificationsHistory.slice(-200);
+    fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
+    activeAlerts[target] = { id: notifId, text: text, sender: sender };
+
+    wss.clients.forEach(function(c) {
+        if (c.readyState === WebSocket.OPEN) {
+            c.send(JSON.stringify({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif }));
+        }
+    });
+    const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ [' + target + ']!', body: sender + ': ' + text });
+    pushSubscriptions.forEach(function(item, index) {
+        if (target === 'ВСЕМ' || item.user === target) {
+            webpush.sendNotification(item.sub, payload, { TTL: 3600, headers: { 'Urgency': 'high' } }).catch(function(err) {
+                if (err.statusCode === 410 || err.statusCode === 404) {
+                    pushSubscriptions.splice(index, 1);
+                    fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
+                }
+            });
+        }
+    });
+}
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
         type: 'init', data: tableHistory, notifications: notificationsHistory,
@@ -107,6 +134,15 @@ wss.on('connection', function(ws) {
                 currentStreamUrl = msg.url;
                 wss.clients.forEach(function(c) {
                     if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify({ type: 'stream_url_updated', url: currentStreamUrl }));
+                });
+                if (msg.notify) {
+                    triggerAlertBroadcast('АДМИН', '#8b5cf6', 'ВСЕМ', '📹 НАЧАЛСЯ ВИДЕОСТРИМ! Откройте раздел видеострима и нажмите «ПЕРЕЙТИ ПО ССЫЛКЕ»', msg.time);
+                }
+                return;
+            }
+            if (msg.type === 'close_stream') {
+                wss.clients.forEach(function(c) {
+                    if (c.readyState === WebSocket.OPEN) c.send(JSON.stringify({ type: 'stream_closed' }));
                 });
                 return;
             }
@@ -134,36 +170,12 @@ wss.on('connection', function(ws) {
                 });
             }
             if (msg.type === 'admin_alert') {
-                const sender = msg.sender || 'АДМИН', color = msg.color || '#ef4444';
-                const now = new Date(), timeStr = msg.time || (now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5));
-                const notifId = Date.now();
-                const newNotif = { id: notifId, time: timeStr, sender: sender, color: color, target: msg.target, text: msg.text, read: false, readBy: '' };
-                notificationsHistory.push(newNotif);
-                if (notificationsHistory.length > 200) notificationsHistory = notificationsHistory.slice(-200);
-                fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
-                activeAlerts[msg.target] = { id: notifId, text: msg.text, sender: sender };
-
-                wss.clients.forEach(function(c) {
-                    if (c.readyState === WebSocket.OPEN) {
-                        c.send(JSON.stringify({ type: 'admin_alert', sender: sender, target: msg.target, text: msg.text, notif: newNotif }));
-                    }
-                });
-                const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ [' + msg.target + ']!', body: sender + ': ' + msg.text });
-                pushSubscriptions.forEach(function(item, index) {
-                    if (msg.target === 'ВСЕМ' || item.user === msg.target) {
-                        webpush.sendNotification(item.sub, payload, { TTL: 3600, headers: { 'Urgency': 'high' } }).catch(function(err) {
-                            if (err.statusCode === 410 || err.statusCode === 404) {
-                                pushSubscriptions.splice(index, 1);
-                                fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
-                            }
-                        });
-                    }
-                });
+                triggerAlertBroadcast(msg.sender || 'АДМИН', msg.color || '#ef4444', msg.target, msg.text, msg.time);
             }
             if (msg.type === 'clear_alert') {
                 delete activeAlerts[msg.target];
                 notificationsHistory.forEach(function(n) {
-                    if ((msg.notifId && n.id === msg.notifId) || (!msg.notifId && n.target === msg.target && !n.read)) { n.read = true; n.readBy = msg.readBy || ''; }
+                    if (n.target === msg.target && !n.read) { n.read = true; n.readBy = msg.readBy || ''; }
                 });
                 fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
                 wss.clients.forEach(function(c) {
