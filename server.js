@@ -1,6 +1,5 @@
 const http = require('http');
 const fs = require('fs');
-const zlib = require('zlib');
 const WebSocket = require('ws');
 const webpush = require('web-push');
 
@@ -37,83 +36,16 @@ if (fs.existsSync(SUBS_FILE)) {
     }
 }
 
-function makeValidPng(size) {
-    const crcTable = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) {
-            c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-        }
-        crcTable.fill(c, n, n + 1);
-    }
-    function crc32(buf) {
-        let c = -1;
-        for (let i = 0; i < buf.length; i++) {
-            const b = buf.readUInt8(i);
-            const t = crcTable.at((c ^ b) & 0xff);
-            c = (c >>> 8) ^ t;
-        }
-        return (c ^ -1) >>> 0;
-    }
-    function makeChunk(type, data) {
-        const len = Buffer.alloc(4);
-        len.writeUInt32BE(data.length, 0);
-        const typeBuf = Buffer.from(type, 'ascii');
-        const crc = Buffer.alloc(4);
-        crc.writeUInt32BE(crc32(Buffer.concat(Array.of(typeBuf, data))), 0);
-        return Buffer.concat(Array.of(len, typeBuf, data, crc));
-    }
-
-    const ihdr = Buffer.alloc(13, 0);
-    ihdr.writeUInt32BE(size, 0);
-    ihdr.writeUInt32BE(size, 4);
-    ihdr.writeUInt8(8, 8);
-    ihdr.writeUInt8(2, 9);
-
-    const rowLen = 1 + size * 3;
-    const raw = Buffer.alloc(size * rowLen, 0);
-    const half = size / 2;
-    const radSq = (size * 0.35) * (size * 0.35);
-
-    for (let y = 0; y < size; y++) {
-        const rowOff = y * rowLen;
-        raw.writeUInt8(0, rowOff);
-        for (let x = 0; x < size; x++) {
-            const p = rowOff + 1 + x * 3;
-            const dx = x - half;
-            const dy = y - half;
-            if (dx * dx + dy * dy < radSq) {
-                raw.writeUInt8(59, p);
-                raw.writeUInt8(130, p + 1);
-                raw.writeUInt8(246, p + 2);
-            } else {
-                raw.writeUInt8(15, p);
-                raw.writeUInt8(23, p + 1);
-                raw.writeUInt8(42, p + 2);
-            }
-        }
-    }
-
-    const idat = zlib.deflateSync(raw);
-    const sig = Buffer.from('89504e470d0a1a0a', 'hex');
-    return Buffer.concat(Array.of(sig, makeChunk('IHDR', ihdr), makeChunk('IDAT', idat), makeChunk('IEND', Buffer.alloc(0))));
-}
-
-const PNG_192 = makeValidPng(192);
-const PNG_512 = makeValidPng(512);
-
 const MANIFEST_JSON = JSON.stringify({
-    id: "/",
     name: "МСБ55115 — Журнал событий",
     short_name: "МСБ55115",
     start_url: "/",
-    scope: "/",
     display: "standalone",
     background_color: "#0f172a",
     theme_color: "#0f172a",
     icons: Array.of(
-        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-        { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" }
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-192.png", sizes: "512x512", type: "image/png" }
     )
 });
 const SW_CODE = [
@@ -155,6 +87,21 @@ const SW_CODE = [
     "});"
 ].join('\n');
 
+function serveImageFile(res) {
+    const candidates = Array.of('logo.jpg', 'logo.png', 'icon-192.png', 'bear.jpg', 'bear.png');
+    for (let i = 0; i < candidates.length; i++) {
+        const f = candidates.at(i);
+        if (fs.existsSync(f)) {
+            const ct = f.indexOf('.png') !== -1 ? 'image/png' : 'image/jpeg';
+            res.writeHead(200, { 'Content-Type': ct });
+            res.end(fs.readFileSync(f));
+            return;
+        }
+    }
+    res.writeHead(404);
+    res.end();
+}
+
 const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
@@ -167,39 +114,25 @@ const server = http.createServer(function(req, res) {
         return;
     }
     if (urlPath === '/manifest.json') {
-        res.writeHead(200, { 
-            'Content-Type': 'application/manifest+json; charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-        });
+        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
         res.end(MANIFEST_JSON);
         return;
     }
-    if (urlPath === '/icon-192.png' || urlPath === '/favicon.ico') {
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': PNG_192.length });
-        res.end(PNG_192);
-        return;
-    }
-    if (urlPath === '/icon-512.png') {
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': PNG_512.length });
-        res.end(PNG_512);
+    if (urlPath === '/logo.jpg' || urlPath === '/logo.png' || urlPath === '/icon-192.png' || urlPath === '/favicon.ico') {
+        serveImageFile(res);
         return;
     }
 
     fs.readFile('index.html', function(err, data) {
         if (err) { 
-            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); 
-            res.end('Ошибка чтения index.html: ' + err.message); 
+            res.writeHead(500); 
+            res.end('Error loading index.html'); 
         } else { 
-            res.writeHead(200, { 
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
-            }); 
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); 
             res.end(data); 
         }
     });
 });
-
-
 const wss = new WebSocket.Server({ server: server });
 
 let tableHistory = new Array(); 
