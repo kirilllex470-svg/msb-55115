@@ -15,28 +15,21 @@
     <style>
         :root { --bg: #0f172a; --panel: #1e293b; --accent: #3b82f6; --text: #f1f5f9; --border: #334155; --danger: #ef4444; }
         body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
-        #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 200000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.5s ease; }
-        .splash-card { width: 100%; max-width: 440px; text-align: center; background: #1e293b; border: 2px solid #3b82f6; border-radius: 16px; padding: 25px 20px; box-shadow: 0 0 40px rgba(59, 130, 246, 0.3); box-sizing: border-box; }
-        .splash-title { font-size: 30px; font-weight: 900; letter-spacing: 2px; color: #f8fafc; margin: 0 0 16px 0; text-shadow: 0 0 10px rgba(59, 130, 246, 0.8); }
-        .progress-track { width: 100%; height: 16px; background: #090d16; border: 1px solid #3b82f6; border-radius: 999px; overflow: hidden; position: relative; }
-        .progress-fill { width: 0%; height: 100%; background: #3b82f6; border-radius: 999px; transition: width 0.2s linear; }
-        .splash-percent { margin-top: 10px; font-size: 15px; font-weight: bold; color: #38bdf8; font-family: monospace; }
-        .splash-file-box { margin-top: 12px; background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
-        .splash-file-name { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .splash-file-tag { color: #22c55e; font-weight: bold; flex-shrink: 0; }
         #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.98); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
         .login-box { background: var(--panel); padding: 40px; border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 320px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.7); box-sizing: border-box; }
         .login-box select, .login-box input { width: 100%; padding: 14px; margin-bottom: 20px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
         .login-box button { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .login-box button:hover { background: #2563eb; }
         .viewer-btn { background: transparent !important; border: 1px solid #475569 !important; color: #94a3b8 !important; margin-top: 15px; }
-        .install-btn { display: inline-block; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
+        .viewer-btn:hover { background: #1e293b !important; color: white !important; }
+        .install-btn { display: none; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
+        .error-msg { color: var(--danger); font-size: 14px; margin-top: 10px; display: none; }
         .input-panel { background: var(--panel); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 1200px; margin-bottom: 20px; display: none; box-sizing: border-box; }
         .inputs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 20px; }
         .field-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; font-weight: bold; }
         .field-group select, .field-group input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 16px; outline: none; box-sizing: border-box; }
         .send-btn { width: 100%; padding: 15px; background: #22c55e; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .stream-main-btn { width: 100%; margin-top: 12px; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .stream-main-btn { width: 100%; margin-top: 12px; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         .stream-main-btn.live { background: #dc2626; animation: pulseLive 1.5s infinite; }
         @keyframes pulseLive { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
         .stream-box { display: none; margin-top: 12px; padding: 15px; background: #0f172a; border: 1px solid var(--accent); border-radius: 8px; box-sizing: border-box; }
@@ -56,7 +49,7 @@
         .alert-btn { margin-top: 20px; width: 100%; padding: 18px; font-size: 20px; background: #b91c1c; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
         .notifications-window { width: 100%; max-width: 1400px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
         .notifications-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
-        .notif-item { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-left: 5px solid var(--danger); padding: 10px 12px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; }
+        .notif-item { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-left: 5px solid var(--danger); padding: 10px 12px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; transition: 0.3s; }
         .notif-item.read { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); border-left: 5px solid #22c55e; }
         .notif-time { color: #facc15; font-family: monospace; }
         .notif-sender { font-weight: bold; }
@@ -64,35 +57,27 @@
         .notif-text { color: #f1f5f9; flex-grow: 1; word-break: break-word; font-weight: bold; }
         .notif-status { font-size: 12px; font-weight: bold; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
         .notif-item.read .notif-status { background: rgba(34, 197, 94, 0.25); color: #86efac; }
-        .history-container { width: 100%; max-width: 1400px; overflow-x: auto; border-radius: 8px; }
+        .history-container { width: 100%; max-width: 1400px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
         table { width: 100%; border-collapse: collapse; min-width: 850px; }
         th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 14px; }
         th { background: #1e293b; color: #94a3b8; }
+        .new-row { animation: fadeIn 0.5s ease; }
         .time-cell { color: #facc15; font-family: monospace; }
         .user-cell { font-weight: bold; }
         @media (max-width: 768px) {
             body { padding: 10px; }
+            .login-box { padding: 25px 20px; }
+            .input-panel { padding: 15px; margin-bottom: 20px; }
             .inputs-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .admin-controls, .stream-controls { flex-direction: column; }
             .admin-controls select, .admin-controls input, .admin-controls button, .stream-controls input, .stream-controls button { width: 100%; box-sizing: border-box; }
+            .alert-content h1 { font-size: 28px !important; }
+            #alert-text { font-size: 22px !important; padding: 15px !important; word-break: break-word; }
         }
         @media (max-width: 480px) { .inputs-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-    <div id="splash-screen">
-        <div class="splash-card">
-            <h1 class="splash-title">МСБ-55115</h1>
-            <div class="progress-track">
-                <div class="progress-fill" id="splash-bar"></div>
-            </div>
-            <div class="splash-percent" id="splash-percent">ЗАГРУЗКА СИСТЕМЫ: 0%</div>
-            <div class="splash-file-box">
-                <span class="splash-file-name" id="splash-file">boot/kernel_msb55115.sys</span>
-                <span class="splash-file-tag" id="splash-tag">[0%]</span>
-            </div>
-        </div>
-    </div>
     <div id="alert-modal">
         <div class="alert-content">
             <h1 style="font-size: 40px; margin: 0;">🛑 СООБЩЕНИЕ!</h1>
@@ -234,45 +219,6 @@
     let sirenAudio = null;
     let publicVapidKey = null;
     let deferredPrompt = null;
-    const SPLASH_FILES = [
-        "boot/kernel_msb55115.sys",
-        "crypto/cipher_channel_v4.dat",
-        "net/websocket_sync_protocol.dll",
-        "maps/tactical_forest_sectors.db",
-        "auth/unit_credentials_guard.bin",
-        "push/vapid_service_worker.js",
-        "stream/salutejazz_rtc_bridge.mod",
-        "journal/history_storage_engine.json",
-        "audio/siren_emergency_synth.wav",
-        "system/msb55115_ready_state.ok"
-    ];
-
-    function runSplash() {
-        const s = document.getElementById('splash-screen');
-        const b = document.getElementById('splash-bar');
-        const p = document.getElementById('splash-percent');
-        const f = document.getElementById('splash-file');
-        const g = document.getElementById('splash-tag');
-        if (!s) return;
-
-        let cur = 0;
-        const timer = setInterval(function() {
-            cur++;
-            if (b) b.style.width = cur + '%';
-            if (p) p.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + cur + '%';
-            
-            const idx = Math.min(Math.floor((cur / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
-            if (f) f.innerText = SPLASH_FILES.at(idx);
-            if (g) g.innerText = (cur < 100) ? '[' + cur + '%]' : '[ГОТОВО]';
-
-            if (cur >= 100) {
-                clearInterval(timer);
-                s.style.opacity = '0';
-                setTimeout(function() { s.style.display = 'none'; }, 500);
-            }
-        }, 200);
-    }
-
     window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         deferredPrompt = e;
@@ -287,13 +233,17 @@
             btn.style.display = 'none';
         });
     });
+
     async function installPWA() {
         if (deferredPrompt) {
             deferredPrompt.prompt();
             await deferredPrompt.userChoice;
             deferredPrompt = null;
+            document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
+                btn.style.display = 'none';
+            });
         } else {
-            alert('Чтобы установить приложение МСБ55115, откройте меню браузера (⋮ или "Поделиться") и нажмите "Установить приложение" / "Добавить на главный экран".');
+            alert('Для установки приложения откройте меню браузера (три точки или "Поделиться") и выберите "Установить приложение" или "На экран Домой".');
         }
     }
 
@@ -331,6 +281,7 @@
             }
         } catch (e) { console.error('Push error:', e); }
     }
+
     function sendLocalNotification(target, text, sender) {
         const fromWho = sender || 'АДМИН';
         const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -349,7 +300,6 @@
             });
         }
     }
-
     function createWavUrl(freq, durationSec, volume) {
         const sr = 8000;
         const numSamples = sr * durationSec;
@@ -397,6 +347,7 @@
             navigator.wakeLock.request('screen').catch(function() {});
         }
     }
+
     function updateLockScreenAlert(target, text, sender) {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
@@ -425,7 +376,6 @@
             setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
-
     function handleStreamBtnClick() {
         if (currentUser === ADMIN_NAME) {
             const box = document.getElementById('admin-stream-box');
@@ -466,6 +416,7 @@
         if (currentUser !== ADMIN_NAME) return;
         ws.send(JSON.stringify({ type: 'stream_stop' }));
     }
+
     function updateStreamUI() {
         const mainBtn = document.getElementById('stream-main-btn');
         const userBox = document.getElementById('user-stream-box');
@@ -501,7 +452,6 @@
         if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
         return false;
     }
-
     function renderNotificationsWindow() {
         const list = document.getElementById('notifications-list');
         if (!list) return;
@@ -541,6 +491,7 @@
         if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME });
         return Array.of(raw);
     }
+
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
@@ -678,14 +629,7 @@
     }
 
     function initApp() {
-        runSplash();
         document.getElementById('login-error').style.display = 'none';
-
-        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
-            document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-                btn.style.display = 'none';
-            });
-        }
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').catch(function() {});
@@ -743,7 +687,7 @@
         connectWS();
     }
     
-    initApp();
+    window.onload = initApp;
 
     function attemptLogin() {
         unlockMobileFeatures();
