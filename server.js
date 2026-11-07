@@ -1,5 +1,6 @@
 const http = require('http');
 const fs = require('fs');
+const zlib = require('zlib');
 const WebSocket = require('ws');
 const webpush = require('web-push');
 
@@ -11,10 +12,14 @@ const VAPID_FILE = DATA_DIR + 'vapid.json';
 
 let vapidKeys;
 if (fs.existsSync(VAPID_FILE)) {
-    vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
+    try {
+        vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
+    } catch (e) {
+        vapidKeys = webpush.generateVAPIDKeys();
+    }
 } else {
     vapidKeys = webpush.generateVAPIDKeys();
-    fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys));
+    try { fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys)); } catch (e) {}
 }
 
 webpush.setVapidDetails(
@@ -32,25 +37,92 @@ if (fs.existsSync(SUBS_FILE)) {
     }
 }
 
+function makeTacticalIcon(size) {
+    const crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        crcTable.fill(c, n, n + 1);
+    }
+    function crc32(buf) {
+        let c = -1;
+        for (let i = 0; i < buf.length; i++) {
+            const b = buf.readUInt8(i);
+            const idx = (c ^ b) & 0xff;
+            const t = crcTable.subarray(idx, idx + 1).reduce(function(a, v) { return v; }, 0);
+            c = (c >>> 8) ^ t;
+        }
+        return (c ^ -1) >>> 0;
+    }
+    function chunk(type, data) {
+        const len = Buffer.alloc(4); len.writeUInt32BE(data.length, 0);
+        const t = Buffer.from(type, 'ascii');
+        const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat(Array.of(t, data))), 0);
+        return Buffer.concat(Array.of(len, t, data, crc));
+    }
+
+    const ihdr = Buffer.alloc(13, 0);
+    ihdr.writeUInt32BE(size, 0); ihdr.writeUInt32BE(size, 4);
+    ihdr.writeUInt8(8, 8); ihdr.writeUInt8(2, 9);
+
+    const rowLen = 1 + size * 3;
+    const raw = Buffer.alloc(size * rowLen, 0);
+    const half = size / 2;
+
+    for (let y = 0; y < size; y++) {
+        const rowOff = y * rowLen;
+        raw.writeUInt8(0, rowOff);
+        for (let x = 0; x < size; x++) {
+            const p = rowOff + 1 + x * 3;
+            const dx = x - half;
+            const dy = y - half;
+            const r = Math.sqrt(dx * dx + dy * dy);
+            let red = 15, green = 23, blue = 42;
+
+            if (r <= half * 0.88) {
+                if (r >= half * 0.82) {
+                    red = 56; green = 189; blue = 248;
+                } else {
+                    red = 30; green = 41; blue = 59;
+                    const c1 = Math.abs(dy - (-half * 0.32 + Math.abs(dx) * 0.75));
+                    const c2 = Math.abs(dy - (-half * 0.05 + Math.abs(dx) * 0.75));
+                    const c3 = Math.abs(dy - (half * 0.22 + Math.abs(dx) * 0.75));
+                    if ((c1 <= size * 0.045 && Math.abs(dx) <= half * 0.52) ||
+                        (c2 <= size * 0.045 && Math.abs(dx) <= half * 0.46) ||
+                        (c3 <= size * 0.045 && Math.abs(dx) <= half * 0.38)) {
+                        red = 250; green = 204; blue = 21;
+                    }
+                }
+            }
+            raw.writeUInt8(red, p);
+            raw.writeUInt8(green, p + 1);
+            raw.writeUInt8(blue, p + 2);
+        }
+    }
+
+    const idat = zlib.deflateSync(raw);
+    const sig = Buffer.from('89504e470d0a1a0a', 'hex');
+    return Buffer.concat(Array.of(sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))));
+}
+
+const TACTICAL_ICON_192 = makeTacticalIcon(192);
+const TACTICAL_ICON_512 = makeTacticalIcon(512);
+
 const MANIFEST_JSON = JSON.stringify({
-    name: "МСБ55115 — Журнал событий",
+    name: "МСБ-55115",
     short_name: "МСБ55115",
     start_url: "/",
     display: "standalone",
     background_color: "#0f172a",
     theme_color: "#0f172a",
-    icons: [
-        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-        { src: "/icon-192.png", sizes: "512x512", type: "image/png" }
-    ]
+    icons: Array.of(
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" }
+    )
 });
-
-const ICON_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
-    "self.addEventListener('fetch', function(e) {});",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 СООБЩЕНИЕ В ЖУРНАЛЕ!', body: 'Срочно откройте журнал!' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -86,8 +158,11 @@ const SW_CODE = [
     "    }));",
     "});"
 ].join('\n');
+
 const server = http.createServer(function(req, res) {
-    if (req.url && req.url.indexOf('/sw.js') === 0) {
+    const urlPath = (req.url || '/').split('?').at(0);
+
+    if (urlPath === '/sw.js') {
         res.writeHead(200, { 
             'Content-Type': 'application/javascript; charset=utf-8',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -95,32 +170,37 @@ const server = http.createServer(function(req, res) {
         res.end(SW_CODE);
         return;
     }
-    if (req.url === '/manifest.json') {
-        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
+    if (urlPath === '/manifest.json') {
+        res.writeHead(200, { 
+            'Content-Type': 'application/manifest+json; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        });
         res.end(MANIFEST_JSON);
         return;
     }
-    if (req.url === '/icon-192.png') {
-        if (fs.existsSync('icon-192.png')) {
-            res.writeHead(200, { 'Content-Type': 'image/png' });
-            res.end(fs.readFileSync('icon-192.png'));
-        } else {
-            res.writeHead(200, { 'Content-Type': 'image/png' });
-            res.end(Buffer.from(ICON_BASE64, 'base64'));
-        }
+    if (urlPath === '/icon-192.png' || urlPath === '/favicon.ico') {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': TACTICAL_ICON_192.length });
+        res.end(TACTICAL_ICON_192);
         return;
     }
-    if (req.url === '/' || req.url.indexOf('/?') === 0) {
-        fs.readFile('index.html', function(err, data) {
-            if (err) { 
-                res.writeHead(500); 
-                res.end('Error loading index.html'); 
-            } else { 
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); 
-                res.end(data); 
-            }
-        });
+    if (urlPath === '/icon-512.png') {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': TACTICAL_ICON_512.length });
+        res.end(TACTICAL_ICON_512);
+        return;
     }
+
+    fs.readFile('index.html', function(err, data) {
+        if (err) { 
+            res.writeHead(500); 
+            res.end('Error loading index.html'); 
+        } else { 
+            res.writeHead(200, { 
+                'Content-Type': 'text/html; charset=utf-8',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+            }); 
+            res.end(data); 
+        }
+    });
 });
 
 const wss = new WebSocket.Server({ server: server });
