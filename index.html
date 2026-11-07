@@ -24,7 +24,7 @@
         .viewer-btn:hover { background: #1e293b !important; color: white !important; }
         .install-btn { display: none; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
         .error-msg { color: var(--danger); font-size: 14px; margin-top: 10px; display: none; }
-        .input-panel { background: var(--panel); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 1200px; margin-bottom: 30px; display: none; box-sizing: border-box; }
+        .input-panel { background: var(--panel); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 1200px; margin-bottom: 20px; display: none; box-sizing: border-box; }
         .inputs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 20px; }
         .field-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; font-weight: bold; }
         .field-group select, .field-group input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 16px; outline: none; box-sizing: border-box; }
@@ -38,6 +38,13 @@
         .alert-content { background: white; color: #b91c1c; padding: 30px; border-radius: 20px; width: 100%; max-width: 600px; box-shadow: 0 0 50px rgba(0,0,0,0.5); animation: shake 0.5s infinite; box-sizing: border-box; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         .alert-btn { margin-top: 20px; width: 100%; padding: 18px; font-size: 20px; background: #b91c1c; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .notifications-window { width: 100%; max-width: 1400px; background: var(--panel); border: 1px solid var(--danger); border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
+        .notifications-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+        .notif-item { background: rgba(239, 68, 68, 0.12); border-left: 4px solid var(--danger); padding: 8px 12px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; }
+        .notif-time { color: #facc15; font-family: monospace; }
+        .notif-sender { font-weight: bold; }
+        .notif-target { background: #7f1d1d; color: #fecaca; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .notif-text { color: #f1f5f9; flex-grow: 1; word-break: break-word; }
         .history-container { width: 100%; max-width: 1400px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
         table { width: 100%; border-collapse: collapse; min-width: 850px; }
         th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 14px; }
@@ -103,6 +110,12 @@
             <div id="clear-history-box" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(239, 68, 68, 0.3);">
                 <button type="button" onclick="clearHistoryAdmin()" style="width: 100%; padding: 12px; background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px;">🗑️ ОЧИСТИТЬ ЖУРНАЛ СОБЫТИЙ ПОЛНОСТЬЮ</button>
             </div>
+        </div>
+    </div>
+    <div class="notifications-window" id="notifications-window">
+        <h3 style="color:#fca5a5; margin: 0 0 10px 0; font-size: 16px;">🔔 Последние уведомления (до 10 шт.)</h3>
+        <div class="notifications-list" id="notifications-list">
+            <div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>
         </div>
     </div>
     <h3 style="color:#94a3b8; width: 100%; max-width: 1400px; margin: 10px 0;">📊 Журнал событий</h3>
@@ -203,7 +216,6 @@
             btn.style.display = 'none';
         });
     }
-
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -238,6 +250,7 @@
             }
         } catch (e) { console.error('Push error:', e); }
     }
+
     function sendLocalNotification(target, text, sender) {
         const fromWho = sender || 'АДМИН';
         const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -334,6 +347,37 @@
             setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
+        function clearNotificationsWindow() {
+        const list = document.getElementById('notifications-list');
+        if (!list) return;
+        list.innerHTML = '<div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>';
+    }
+
+    function addNotificationToWindow(row) {
+        const list = document.getElementById('notifications-list');
+        if (!list) return;
+        const placeholder = document.getElementById('no-notif-placeholder');
+        if (placeholder) placeholder.remove();
+
+        const targetRaw = (row.values && row.values.at(1)) ? String(row.values.at(1)) : '';
+        const textRaw = (row.values && row.values.at(5)) ? String(row.values.at(5)) : '';
+
+        const item = document.createElement('div');
+        item.className = 'notif-item';
+        item.innerHTML =
+            '<span class="notif-time">' + row.time + '</span>' +
+            '<span class="notif-sender" style="color:' + (row.color || '#ef4444') + '">' + row.user + '</span>' +
+            '<span class="notif-target">' + targetRaw + '</span>' +
+            '<span class="notif-text">' + textRaw + '</span>';
+
+        list.appendChild(item);
+
+        const items = list.getElementsByClassName('notif-item');
+        while (items.length > 10) {
+            list.removeChild(items[0]);
+        }
+        list.scrollTop = list.scrollHeight;
+    }
 
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
@@ -343,6 +387,7 @@
             const msg = JSON.parse(event.data);
             if (msg.type === 'init') {
                 document.getElementById('table-body').innerHTML = '';
+                clearNotificationsWindow();
                 msg.data.forEach(appendRow);
                 if (msg.vapidPublicKey) {
                     publicVapidKey = msg.vapidPublicKey;
@@ -356,6 +401,7 @@
             if (msg.type === 'new_row') appendRow(msg.row);
             if (msg.type === 'history_cleared') {
                 document.getElementById('table-body').innerHTML = '';
+                clearNotificationsWindow();
             }
             if (msg.type === 'admin_alert') {
                 pendingAlerts[msg.target] = {
@@ -373,6 +419,7 @@
 
         ws.onclose = function() { setTimeout(connectWS, 1500); };
     }
+
     setInterval(function() {
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'ping' }));
@@ -380,6 +427,7 @@
             connectWS();
         }
     }, 4000);
+
     function populateTargetSelect() {
         const adminSelect = document.getElementById('admin-target');
         adminSelect.innerHTML = '';
@@ -414,7 +462,6 @@
             document.getElementById('clear-history-box').style.display = 'none';
         }
     }
-
     function initApp() {
         document.getElementById('login-error').style.display = 'none';
 
@@ -456,7 +503,7 @@
                 let opts = col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('');
                 inputHtml = '<select id="in-' + index + '"><option value="" disabled selected>-</option>' + opts + '</select>';
             } else if (col.digitsOnly) {
-                inputHtml = '<input type="text" inputmode="numeric" pattern="[0-9]*" id="in-' + index + '" placeholder="Только цифры..." oninput="this.value = this.value.replace(/[^0-9]/g, \'\')">';
+                inputHtml = '<input type="text" id="in-' + index + '" placeholder="Цифры, дробь, слэш..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">';
             } else {
                 inputHtml = '<input type="text" id="in-' + index + '" placeholder="...">';
             }
@@ -471,7 +518,6 @@
             userColor = savedColor || '#fff';
             applyUserUI();
         }
-
         connectWS();
     }
     
@@ -497,6 +543,7 @@
             document.getElementById('login-error').style.display = 'block';
         }
     }
+
     function logoutUser() {
         localStorage.removeItem('journal_user');
         localStorage.removeItem('journal_color');
@@ -509,7 +556,6 @@
         subscribeToWebPush();
         checkAndShowAlerts(false);
     }
-
     function sendAdminAlert() {
         if (!currentUser) return;
         const target = document.getElementById('admin-target').value;
@@ -544,6 +590,7 @@
         if (typeof raw === 'string') return { text: raw, sender: ADMIN_NAME };
         return raw;
     }
+
     function checkAndShowAlerts(isNew) {
         let targetToShow = null;
 
@@ -613,7 +660,6 @@
             });
         }
     }
-
     function confirmAlert() {
         unlockMobileFeatures();
         const whoConfirmed = currentUser || ('Экран (' + currentAlertTarget + ')');
@@ -650,7 +696,7 @@
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
             let val = document.getElementById('in-' + i).value;
             if (COLUMNS_CONFIG.at(i).digitsOnly && val) {
-                val = val.replace(/[^0-9]/g, '');
+                val = val.replace(/[^0-9.,\/\\]/g, '');
             }
             values.push(val);
             if(val) isEmpty = false;
@@ -665,7 +711,7 @@
             time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5),
             values: values
         }));
-        
+
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
     }
 
@@ -679,6 +725,7 @@
                 tr.classList.add('ack-row');
             } else if (firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
                 tr.classList.add('alert-row');
+                addNotificationToWindow(row);
             }
         }
         let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
@@ -695,3 +742,4 @@
 </script>
 </body>
 </html>
+
