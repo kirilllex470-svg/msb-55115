@@ -87,6 +87,11 @@ const SW_CODE = [
     "});"
 ].join('\n');
 
+const FALLBACK_PNG = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAMAAABlApw1AAAAA1BMVEX///+nxBvIAAAANElEQVR42u3BAQ0AAADCoPdPbQ8HFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8G4wQAAB52y53AAAAABJRU5ErkJggg==",
+    "base64"
+);
+
 function serveImageFile(res) {
     const candidates = Array.of('logo.jpg', 'logo.png', 'icon-192.png', 'bear.jpg', 'bear.png');
     for (let i = 0; i < candidates.length; i++) {
@@ -98,8 +103,8 @@ function serveImageFile(res) {
             return;
         }
     }
-    res.writeHead(404);
-    res.end();
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': FALLBACK_PNG.length });
+    res.end(FALLBACK_PNG);
 }
 
 const server = http.createServer(function(req, res) {
@@ -133,6 +138,7 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
+
 const wss = new WebSocket.Server({ server: server });
 
 let tableHistory = new Array(); 
