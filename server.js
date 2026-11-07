@@ -62,13 +62,13 @@ const SW_CODE = [
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
-    "            if ('focus' in clientList[i]) return clientList[i].focus();",
+    "            var cl = clientList.at(i);",
+    "            if (cl && 'focus' in cl) return cl.focus();",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
 ].join('\n');
-
 const server = http.createServer(function(req, res) {
     if (req.url && req.url.indexOf('/sw.js') === 0) {
         res.writeHead(200, { 
@@ -90,6 +90,7 @@ const server = http.createServer(function(req, res) {
         });
     }
 });
+
 const wss = new WebSocket.Server({ server: server });
 
 let tableHistory = new Array(); 
@@ -124,7 +125,7 @@ wss.on('connection', function(ws) {
             if (msg.type === 'save_sub' && msg.sub) {
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub.endpoint === msg.sub.endpoint; });
                 if (idx !== -1) {
-                    pushSubscriptions[idx].user = msg.user;
+                    pushSubscriptions.at(idx).user = msg.user;
                 } else {
                     pushSubscriptions.push({ user: msg.user, sub: msg.sub });
                 }
@@ -150,7 +151,6 @@ wss.on('connection', function(ws) {
                     }
                 });
             }
-
             if (msg.type === 'clear_history') {
                 console.log('🗑️ АДМИН полностью очистил журнал событий');
                 tableHistory = new Array();
@@ -180,14 +180,14 @@ wss.on('connection', function(ws) {
                     time: timeStr,
                     user: sender,
                     color: color,
-                    values: [
+                    values: Array.of(
                         "📢 УВЕДОМЛЕНИЕ",
                         "КОМУ: " + msg.target,
                         "-",
                         "-",
                         "-",
                         "Текст: " + msg.text
-                    ]
+                    )
                 };
                 tableHistory.push(alertRow);
                 fs.writeFile(DB_FILE, JSON.stringify(tableHistory), function() {});
