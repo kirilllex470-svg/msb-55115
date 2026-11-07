@@ -32,9 +32,25 @@ if (fs.existsSync(SUBS_FILE)) {
     }
 }
 
+const MANIFEST_JSON = JSON.stringify({
+    name: "МСБ55115 — Журнал событий",
+    short_name: "МСБ55115",
+    start_url: "/",
+    display: "standalone",
+    background_color: "#0f172a",
+    theme_color: "#0f172a",
+    icons: [
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-192.png", sizes: "512x512", type: "image/png" }
+    ]
+});
+
+const ICON_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
+    "self.addEventListener('fetch', function(e) {});",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 СООБЩЕНИЕ В ЖУРНАЛЕ!', body: 'Срочно откройте журнал!' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -44,7 +60,7 @@ const SW_CODE = [
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
-    "        tag: 'admin-alert'",
+    "        tag: 'admin-alert-' + Date.now()",
     "    }));",
     "});",
     "self.addEventListener('message', function(event) {",
@@ -55,7 +71,7 @@ const SW_CODE = [
     "            silent: false,",
     "            requireInteraction: true,",
     "            renotify: true,",
-    "            tag: 'admin-alert'",
+    "            tag: 'admin-alert-' + Date.now()",
     "        });",
     "    }",
     "});",
@@ -79,7 +95,22 @@ const server = http.createServer(function(req, res) {
         res.end(SW_CODE);
         return;
     }
-    if (req.url === '/') {
+    if (req.url === '/manifest.json') {
+        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
+        res.end(MANIFEST_JSON);
+        return;
+    }
+    if (req.url === '/icon-192.png') {
+        if (fs.existsSync('icon-192.png')) {
+            res.writeHead(200, { 'Content-Type': 'image/png' });
+            res.end(fs.readFileSync('icon-192.png'));
+        } else {
+            res.writeHead(200, { 'Content-Type': 'image/png' });
+            res.end(Buffer.from(ICON_BASE64, 'base64'));
+        }
+        return;
+    }
+    if (req.url === '/' || req.url.indexOf('/?') === 0) {
         fs.readFile('index.html', function(err, data) {
             if (err) { 
                 res.writeHead(500); 
@@ -97,6 +128,7 @@ const wss = new WebSocket.Server({ server: server });
 let tableHistory = new Array(); 
 let notificationsHistory = new Array();
 let activeAlerts = {}; 
+let streamState = { active: false, url: '' };
 
 if (fs.existsSync(DB_FILE)) {
     try { 
@@ -111,9 +143,74 @@ if (fs.existsSync(NOTIFS_FILE)) {
     try {
         const notifContent = fs.readFileSync(NOTIFS_FILE, 'utf8');
         notificationsHistory = notifContent.trim() ? JSON.parse(notifContent) : new Array();
+        notificationsHistory.forEach(function(n) {
+            if (!n.read) {
+                if (!Array.isArray(activeAlerts[n.target])) activeAlerts[n.target] = new Array();
+                activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender });
+            }
+        });
     } catch (e) {
         notificationsHistory = new Array();
     }
+}
+function broadcastAlert(sender, color, timeStr, target, text) {
+    const notifId = Date.now() + Math.floor(Math.random() * 1000);
+    const newNotif = {
+        id: notifId,
+        time: timeStr,
+        sender: sender,
+        color: color,
+        target: target,
+        text: text,
+        read: false,
+        readBy: ''
+    };
+
+    notificationsHistory.push(newNotif);
+    if (notificationsHistory.length > 200) {
+        notificationsHistory = notificationsHistory.slice(-200);
+    }
+    fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
+
+    if (!Array.isArray(activeAlerts[target])) {
+        activeAlerts[target] = new Array();
+    }
+    activeAlerts[target].push({
+        id: notifId,
+        text: text,
+        sender: sender
+    });
+
+    wss.clients.forEach(function(client) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+                type: 'admin_alert',
+                sender: sender,
+                target: target,
+                text: text,
+                notif: newNotif
+            }));
+        }
+    });
+
+    const payload = JSON.stringify({
+        title: '🛑 СООБЩЕНИЕ ДЛЯ [' + target + ']!',
+        body: sender + ': ' + text
+    });
+
+    const pushOptions = { TTL: 3600, headers: { 'Urgency': 'high' } };
+
+    pushSubscriptions.forEach(function(item, index) {
+        if (target === 'ВСЕМ' || item.user === target) {
+            webpush.sendNotification(item.sub, payload, pushOptions)
+                .catch(function(err) {
+                    if (err.statusCode === 410 || err.statusCode === 404) {
+                        pushSubscriptions.splice(index, 1);
+                        fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
+                    }
+                });
+        }
+    });
 }
 
 wss.on('connection', function(ws) {
@@ -122,6 +219,7 @@ wss.on('connection', function(ws) {
         data: tableHistory, 
         notifications: notificationsHistory,
         alerts: activeAlerts,
+        streamState: streamState,
         vapidPublicKey: vapidKeys.publicKey 
     }));
 
@@ -133,7 +231,6 @@ wss.on('connection', function(ws) {
                 ws.send(JSON.stringify({ type: 'pong' }));
                 return;
             }
-
             if (msg.type === 'save_sub' && msg.sub) {
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub.endpoint === msg.sub.endpoint; });
                 if (idx !== -1) {
@@ -142,9 +239,9 @@ wss.on('connection', function(ws) {
                     pushSubscriptions.push({ user: msg.user, sub: msg.sub });
                 }
                 fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
-                console.log('✅ Телефон подключен к шторке уведомлений:', msg.user || 'Гость');
                 return;
             }
+
             if (msg.type === 'add_row') {
                 const newRow = {
                     id: Date.now(),
@@ -163,8 +260,28 @@ wss.on('connection', function(ws) {
                 });
             }
 
+            if (msg.type === 'stream_start') {
+                streamState = { active: true, url: msg.url };
+                wss.clients.forEach(function(client) {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'stream_state', streamState: streamState }));
+                    }
+                });
+                const now = new Date();
+                const timeStr = msg.time || (now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5));
+                broadcastAlert(msg.sender || 'АДМИН', msg.color || '#ef4444', timeStr, 'ВСЕМ', '🎥 НАЧАЛСЯ ВИДЕОСТРИМ МСБ-55115! Нажмите кнопку "ПЕРЕЙТИ ПО ССЫЛКЕ"');
+            }
+
+            if (msg.type === 'stream_stop') {
+                streamState = { active: false, url: '' };
+                wss.clients.forEach(function(client) {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'stream_state', streamState: streamState }));
+                    }
+                });
+            }
+
             if (msg.type === 'clear_history') {
-                console.log('🗑️ АДМИН полностью очистил журнал событий');
                 tableHistory = new Array();
                 notificationsHistory = new Array();
                 activeAlerts = {};
@@ -183,77 +300,32 @@ wss.on('connection', function(ws) {
                 const color = msg.color || '#ef4444';
                 const now = new Date();
                 const timeStr = msg.time || (now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5));
-                const notifId = Date.now();
-
-                console.log('📢 [' + sender + '] пишет для [' + msg.target + ']: ' + msg.text);
-
-                const newNotif = {
-                    id: notifId,
-                    time: timeStr,
-                    sender: sender,
-                    color: color,
-                    target: msg.target,
-                    text: msg.text,
-                    read: false,
-                    readBy: ''
-                };
-
-                notificationsHistory.push(newNotif);
-                if (notificationsHistory.length > 200) {
-                    notificationsHistory = notificationsHistory.slice(-200);
-                }
-                fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
-
-                activeAlerts[msg.target] = {
-                    id: notifId,
-                    text: msg.text,
-                    sender: sender
-                };
-                wss.clients.forEach(function(client) {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({
-                            type: 'admin_alert',
-                            sender: sender,
-                            target: msg.target,
-                            text: msg.text,
-                            notif: newNotif
-                        }));
-                    }
-                });
-
-                const payload = JSON.stringify({
-                    title: '🛑 СООБЩЕНИЕ ДЛЯ [' + msg.target + ']!',
-                    body: sender + ': ' + msg.text
-                });
-
-                const pushOptions = {
-                    TTL: 3600,
-                    headers: {
-                        'Urgency': 'high'
-                    }
-                };
-
-                pushSubscriptions.forEach(function(item, index) {
-                    if (msg.target === 'ВСЕМ' || item.user === msg.target) {
-                        webpush.sendNotification(item.sub, payload, pushOptions)
-                            .then(function() { console.log('---> Успешно доставлено в шторку (' + (item.user || 'Гость') + ')'); })
-                            .catch(function(err) {
-                                if (err.statusCode === 410 || err.statusCode === 404) {
-                                    pushSubscriptions.splice(index, 1);
-                                    fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
-                                }
-                            });
-                    }
-                });
+                broadcastAlert(sender, color, timeStr, msg.target, msg.text);
             }
 
             if (msg.type === 'clear_alert') {
-                delete activeAlerts[msg.target];
+                if (Array.isArray(activeAlerts[msg.target])) {
+                    if (msg.notifId) {
+                        activeAlerts[msg.target] = activeAlerts[msg.target].filter(function(a) { return a.id !== msg.notifId; });
+                    } else {
+                        activeAlerts[msg.target].shift();
+                    }
+                    if (activeAlerts[msg.target].length === 0) {
+                        delete activeAlerts[msg.target];
+                    }
+                } else {
+                    delete activeAlerts[msg.target];
+                }
 
+                let marked = false;
                 notificationsHistory.forEach(function(n) {
-                    if ((msg.notifId && n.id === msg.notifId) || (!msg.notifId && n.target === msg.target && !n.read)) {
+                    if (msg.notifId && n.id === msg.notifId) {
                         n.read = true;
                         n.readBy = msg.readBy || '';
+                    } else if (!msg.notifId && !marked && n.target === msg.target && !n.read) {
+                        n.read = true;
+                        n.readBy = msg.readBy || '';
+                        marked = true;
                     }
                 });
                 fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
@@ -269,7 +341,6 @@ wss.on('connection', function(ws) {
                     }
                 });
             }
-
         } catch (e) { console.error("Ошибка:", e); }
     });
 });
