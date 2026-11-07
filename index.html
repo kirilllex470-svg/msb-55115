@@ -72,7 +72,23 @@
     <div id="splash-screen">
         <div class="splash-card">
             <div class="splash-img-wrap">
-                <img src="/logo.jpg" alt="МСБ-55115" style="width:100%; height:100%; object-fit:cover; display:block;">
+                <svg xmlns="http://w3.org" viewBox="0 0 800 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+                    <rect width="800" height="500" fill="#0f172a"/>
+                    <polygon points="80,70 10,400 150,400" fill="#14532d"/>
+                    <polygon points="190,40 110,400 270,400" fill="#166534"/>
+                    <polygon points="630,50 550,400 710,400" fill="#166534"/>
+                    <polygon points="730,90 660,400 800,400" fill="#14532d"/>
+                    <path d="M20,500 L130,395 L330,365 L570,372 L740,415 L790,500 Z" fill="#64748b"/>
+                    <path d="M210,405 Q380,378 580,405" stroke="#4d7c0f" stroke-width="16" fill="none"/>
+                    <path d="M350,125 Q435,105 520,160 Q600,205 588,310 L568,385 L505,385 L500,320 L455,320 L445,385 L385,385 L375,325 L340,385 L278,385 L272,260 Q272,160 350,125 Z" fill="#713f12" stroke="#2e1905" stroke-width="4"/>
+                    <circle cx="268" cy="150" r="24" fill="#452306"/>
+                    <circle cx="386" cy="145" r="24" fill="#452306"/>
+                    <ellipse cx="328" cy="212" rx="78" ry="70" fill="#854d0e"/>
+                    <ellipse cx="312" cy="234" rx="36" ry="29" fill="#ca8a04"/>
+                    <ellipse cx="305" cy="222" rx="16" ry="12" fill="#0f172a"/>
+                    <circle cx="295" cy="192" r="6" fill="#090d16"/>
+                    <circle cx="352" cy="192" r="6" fill="#090d16"/>
+                </svg>
             </div>
             <h1 class="splash-title">МСБ-55115</h1>
             <div class="progress-track">
@@ -85,6 +101,43 @@
             </div>
         </div>
     </div>
+    <script>
+        (function() {
+            var files = Array.of(
+                "⚙️ boot/kernel_msb55115.sys",
+                "🔐 crypto/cipher_channel_v4.dat",
+                "📡 net/websocket_sync_protocol.dll",
+                "🗺️ maps/tactical_forest_sectors.db",
+                "🛡️ auth/unit_credentials_guard.bin",
+                "🔔 push/vapid_service_worker.js",
+                "🎥 stream/salutejazz_rtc_bridge.mod",
+                "📊 journal/history_storage_engine.json",
+                "🔊 audio/siren_emergency_synth.wav",
+                "✅ system/msb55115_ready_state.ok"
+            );
+            var step = 0;
+            var t = setInterval(function() {
+                step++;
+                var b = document.getElementById('splash-bar');
+                var p = document.getElementById('splash-percent');
+                var f = document.getElementById('splash-file');
+                var g = document.getElementById('splash-tag');
+                var s = document.getElementById('splash-screen');
+                if (b) b.style.width = step + '%';
+                if (p) p.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + step + '%';
+                var idx = Math.min(Math.floor((step / 100) * files.length), files.length - 1);
+                if (f) f.innerText = files.at(idx);
+                if (g) g.innerText = (step < 100) ? '[' + step + '%]' : '[ГОТОВО]';
+                if (step >= 100) {
+                    clearInterval(t);
+                    if (s) {
+                        s.style.opacity = '0';
+                        setTimeout(function() { s.style.display = 'none'; }, 600);
+                    }
+                }
+            }, 200);
+        })();
+    </script>
     <div id="alert-modal">
         <div class="alert-content">
             <h1 style="font-size: 40px; margin: 0;">🛑 СООБЩЕНИЕ!</h1>
@@ -106,6 +159,7 @@
             <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none;">❌ Неверный пароль</div>
         </div>
     </div>
+
 
     <div id="alert-modal">
         <div class="alert-content">
