@@ -111,12 +111,12 @@
         <button type="button" class="send-btn" onclick="submitRow()">📤 ЗАПИСАТЬ В ЖУРНАЛ</button>
         <button type="button" class="stream-toggle-btn" onclick="toggleStreamPanel()">📹 ВИДЕОСТРИМ МСБ-55115</button>
         <div id="stream-panel">
-            <div style="color:#c4b5fd; font-size:14px; margin-bottom:8px; font-weight:bold;">🔗 Ссылка на видеострим (например, https://salutejazz.ru...):</div>
+            <div id="stream-admin-label" style="color:#c4b5fd; font-size:14px; margin-bottom:8px; font-weight:bold; display:none;">🔗 Ссылка на видеострим (например, https://salutejazz.ru...):</div>
             <div class="stream-controls">
-                <input type="text" id="stream-url-input" placeholder="Вставьте ссылку https://salutejazz.ru..." value="https://salutejazz.ru">
-                <button type="button" style="background:#22c55e;" onclick="openStreamInWindow()">▶️ ОТКРЫТЬ В ЭТОМ ОКНЕ</button>
-                <button type="button" style="background:#3b82f6;" onclick="navigateSameTabStream()">🌐 ПЕРЕЙТИ ПО ССЫЛКЕ</button>
-                <button type="button" style="background:#ef4444;" onclick="closeStreamInWindow()">✖ ЗАКРЫТЬ СТРИМ</button>
+                <input type="text" id="stream-url-input" placeholder="Вставьте ссылку https://salutejazz.ru..." value="https://salutejazz.ru" style="display:none;">
+                <button type="button" id="btn-stream-start" style="background:#22c55e; display:none;" onclick="openStreamInWindow()">▶️ ЗАПУСТИТЬ СТРИМ</button>
+                <button type="button" id="btn-stream-go" style="background:#3b82f6; width:100%;" onclick="navigateSameTabStream()">🌐 ПЕРЕЙТИ ПО ССЫЛКЕ</button>
+                <button type="button" id="btn-stream-close" style="background:#ef4444; display:none;" onclick="closeStreamInWindow()">✖ ЗАКРЫТЬ СТРИМ</button>
             </div>
             <div id="stream-frame-wrap">
                 <iframe id="stream-iframe" allow="camera; microphone; display-capture; fullscreen; autoplay; clipboard-read; clipboard-write" allowfullscreen></iframe>
@@ -134,6 +134,9 @@
                 <button type="button" onclick="clearHistoryAdmin()" style="width: 100%; padding: 12px; background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 15px;">🗑️ ОЧИСТИТЬ ЖУРНАЛ СОБЫТИЙ ПОЛНОСТЬЮ</button>
             </div>
         </div>
+    </div>
+    <div id="viewer-stream-bar" style="display:none; width:100%; max-width:1400px; margin-bottom:15px;">
+        <button type="button" onclick="navigateSameTabStream()" style="width:100%; padding:14px; background:#8b5cf6; color:white; border:none; border-radius:8px; font-size:16px; font-weight:bold; cursor:pointer;">🌐 ПЕРЕЙТИ ПО ССЫЛКЕ НА ВИДЕОСТРИМ</button>
     </div>
     <div class="notifications-window" id="notifications-window">
         <h3 style="color:#94a3b8; margin: 0 0 10px 0; font-size: 16px;">🔔 Уведомления подразделения (последние 10 шт.)</h3>
@@ -167,10 +170,9 @@
         { label: "ЛЕСОПОЛОСА", options: ["ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "ЗАМЕНА", "КРАСКА", "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7", "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1", "ИРБИС", "СЕЗОН", "КАРАЗ", "КВАС", "КАФР", "СТЕНА", "ТРАКТ", "СЛЕЖКА", "МОНАРХ", "ГИК", "МУРАЛ", "ГРЕК", "БАКУ", "БАКУ-1", "САЛАТ", "САЛАТ-1", "ГУК", "СМЕНА-1", "КАБАН", "КАБАН-2", "КАБАН-3", "ЛИС-1", "ЛИС-2", "ЛИС-3", "-->ФАКС", "-->ЗУБР1", "-->ПОЭТ", "-->СУДЬЯ", "-->СОР4", "-->ЗАМЕНА", "-->КРАСКА", "-->МАСТАК1", "-->ВОЛК3", "-->АНГЕЛ", "-->ВАЛИК1", "-->ЛЕЖАК", "-->ЛОТ ", "-->ПРИНТ7", "-->ГОН1", "-->СТОП-3", "-->ТАБЛА", "-->ПОКЕР", "-->ЛОКОН", "-->КАЛЫМ", "-->КАРМАН1", "-->ИРБИС", "-->СЕЗОН", "-->КАРАЗ", "-->КВАС", "-->КАФР", "-->СТЕНА", "-->ТРАКТ", "-->СЛЕЖКА", "-->МОНАРХ", "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1", "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН", "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"] },
         { label: "ПРИМЕЧАНИЯ", options: new Array() }
     ];
-
     let ws = null, currentUser = null, userColor = '#fff', currentAlertId = null;
     let currentAlertText = "", currentAlertTarget = "", currentAlertSender = "";
-    let pendingAlerts = {}, allNotifications = new Array();
+    let allNotifications = new Array();
     let titleInterval = null, soundInterval = null, audioCtx = null;
     let keepAliveAudio = null, sirenAudio = null, publicVapidKey = null, deferredPrompt = null;
 
@@ -203,23 +205,28 @@
         return u;
     }
     function openStreamInWindow() {
+        if (currentUser !== ADMIN_NAME) return;
         const input = document.getElementById('stream-url-input');
         const url = normalizeStreamUrl(input.value);
         if (!url) return alert('Вставьте ссылку на видеострим!');
         input.value = url;
         document.getElementById('stream-frame-wrap').style.display = 'block';
         document.getElementById('stream-iframe').src = url;
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'set_stream_url', url: url }));
+        const n = new Date();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'start_stream', url: url, time: n.toLocaleDateString() + ' ' + n.toLocaleTimeString().slice(0, 5) }));
+        }
     }
     function navigateSameTabStream() {
         const url = normalizeStreamUrl(document.getElementById('stream-url-input').value);
-        if (!url) return alert('Вставьте ссылку на видеострим!');
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'set_stream_url', url: url }));
-        window.location.href = url;
+        if (!url) return alert('Ссылка на видеострим еще не задана администратором!');
+        window.open(url, '_blank');
     }
     function closeStreamInWindow() {
+        if (currentUser !== ADMIN_NAME) return;
         document.getElementById('stream-iframe').src = 'about:blank';
         document.getElementById('stream-frame-wrap').style.display = 'none';
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'stop_stream' }));
     }
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -260,7 +267,7 @@
                 reg.showNotification(title, {
                     body: body,
                     vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
-                    silent: false, requireInteraction: true, renotify: true, tag: 'admin-alert'
+                    silent: false, requireInteraction: true, renotify: true, tag: 'admin-alert-' + Date.now()
                 }).catch(function() {});
             });
         }
@@ -351,48 +358,84 @@
                 allNotifications = msg.notifications || new Array(); renderNotificationsWindow();
                 if (msg.streamUrl) document.getElementById('stream-url-input').value = msg.streamUrl;
                 if (msg.vapidPublicKey) { publicVapidKey = msg.vapidPublicKey; subscribeToWebPush(); }
-                if (msg.alerts) { pendingAlerts = msg.alerts; checkAndShowAlerts(false); }
+                checkAndShowAlerts(false);
             }
             if (msg.type === 'stream_url_updated' && msg.url) document.getElementById('stream-url-input').value = msg.url;
+            if (msg.type === 'stream_stopped' && currentUser !== ADMIN_NAME) {
+                document.getElementById('stream-iframe').src = 'about:blank';
+                document.getElementById('stream-frame-wrap').style.display = 'none';
+            }
             if (msg.type === 'new_row') appendRow(msg.row);
-            if (msg.type === 'history_cleared') { document.getElementById('table-body').innerHTML = ''; allNotifications = new Array(); renderNotificationsWindow(); }
+            if (msg.type === 'history_cleared') { document.getElementById('table-body').innerHTML = ''; allNotifications = new Array(); renderNotificationsWindow(); stopAlertVisuals(); }
             if (msg.type === 'admin_alert') {
                 if (msg.notif) { allNotifications.push(msg.notif); renderNotificationsWindow(); }
-                pendingAlerts[msg.target] = { id: msg.notif ? msg.notif.id : Date.now(), text: msg.text, sender: msg.sender || ADMIN_NAME };
                 checkAndShowAlerts(true);
             }
             if (msg.type === 'alert_cleared') {
-                delete pendingAlerts[msg.target];
-                allNotifications.forEach(function(n) { if ((msg.notifId && n.id === msg.notifId) || (!msg.notifId && n.target === msg.target && !n.read)) { n.read = true; n.readBy = msg.readBy || ''; } });
+                allNotifications.forEach(function(n) {
+                    if (msg.notifId && n.id === msg.notifId) { n.read = true; n.readBy = msg.readBy || ''; }
+                });
                 renderNotificationsWindow();
-                if (currentAlertTarget === msg.target) stopAlertVisuals();
-                checkAndShowAlerts(false);
+                if (currentAlertId === msg.notifId) { stopAlertVisuals(); checkAndShowAlerts(false); }
             }
         };
         ws.onclose = function() { setTimeout(connectWS, 1500); };
     }
-    setInterval(function() { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' })); else connectWS(); }, 4000);
+    setInterval(function() {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+        else connectWS();
+    }, 4000);
     function populateTargetSelect() {
-        const s = document.getElementById('admin-target'); s.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ</option>';
-        USERS_CONFIG.forEach(function(u) { if (u.name !== currentUser) { let o = document.createElement('option'); o.value = u.name; o.innerText = u.name; s.appendChild(o); } });
+        const s = document.getElementById('admin-target');
+        s.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ</option>';
+        USERS_CONFIG.forEach(function(u) {
+            if (u.name !== currentUser) {
+                let o = document.createElement('option');
+                o.value = u.name; o.innerText = u.name; s.appendChild(o);
+            }
+        });
     }
     function applyUserUI() {
-        document.getElementById('login-overlay').style.display = 'none'; document.getElementById('input-panel').style.display = 'block';
-        document.getElementById('my-name').innerText = currentUser; document.getElementById('my-name').style.color = userColor;
-        document.getElementById('admin-zone').style.display = 'block'; populateTargetSelect(); renderNotificationsWindow();
-        document.getElementById('clear-history-box').style.display = (currentUser === ADMIN_NAME) ? 'block' : 'none';
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('input-panel').style.display = 'block';
+        document.getElementById('my-name').innerText = currentUser;
+        document.getElementById('my-name').style.color = userColor;
+        document.getElementById('admin-zone').style.display = 'block';
+        populateTargetSelect(); renderNotificationsWindow();
+        const isAdmin = (currentUser === ADMIN_NAME);
+        document.getElementById('clear-history-box').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('stream-admin-label').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('stream-url-input').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('btn-stream-start').style.display = isAdmin ? 'inline-block' : 'none';
+        document.getElementById('btn-stream-close').style.display = isAdmin ? 'inline-block' : 'none';
+        document.getElementById('btn-stream-go').style.width = isAdmin ? 'auto' : '100%';
     }
     function initApp() {
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function() {});
-        document.body.addEventListener('click', function firstTouch() { unlockMobileFeatures(); subscribeToWebPush(); document.body.removeEventListener('click', firstTouch); }, { once: true });
+        document.body.addEventListener('click', function firstTouch() {
+            unlockMobileFeatures(); subscribeToWebPush();
+            document.body.removeEventListener('click', firstTouch);
+        }, { once: true });
         const ls = document.getElementById('login-select'); ls.innerHTML = '';
-        USERS_CONFIG.forEach(function(u, idx) { let o = document.createElement('option'); o.value = idx; o.innerText = u.name; ls.appendChild(o); });
+        USERS_CONFIG.forEach(function(u, idx) {
+            let o = document.createElement('option');
+            o.value = idx; o.innerText = u.name; ls.appendChild(o);
+        });
         const hr = document.getElementById('table-headers'), ic = document.getElementById('dynamic-inputs');
-        hr.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>'; ic.innerHTML = '';
+        hr.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
+        ic.innerHTML = '';
         COLUMNS_CONFIG.forEach(function(col, idx) {
             let th = document.createElement('th'); th.innerText = col.label; hr.appendChild(th);
             let div = document.createElement('div'); div.className = 'field-group';
-            let h = (col.options && col.options.length > 0) ? '<select id="in-' + idx + '"><option value="" disabled selected>-</option>' + col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('') + '</select>' : (col.digitsOnly ? '<input type="text" id="in-' + idx + '" placeholder="Цифры, дробь, слэш..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">' : '<input type="text" id="in-' + idx + '" placeholder="...">');
+            let h = '';
+            if (col.options && col.options.length > 0) {
+                h = '<select id="in-' + idx + '"><option value="" disabled selected>-</option>' +
+                    col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('') + '</select>';
+            } else if (col.digitsOnly) {
+                h = '<input type="text" id="in-' + idx + '" placeholder="Цифры..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">';
+            } else {
+                h = '<input type="text" id="in-' + idx + '" placeholder="...">';
+            }
             div.innerHTML = '<label>' + col.label + '</label>' + h; ic.appendChild(div);
         });
         const su = localStorage.getItem('journal_user'), sc = localStorage.getItem('journal_color');
@@ -400,18 +443,89 @@
         connectWS();
     }
     window.onload = initApp;
-    function attemptLogin() { unlockMobileFeatures(); const u = USERS_CONFIG.at(Number(document.getElementById('login-select').value)); if (u && document.getElementById('login-pass').value.trim() === u.pass) { document.getElementById('login-error').style.display = 'none'; currentUser = u.name; userColor = u.color; localStorage.setItem('journal_user', currentUser); localStorage.setItem('journal_color', userColor); applyUserUI(); subscribeToWebPush(); checkAndShowAlerts(false); } else document.getElementById('login-error').style.display = 'block'; }
-    function logoutUser() { localStorage.removeItem('journal_user'); localStorage.removeItem('journal_color'); location.reload(); }
-    function loginAsViewer() { unlockMobileFeatures(); document.getElementById('login-overlay').style.display = 'none'; renderNotificationsWindow(); subscribeToWebPush(); checkAndShowAlerts(false); }
-    function sendAdminAlert() { if (!currentUser) return; const t = document.getElementById('admin-target').value, m = document.getElementById('admin-msg').value.trim(); if (!m) return alert("Напишите текст!"); const n = new Date(); ws.send(JSON.stringify({ type: 'admin_alert', sender: currentUser, color: userColor, time: n.toLocaleDateString() + ' ' + n.toLocaleTimeString().slice(0, 5), target: t, text: m })); document.getElementById('admin-msg').value = ''; }
-    function clearHistoryAdmin() { if (currentUser === ADMIN_NAME && confirm("⚠️ Очистить весь журнал событий?")) ws.send(JSON.stringify({ type: 'clear_history' })); }
     function getAlertObj(r) { return !r ? null : (typeof r === 'string' ? { id: null, text: r, sender: ADMIN_NAME } : r); }
-    function checkAndShowAlerts(isNew) { let t = null; if (currentUser) { const m = getAlertObj(pendingAlerts[currentUser]); if (m && m.sender !== currentUser) t = currentUser; } if (!t) { const a = getAlertObj(pendingAlerts["ВСЕМ"]); if (a && (!currentUser || a.sender !== currentUser)) t = "ВСЕМ"; } if (t) { const o = getAlertObj(pendingAlerts[t]); showAlert(t, o.text, o.sender, o.id, isNew); } }
-    function showAlert(t, txt, s, id, isNew) { currentAlertId = id || null; currentAlertTarget = t; currentAlertText = txt; currentAlertSender = s || ADMIN_NAME; document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + t + '] ОТ [' + currentAlertSender + ']:'; document.getElementById('alert-text').innerText = txt; document.getElementById('alert-modal').style.display = 'flex'; updateLockScreenAlert(t, txt, currentAlertSender); if (isNew || document.visibilityState === 'hidden') sendLocalNotification(t, txt, currentAlertSender); if (!titleInterval) { let f = false; titleInterval = setInterval(function() { document.title = f ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!"; f = !f; }, 600); } playBeep(); if (!soundInterval) soundInterval = setInterval(playBeep, 2000); }
-    function stopAlertVisuals() { document.getElementById('alert-modal').style.display = 'none'; if (titleInterval) { clearInterval(titleInterval); titleInterval = null; } if (soundInterval) { clearInterval(soundInterval); soundInterval = null; } if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; } if (navigator.vibrate) navigator.vibrate(0); document.title = "МСБ55115"; }
-    function confirmAlert() { unlockMobileFeatures(); stopAlertVisuals(); delete pendingAlerts[currentAlertTarget]; ws.send(JSON.stringify({ type: 'clear_alert', target: currentAlertTarget, notifId: currentAlertId, readBy: currentUser || 'Просмотр' })); checkAndShowAlerts(false); }
-    function submitRow() { if (!currentUser) return; let v = new Array(), emp = true; for (let i = 0; i < COLUMNS_CONFIG.length; i++) { let val = document.getElementById('in-' + i).value; if (COLUMNS_CONFIG.at(i).digitsOnly && val) val = val.replace(/[^0-9.,\/\\]/g, ''); v.push(val); if (val) emp = false; } if (emp) return alert("Пустая строка!"); const n = new Date(); ws.send(JSON.stringify({ type: 'add_row', user: currentUser, color: userColor, time: n.toLocaleDateString() + ' ' + n.toLocaleTimeString().slice(0, 5), values: v })); for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = ""; }
-    function appendRow(row) { if (row.values && row.values.at(0) && (String(row.values.at(0)).indexOf("ОЗНАКОМЛЕН") !== -1 || String(row.values.at(0)).indexOf("УВЕДОМЛЕНИЕ") !== -1)) return; const tb = document.getElementById('table-body'), tr = document.createElement('tr'); tr.className = 'new-row'; let h = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>'; for (let i = 0; i < COLUMNS_CONFIG.length; i++) h += '<td>' + ((row.values && row.values.at(i)) ? row.values.at(i) : '-') + '</td>'; tr.innerHTML = h; tb.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); }
+    function checkAndShowAlerts(isNew) {
+        let t = null;
+        if (currentUser) {
+            const m = getAlertObj(pendingAlerts[currentUser]);
+            if (m && m.sender !== currentUser) t = currentUser;
+        }
+        if (!t) {
+            const a = getAlertObj(pendingAlerts["ВСЕМ"]);
+            if (a && (!currentUser || a.sender !== currentUser)) t = "ВСЕМ";
+        }
+        if (t) {
+            const o = getAlertObj(pendingAlerts[t]);
+            showAlert(t, o.text, o.sender, o.id, isNew);
+        }
+    }
+    function showAlert(t, txt, s, id, isNew) {
+        currentAlertId = id || null;
+        currentAlertTarget = t;
+        currentAlertText = txt;
+        currentAlertSender = s || ADMIN_NAME;
+        document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + t + '] ОТ [' + currentAlertSender + ']:';
+        document.getElementById('alert-text').innerText = txt;
+        document.getElementById('alert-modal').style.display = 'flex';
+        updateLockScreenAlert(t, txt, currentAlertSender);
+        if (isNew || document.visibilityState === 'hidden') sendLocalNotification(t, txt, currentAlertSender);
+        if (!titleInterval) {
+            let f = false;
+            titleInterval = setInterval(function() { document.title = f ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!"; f = !f; }, 600);
+        }
+        playBeep();
+        if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
+    }
+    function stopAlertVisuals() {
+        document.getElementById('alert-modal').style.display = 'none';
+        if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
+        if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
+        if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
+        if (navigator.vibrate) navigator.vibrate(0);
+        document.title = "МСБ55115";
+    }
+    function confirmAlert() {
+        unlockMobileFeatures();
+        stopAlertVisuals();
+        delete pendingAlerts[currentAlertTarget];
+        ws.send(JSON.stringify({
+            type: 'clear_alert',
+            target: currentAlertTarget,
+            notifId: currentAlertId,
+            readBy: currentUser || 'Просмотр'
+        }));
+        checkAndShowAlerts(false);
+    }
+    function submitRow() {
+        if (!currentUser) return;
+        let v = new Array(), emp = true;
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
+            let val = document.getElementById('in-' + i).value;
+            if (COLUMNS_CONFIG.at(i).digitsOnly && val) val = val.replace(/[^0-9.,\/\\]/g, '');
+            v.push(val);
+            if (val) emp = false;
+        }
+        if (emp) return alert("Пустая строка!");
+        const n = new Date();
+        ws.send(JSON.stringify({
+            type: 'add_row',
+            user: currentUser,
+            color: userColor,
+            time: n.toLocaleDateString() + ' ' + n.toLocaleTimeString().slice(0, 5),
+            values: v
+        }));
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
+    }
+    function appendRow(row) {
+        if (row.values && row.values.at(0) && (String(row.values.at(0)).indexOf("ОЗНАКОМЛЕН") !== -1 || String(row.values.at(0)).indexOf("УВЕДОМЛЕНИЕ") !== -1)) return;
+        const tb = document.getElementById('table-body'), tr = document.createElement('tr');
+        tr.className = 'new-row';
+        let h = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
+        for (let i = 0; i < COLUMNS_CONFIG.length; i++) h += '<td>' + ((row.values && row.values.at(i)) ? row.values.at(i) : '-') + '</td>';
+        tr.innerHTML = h;
+        tb.appendChild(tr);
+        requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    }
 </script>
 </body>
 </html>
