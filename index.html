@@ -38,13 +38,16 @@
         .alert-content { background: white; color: #b91c1c; padding: 30px; border-radius: 20px; width: 100%; max-width: 600px; box-shadow: 0 0 50px rgba(0,0,0,0.5); animation: shake 0.5s infinite; box-sizing: border-box; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
         .alert-btn { margin-top: 20px; width: 100%; padding: 18px; font-size: 20px; background: #b91c1c; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
-        .notifications-window { width: 100%; max-width: 1400px; background: var(--panel); border: 1px solid var(--danger); border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
-        .notifications-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
-        .notif-item { background: rgba(239, 68, 68, 0.12); border-left: 4px solid var(--danger); padding: 8px 12px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; }
+        .notifications-window { width: 100%; max-width: 1400px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
+        .notifications-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+        .notif-item { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-left: 5px solid var(--danger); padding: 10px 12px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; transition: 0.3s; }
+        .notif-item.read { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); border-left: 5px solid #22c55e; }
         .notif-time { color: #facc15; font-family: monospace; }
         .notif-sender { font-weight: bold; }
-        .notif-target { background: #7f1d1d; color: #fecaca; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-        .notif-text { color: #f1f5f9; flex-grow: 1; word-break: break-word; }
+        .notif-target { background: #334155; color: #f8fafc; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .notif-text { color: #f1f5f9; flex-grow: 1; word-break: break-word; font-weight: bold; }
+        .notif-status { font-size: 12px; font-weight: bold; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+        .notif-item.read .notif-status { background: rgba(34, 197, 94, 0.25); color: #86efac; }
         .history-container { width: 100%; max-width: 1400px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
         table { width: 100%; border-collapse: collapse; min-width: 850px; }
         th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 14px; }
@@ -52,8 +55,6 @@
         .new-row { animation: fadeIn 0.5s ease; }
         .time-cell { color: #facc15; font-family: monospace; }
         .user-cell { font-weight: bold; }
-        .ack-row td { background: rgba(34, 197, 94, 0.1); color: #86efac; font-style: italic; }
-        .alert-row td { background: rgba(239, 68, 68, 0.15); color: #fca5a5; font-weight: bold; }
         @media (max-width: 768px) {
             body { padding: 10px; }
             .login-box { padding: 25px 20px; }
@@ -113,7 +114,7 @@
         </div>
     </div>
     <div class="notifications-window" id="notifications-window">
-        <h3 style="color:#fca5a5; margin: 0 0 10px 0; font-size: 16px;">🔔 Последние уведомления (до 10 шт.)</h3>
+        <h3 style="color:#94a3b8; margin: 0 0 10px 0; font-size: 16px;">🔔 Уведомления подразделения (последние 10 шт.)</h3>
         <div class="notifications-list" id="notifications-list">
             <div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>
         </div>
@@ -180,10 +181,12 @@
     let ws = null;
     let currentUser = null;
     let userColor = '#fff';
+    let currentAlertId = null;
     let currentAlertText = "";
     let currentAlertTarget = "";
     let currentAlertSender = "";
     let pendingAlerts = {};
+    let allNotifications = new Array();
     let titleInterval = null;
     let soundInterval = null;
     let audioCtx = null;
@@ -347,37 +350,45 @@
             setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
-        function clearNotificationsWindow() {
-        const list = document.getElementById('notifications-list');
-        if (!list) return;
-        list.innerHTML = '<div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>';
+    function isNotificationVisibleForMe(notif) {
+        if (!notif) return false;
+        if (notif.target === "ВСЕМ") return true;
+        if (currentUser === ADMIN_NAME) return true;
+        if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
+        return false;
     }
 
-    function addNotificationToWindow(row) {
+    function renderNotificationsWindow() {
         const list = document.getElementById('notifications-list');
         if (!list) return;
-        const placeholder = document.getElementById('no-notif-placeholder');
-        if (placeholder) placeholder.remove();
+        list.innerHTML = '';
 
-        const targetRaw = (row.values && row.values.at(1)) ? String(row.values.at(1)) : '';
-        const textRaw = (row.values && row.values.at(5)) ? String(row.values.at(5)) : '';
+        const myNotifs = allNotifications.filter(isNotificationVisibleForMe).slice(-10);
 
-        const item = document.createElement('div');
-        item.className = 'notif-item';
-        item.innerHTML =
-            '<span class="notif-time">' + row.time + '</span>' +
-            '<span class="notif-sender" style="color:' + (row.color || '#ef4444') + '">' + row.user + '</span>' +
-            '<span class="notif-target">' + targetRaw + '</span>' +
-            '<span class="notif-text">' + textRaw + '</span>';
-
-        list.appendChild(item);
-
-        while (list.children.length > 10) {
-            list.removeChild(list.firstElementChild);
+        if (myNotifs.length === 0) {
+            list.innerHTML = '<div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>';
+            return;
         }
+
+        myNotifs.forEach(function(notif) {
+            const item = document.createElement('div');
+            item.className = 'notif-item' + (notif.read ? ' read' : '');
+            const statusText = notif.read
+                ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : ''))
+                : '⏳ НЕ ПРОЧИТАНО';
+
+            item.innerHTML =
+                '<span class="notif-time">' + notif.time + '</span>' +
+                '<span class="notif-sender" style="color:' + (notif.color || '#ef4444') + '">' + notif.sender + '</span>' +
+                '<span class="notif-target">КОМУ: ' + notif.target + '</span>' +
+                '<span class="notif-text">' + notif.text + '</span>' +
+                '<span class="notif-status">' + statusText + '</span>';
+
+            list.appendChild(item);
+        });
+
         list.scrollTop = list.scrollHeight;
     }
-
 
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
@@ -387,8 +398,10 @@
             const msg = JSON.parse(event.data);
             if (msg.type === 'init') {
                 document.getElementById('table-body').innerHTML = '';
-                clearNotificationsWindow();
                 msg.data.forEach(appendRow);
+                allNotifications = msg.notifications || new Array();
+                renderNotificationsWindow();
+
                 if (msg.vapidPublicKey) {
                     publicVapidKey = msg.vapidPublicKey;
                     subscribeToWebPush();
@@ -401,10 +414,16 @@
             if (msg.type === 'new_row') appendRow(msg.row);
             if (msg.type === 'history_cleared') {
                 document.getElementById('table-body').innerHTML = '';
-                clearNotificationsWindow();
+                allNotifications = new Array();
+                renderNotificationsWindow();
             }
             if (msg.type === 'admin_alert') {
+                if (msg.notif) {
+                    allNotifications.push(msg.notif);
+                    renderNotificationsWindow();
+                }
                 pendingAlerts[msg.target] = {
+                    id: msg.notif ? msg.notif.id : Date.now(),
                     text: msg.text,
                     sender: msg.sender || ADMIN_NAME
                 };
@@ -412,6 +431,22 @@
             }
             if (msg.type === 'alert_cleared') {
                 delete pendingAlerts[msg.target];
+                if (msg.notifId) {
+                    allNotifications.forEach(function(n) {
+                        if (n.id === msg.notifId) {
+                            n.read = true;
+                            n.readBy = msg.readBy || '';
+                        }
+                    });
+                } else {
+                    allNotifications.forEach(function(n) {
+                        if (n.target === msg.target && !n.read) {
+                            n.read = true;
+                            n.readBy = msg.readBy || '';
+                        }
+                    });
+                }
+                renderNotificationsWindow();
                 if (currentAlertTarget === msg.target) stopAlertVisuals();
                 checkAndShowAlerts(false);
             }
@@ -427,7 +462,6 @@
             connectWS();
         }
     }, 4000);
-
     function populateTargetSelect() {
         const adminSelect = document.getElementById('admin-target');
         adminSelect.innerHTML = '';
@@ -455,6 +489,7 @@
         
         document.getElementById('admin-zone').style.display = 'block';
         populateTargetSelect();
+        renderNotificationsWindow();
 
         if (currentUser === ADMIN_NAME) {
             document.getElementById('clear-history-box').style.display = 'block';
@@ -462,6 +497,7 @@
             document.getElementById('clear-history-box').style.display = 'none';
         }
     }
+
     function initApp() {
         document.getElementById('login-error').style.display = 'none';
 
@@ -522,7 +558,6 @@
     }
     
     window.onload = initApp;
-
     function attemptLogin() {
         unlockMobileFeatures();
         const userIndex = Number(document.getElementById('login-select').value);
@@ -553,9 +588,11 @@
     function loginAsViewer() {
         unlockMobileFeatures();
         document.getElementById('login-overlay').style.display = 'none';
+        renderNotificationsWindow();
         subscribeToWebPush();
         checkAndShowAlerts(false);
     }
+
     function sendAdminAlert() {
         if (!currentUser) return;
         const target = document.getElementById('admin-target').value;
@@ -574,7 +611,6 @@
             text: msg 
         }));
 
-        alert("Уведомление отправлено и записано в журнал!");
         document.getElementById('admin-msg').value = '';
     }
 
@@ -587,39 +623,34 @@
 
     function getAlertObj(raw) {
         if (!raw) return null;
-        if (typeof raw === 'string') return { text: raw, sender: ADMIN_NAME };
+        if (typeof raw === 'string') return { id: null, text: raw, sender: ADMIN_NAME };
         return raw;
     }
 
     function checkAndShowAlerts(isNew) {
         let targetToShow = null;
 
-        const allAlert = getAlertObj(pendingAlerts["ВСЕМ"]);
-        if (allAlert) {
-            if (!currentUser || allAlert.sender !== currentUser) {
-                targetToShow = "ВСЕМ";
+        if (currentUser) {
+            const myAlert = getAlertObj(pendingAlerts[currentUser]);
+            if (myAlert && myAlert.sender !== currentUser) {
+                targetToShow = currentUser;
             }
         }
 
         if (!targetToShow) {
-            if (currentUser) {
-                const myAlert = getAlertObj(pendingAlerts[currentUser]);
-                if (myAlert && myAlert.sender !== currentUser) {
-                    targetToShow = currentUser;
-                }
-            } else {
-                const targets = Object.keys(pendingAlerts);
-                if (targets.length > 0) targetToShow = targets.at(0);
+            const allAlert = getAlertObj(pendingAlerts["ВСЕМ"]);
+            if (allAlert && (!currentUser || allAlert.sender !== currentUser)) {
+                targetToShow = "ВСЕМ";
             }
         }
 
         if (targetToShow) {
             const alertObj = getAlertObj(pendingAlerts[targetToShow]);
-            showAlert(targetToShow, alertObj.text, alertObj.sender, isNew);
+            showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
         }
     }
-
-    function showAlert(target, text, sender, isNew) {
+    function showAlert(target, text, sender, notifId, isNew) {
+        currentAlertId = notifId || null;
         currentAlertTarget = target;
         currentAlertText = text;
         currentAlertSender = sender || ADMIN_NAME;
@@ -660,30 +691,19 @@
             });
         }
     }
+
     function confirmAlert() {
         unlockMobileFeatures();
-        const whoConfirmed = currentUser || ('Экран (' + currentAlertTarget + ')');
-        const confirmColor = currentUser ? userColor : '#facc15';
+        const whoConfirmed = currentUser || 'Просмотр';
 
         stopAlertVisuals();
         delete pendingAlerts[currentAlertTarget];
 
-        ws.send(JSON.stringify({ type: 'clear_alert', target: currentAlertTarget }));
-
-        const now = new Date();
-        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-        
-        let ackValues = new Array(COLUMNS_CONFIG.length).fill("-");
-        ackValues.splice(0, 1, "✅ ОЗНАКОМЛЕН");
-        ackValues.splice(1, 1, "ОТ: " + (currentAlertSender || ADMIN_NAME));
-        ackValues.splice(ackValues.length - 1, 1, 'Сообщение: ' + currentAlertText);
-
         ws.send(JSON.stringify({
-            type: 'add_row',
-            user: whoConfirmed,
-            color: confirmColor,
-            time: timeString,
-            values: ackValues
+            type: 'clear_alert',
+            target: currentAlertTarget,
+            notifId: currentAlertId,
+            readBy: whoConfirmed
         }));
 
         checkAndShowAlerts(false);
@@ -716,18 +736,15 @@
     }
 
     function appendRow(row) {
+        if (row.values && row.values.at(0)) {
+            const firstCol = String(row.values.at(0));
+            if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
+                return;
+            }
+        }
         const tbody = document.getElementById('table-body');
         const tr = document.createElement('tr');
         tr.className = 'new-row';
-        if (row.values && row.values.at(0)) {
-            const firstCol = String(row.values.at(0));
-            if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1) {
-                tr.classList.add('ack-row');
-            } else if (firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
-                tr.classList.add('alert-row');
-                addNotificationToWindow(row);
-            }
-        }
         let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
         
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
@@ -742,4 +759,3 @@
 </script>
 </body>
 </html>
-
