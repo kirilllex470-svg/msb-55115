@@ -29,6 +29,15 @@
         .field-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; font-weight: bold; }
         .field-group select, .field-group input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 16px; outline: none; box-sizing: border-box; }
         .send-btn { width: 100%; padding: 15px; background: #22c55e; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .stream-main-btn { width: 100%; margin-top: 12px; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .stream-main-btn.live { background: #dc2626; animation: pulseLive 1.5s infinite; }
+        @keyframes pulseLive { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+        .stream-box { display: none; margin-top: 12px; padding: 15px; background: #0f172a; border: 1px solid var(--accent); border-radius: 8px; box-sizing: border-box; }
+        .stream-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .stream-controls input { flex-grow: 1; padding: 12px; background: #1e293b; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 15px; outline: none; }
+        .stream-start-btn { padding: 12px 18px; background: #22c55e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .stream-stop-btn { padding: 12px 18px; background: var(--danger); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .stream-link-btn { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         #admin-zone { display: none; margin-top: 30px; padding: 20px; border: 2px solid var(--danger); border-radius: 10px; background: rgba(239, 68, 68, 0.1); }
         .admin-controls { display: flex; gap: 10px; }
         .admin-controls select { width: 200px; padding: 12px; border-radius: 6px; border: none; font-size: 16px; }
@@ -60,8 +69,8 @@
             .login-box { padding: 25px 20px; }
             .input-panel { padding: 15px; margin-bottom: 20px; }
             .inputs-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .admin-controls { flex-direction: column; }
-            .admin-controls select, .admin-controls input, .admin-controls button { width: 100%; box-sizing: border-box; }
+            .admin-controls, .stream-controls { flex-direction: column; }
+            .admin-controls select, .admin-controls input, .admin-controls button, .stream-controls input, .stream-controls button { width: 100%; box-sizing: border-box; }
             .alert-content h1 { font-size: 28px !important; }
             #alert-text { font-size: 22px !important; padding: 15px !important; word-break: break-word; }
         }
@@ -100,6 +109,18 @@
         </div>
         <div class="inputs-grid" id="dynamic-inputs"></div>
         <button type="button" class="send-btn" onclick="submitRow()">📤 ЗАПИСАТЬ В ЖУРНАЛ</button>
+        <button type="button" class="stream-main-btn" id="stream-main-btn" onclick="handleStreamBtnClick()">🎥 ВИДЕОСТРИМ МСБ-55115</button>
+        <div class="stream-box" id="admin-stream-box">
+            <div style="color:#94a3b8; font-size:13px; margin-bottom:8px; font-weight:bold;">Ссылка на видеострим (SaluteJazz и др.):</div>
+            <div class="stream-controls">
+                <input type="text" id="stream-url-input" value="https://salutejazz.ru" placeholder="https://salutejazz.ru...">
+                <button type="button" class="stream-start-btn" onclick="startVideoStream()">▶️ НАЧАТЬ И ОТКРЫТЬ СТРИМ</button>
+                <button type="button" class="stream-stop-btn" onclick="stopVideoStream()">⏹️ ЗАВЕРШИТЬ СТРИМ</button>
+            </div>
+        </div>
+        <div class="stream-box" id="user-stream-box">
+            <button type="button" class="stream-link-btn" onclick="openActiveStreamWindow()">🔗 ПЕРЕЙТИ ПО ССЫЛКЕ</button>
+        </div>
         <div id="admin-zone">
             <h3 style="color: #ef4444; margin-top: 0;">⚡ УПРАВЛЕНИЕ И СВЯЗЬ</h3>
             <div style="color: #fca5a5; margin-bottom: 10px; font-size: 14px;">Отправить уведомление подразделению:</div>
@@ -114,6 +135,9 @@
         </div>
     </div>
     <div class="notifications-window" id="notifications-window">
+        <div id="viewer-stream-panel" style="display:none; margin-bottom: 12px;">
+            <button type="button" class="stream-link-btn" style="background:#dc2626;" onclick="openActiveStreamWindow()">🎥 ИДЕТ ВИДЕОСТРИМ МСБ-55115 — ПЕРЕЙТИ ПО ССЫЛКЕ</button>
+        </div>
         <h3 style="color:#94a3b8; margin: 0 0 10px 0; font-size: 16px;">🔔 Уведомления подразделения (последние 10 шт.)</h3>
         <div class="notifications-list" id="notifications-list">
             <div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>
@@ -187,6 +211,7 @@
     let currentAlertSender = "";
     let pendingAlerts = {};
     let allNotifications = new Array();
+    let activeStream = { active: false, url: "" };
     let titleInterval = null;
     let soundInterval = null;
     let audioCtx = null;
@@ -194,7 +219,6 @@
     let sirenAudio = null;
     let publicVapidKey = null;
     let deferredPrompt = null;
-
     window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         deferredPrompt = e;
@@ -211,14 +235,18 @@
     });
 
     async function installPWA() {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-            btn.style.display = 'none';
-        });
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
+                btn.style.display = 'none';
+            });
+        } else {
+            alert('Для установки приложения откройте меню браузера (три точки или "Поделиться") и выберите "Установить приложение" или "На экран Домой".');
+        }
     }
+
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -267,12 +295,11 @@
                     silent: false,
                     requireInteraction: true,
                     renotify: true,
-                    tag: 'admin-alert'
+                    tag: 'admin-alert-' + Date.now()
                 }).catch(function() {});
             });
         }
     }
-
     function createWavUrl(freq, durationSec, volume) {
         const sr = 8000;
         const numSamples = sr * durationSec;
@@ -316,7 +343,6 @@
                 });
             }
         } catch(e) {}
-
         if ('wakeLock' in navigator) {
             navigator.wakeLock.request('screen').catch(function() {});
         }
@@ -350,6 +376,75 @@
             setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
+    function handleStreamBtnClick() {
+        if (currentUser === ADMIN_NAME) {
+            const box = document.getElementById('admin-stream-box');
+            box.style.display = (box.style.display === 'block') ? 'none' : 'block';
+        } else {
+            if (activeStream && activeStream.active && activeStream.url) {
+                const uBox = document.getElementById('user-stream-box');
+                uBox.style.display = (uBox.style.display === 'block') ? 'none' : 'block';
+            } else {
+                alert('Видеострим сейчас не запущен администратором.');
+            }
+        }
+    }
+
+    function openActiveStreamWindow() {
+        if (activeStream && activeStream.url) {
+            window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
+        }
+    }
+
+    function startVideoStream() {
+        if (currentUser !== ADMIN_NAME) return;
+        const url = document.getElementById('stream-url-input').value.trim();
+        if (!url) return alert('Вставьте ссылку на стрим!');
+        const now = new Date();
+        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
+        ws.send(JSON.stringify({
+            type: 'stream_start',
+            url: url,
+            sender: currentUser,
+            color: userColor,
+            time: timeString
+        }));
+        window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
+    }
+
+    function stopVideoStream() {
+        if (currentUser !== ADMIN_NAME) return;
+        ws.send(JSON.stringify({ type: 'stream_stop' }));
+    }
+
+    function updateStreamUI() {
+        const mainBtn = document.getElementById('stream-main-btn');
+        const userBox = document.getElementById('user-stream-box');
+        const viewerPanel = document.getElementById('viewer-stream-panel');
+        const urlInput = document.getElementById('stream-url-input');
+
+        if (activeStream && activeStream.active && activeStream.url) {
+            if (urlInput && currentUser !== ADMIN_NAME) urlInput.value = activeStream.url;
+            if (mainBtn) {
+                mainBtn.classList.add('live');
+                mainBtn.innerText = '🔴 ИДЕТ ВИДЕОСТРИМ МСБ-55115';
+            }
+            if (currentUser && currentUser !== ADMIN_NAME && userBox) {
+                userBox.style.display = 'block';
+            }
+            if (!currentUser && viewerPanel) {
+                viewerPanel.style.display = 'block';
+            }
+        } else {
+            if (mainBtn) {
+                mainBtn.classList.remove('live');
+                mainBtn.innerText = '🎥 ВИДЕОСТРИМ МСБ-55115';
+            }
+            if (userBox) userBox.style.display = 'none';
+            if (viewerPanel) viewerPanel.style.display = 'none';
+        }
+    }
+
     function isNotificationVisibleForMe(notif) {
         if (!notif) return false;
         if (notif.target === "ВСЕМ") return true;
@@ -357,7 +452,6 @@
         if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
         return false;
     }
-
     function renderNotificationsWindow() {
         const list = document.getElementById('notifications-list');
         if (!list) return;
@@ -390,6 +484,14 @@
         list.scrollTop = list.scrollHeight;
     }
 
+    function getAlertsQueue(target) {
+        const raw = pendingAlerts[target];
+        if (!raw) return new Array();
+        if (Array.isArray(raw)) return raw;
+        if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME });
+        return Array.of(raw);
+    }
+
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
@@ -402,6 +504,10 @@
                 allNotifications = msg.notifications || new Array();
                 renderNotificationsWindow();
 
+                if (msg.streamState) {
+                    activeStream = msg.streamState;
+                    updateStreamUI();
+                }
                 if (msg.vapidPublicKey) {
                     publicVapidKey = msg.vapidPublicKey;
                     subscribeToWebPush();
@@ -412,9 +518,15 @@
                 }
             }
             if (msg.type === 'new_row') appendRow(msg.row);
+            if (msg.type === 'stream_state') {
+                activeStream = msg.streamState || { active: false, url: '' };
+                updateStreamUI();
+            }
             if (msg.type === 'history_cleared') {
                 document.getElementById('table-body').innerHTML = '';
                 allNotifications = new Array();
+                pendingAlerts = {};
+                stopAlertVisuals();
                 renderNotificationsWindow();
             }
             if (msg.type === 'admin_alert') {
@@ -422,15 +534,27 @@
                     allNotifications.push(msg.notif);
                     renderNotificationsWindow();
                 }
-                pendingAlerts[msg.target] = {
+                const queue = getAlertsQueue(msg.target);
+                queue.push({
                     id: msg.notif ? msg.notif.id : Date.now(),
                     text: msg.text,
                     sender: msg.sender || ADMIN_NAME
-                };
+                });
+                pendingAlerts[msg.target] = queue;
                 checkAndShowAlerts(true);
             }
             if (msg.type === 'alert_cleared') {
-                delete pendingAlerts[msg.target];
+                const queue = getAlertsQueue(msg.target);
+                if (msg.notifId) {
+                    pendingAlerts[msg.target] = queue.filter(function(a) { return a.id !== msg.notifId; });
+                } else {
+                    queue.shift();
+                    pendingAlerts[msg.target] = queue;
+                }
+                if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) {
+                    delete pendingAlerts[msg.target];
+                }
+
                 if (msg.notifId) {
                     allNotifications.forEach(function(n) {
                         if (n.id === msg.notifId) {
@@ -439,15 +563,19 @@
                         }
                     });
                 } else {
+                    let marked = false;
                     allNotifications.forEach(function(n) {
-                        if (n.target === msg.target && !n.read) {
+                        if (!marked && n.target === msg.target && !n.read) {
                             n.read = true;
                             n.readBy = msg.readBy || '';
+                            marked = true;
                         }
                     });
                 }
                 renderNotificationsWindow();
-                if (currentAlertTarget === msg.target) stopAlertVisuals();
+                if (currentAlertTarget === msg.target && (!msg.notifId || currentAlertId === msg.notifId)) {
+                    stopAlertVisuals();
+                }
                 checkAndShowAlerts(false);
             }
         };
@@ -462,6 +590,7 @@
             connectWS();
         }
     }, 4000);
+
     function populateTargetSelect() {
         const adminSelect = document.getElementById('admin-target');
         adminSelect.innerHTML = '';
@@ -480,7 +609,6 @@
             }
         });
     }
-
     function applyUserUI() {
         document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('input-panel').style.display = 'block';
@@ -490,11 +618,13 @@
         document.getElementById('admin-zone').style.display = 'block';
         populateTargetSelect();
         renderNotificationsWindow();
+        updateStreamUI();
 
         if (currentUser === ADMIN_NAME) {
             document.getElementById('clear-history-box').style.display = 'block';
         } else {
             document.getElementById('clear-history-box').style.display = 'none';
+            document.getElementById('admin-stream-box').style.display = 'none';
         }
     }
 
@@ -558,6 +688,7 @@
     }
     
     window.onload = initApp;
+
     function attemptLogin() {
         unlockMobileFeatures();
         const userIndex = Number(document.getElementById('login-select').value);
@@ -578,7 +709,6 @@
             document.getElementById('login-error').style.display = 'block';
         }
     }
-
     function logoutUser() {
         localStorage.removeItem('journal_user');
         localStorage.removeItem('journal_color');
@@ -589,6 +719,7 @@
         unlockMobileFeatures();
         document.getElementById('login-overlay').style.display = 'none';
         renderNotificationsWindow();
+        updateStreamUI();
         subscribeToWebPush();
         checkAndShowAlerts(false);
     }
@@ -621,41 +752,43 @@
         }
     }
 
-    function getAlertObj(raw) {
-        if (!raw) return null;
-        if (typeof raw === 'string') return { id: null, text: raw, sender: ADMIN_NAME };
-        return raw;
-    }
-
     function checkAndShowAlerts(isNew) {
+        if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
+
         let targetToShow = null;
+        let alertObj = null;
 
         if (currentUser) {
-            const myAlert = getAlertObj(pendingAlerts[currentUser]);
-            if (myAlert && myAlert.sender !== currentUser) {
+            const myQueue = getAlertsQueue(currentUser).filter(function(a) { return a.sender !== currentUser; });
+            if (myQueue.length > 0) {
                 targetToShow = currentUser;
+                alertObj = myQueue.at(0);
             }
         }
 
         if (!targetToShow) {
-            const allAlert = getAlertObj(pendingAlerts["ВСЕМ"]);
-            if (allAlert && (!currentUser || allAlert.sender !== currentUser)) {
+            const allQueue = getAlertsQueue("ВСЕМ").filter(function(a) { return !currentUser || a.sender !== currentUser; });
+            if (allQueue.length > 0) {
                 targetToShow = "ВСЕМ";
+                alertObj = allQueue.at(0);
             }
         }
 
-        if (targetToShow) {
-            const alertObj = getAlertObj(pendingAlerts[targetToShow]);
+        if (targetToShow && alertObj) {
             showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
         }
     }
+
     function showAlert(target, text, sender, notifId, isNew) {
         currentAlertId = notifId || null;
         currentAlertTarget = target;
         currentAlertText = text;
         currentAlertSender = sender || ADMIN_NAME;
 
-        document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']:';
+        const queueLen = getAlertsQueue(target).filter(function(a) { return !currentUser || a.sender !== currentUser; }).length;
+        const countBadge = queueLen > 1 ? ' (1 из ' + queueLen + ')' : '';
+
+        document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + countBadge + ':';
         document.getElementById('alert-text').innerText = text;
         document.getElementById('alert-modal').style.display = 'flex';
 
@@ -679,6 +812,8 @@
 
     function stopAlertVisuals() {
         document.getElementById('alert-modal').style.display = 'none';
+        currentAlertId = null;
+        currentAlertTarget = "";
         if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
         if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
         if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
@@ -695,16 +830,30 @@
     function confirmAlert() {
         unlockMobileFeatures();
         const whoConfirmed = currentUser || 'Просмотр';
+        const targetToClear = currentAlertTarget;
+        const idToClear = currentAlertId;
 
         stopAlertVisuals();
-        delete pendingAlerts[currentAlertTarget];
 
-        ws.send(JSON.stringify({
-            type: 'clear_alert',
-            target: currentAlertTarget,
-            notifId: currentAlertId,
-            readBy: whoConfirmed
-        }));
+        if (targetToClear) {
+            const queue = getAlertsQueue(targetToClear);
+            if (idToClear) {
+                pendingAlerts[targetToClear] = queue.filter(function(a) { return a.id !== idToClear; });
+            } else {
+                queue.shift();
+                pendingAlerts[targetToClear] = queue;
+            }
+            if (pendingAlerts[targetToClear] && pendingAlerts[targetToClear].length === 0) {
+                delete pendingAlerts[targetToClear];
+            }
+
+            ws.send(JSON.stringify({
+                type: 'clear_alert',
+                target: targetToClear,
+                notifId: idToClear,
+                readBy: whoConfirmed
+            }));
+        }
 
         checkAndShowAlerts(false);
     }
