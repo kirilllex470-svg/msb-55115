@@ -16,15 +16,14 @@
         :root { --bg: #0f172a; --panel: #1e293b; --accent: #3b82f6; --text: #f1f5f9; --border: #334155; --danger: #ef4444; }
         body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
         #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%); z-index: 200000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.6s ease; }
-        .splash-card { width: 100%; max-width: 440px; text-align: center; background: rgba(15, 23, 42, 0.85); border: 1px solid #334155; border-radius: 20px; padding: 28px 24px; box-shadow: 0 0 50px rgba(59, 130, 246, 0.25); }
+        .splash-card { width: 100%; max-width: 440px; text-align: center; background: rgba(15, 23, 42, 0.92); border: 1px solid #334155; border-radius: 20px; padding: 28px 24px; box-shadow: 0 0 50px rgba(59, 130, 246, 0.25); box-sizing: border-box; }
         .splash-img-wrap { position: relative; width: 100%; height: 230px; border-radius: 14px; overflow: hidden; border: 2px solid #3b82f6; box-shadow: 0 0 25px rgba(59, 130, 246, 0.4); margin-bottom: 18px; background: #0f172a; }
-        .splash-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .splash-title { font-size: 32px; font-weight: 900; letter-spacing: 3px; color: #f8fafc; margin: 0 0 18px 0; text-shadow: 0 0 15px rgba(59, 130, 246, 0.9), 0 2px 4px #000; }
         .progress-track { width: 100%; height: 16px; background: #090d16; border: 1px solid #334155; border-radius: 999px; overflow: hidden; position: relative; box-shadow: inset 0 2px 6px rgba(0,0,0,0.8); }
-        .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #2563eb, #06b6d4, #22c55e, #3b82f6); background-size: 300% 100%; animation: moveGrad 2s linear infinite; border-radius: 999px; transition: width 0.2s linear; }
+        .progress-fill { width: 2%; height: 100%; background: linear-gradient(90deg, #2563eb, #06b6d4, #22c55e, #3b82f6); background-size: 300% 100%; animation: moveGrad 2s linear infinite; border-radius: 999px; transition: width 0.2s linear; }
         @keyframes moveGrad { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
         .splash-percent { margin-top: 10px; font-size: 16px; font-weight: bold; color: #38bdf8; font-family: monospace; }
-        .splash-file-box { margin-top: 12px; background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 10px 12px; font-family: monospace; font-size: 12px; color: #94a3b8; text-align: left; min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .splash-file-box { margin-top: 12px; background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 10px 12px; font-family: monospace; font-size: 12px; color: #94a3b8; text-align: left; min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; box-sizing: border-box; }
         .splash-file-name { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .splash-file-tag { color: #22c55e; font-weight: bold; flex-shrink: 0; }
         #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.98); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
@@ -70,7 +69,7 @@
         .notif-status { font-size: 12px; font-weight: bold; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
         .notif-item.read .notif-status { background: rgba(34, 197, 94, 0.25); color: #86efac; }
         .history-container { width: 100%; max-width: 1400px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
-    <div id="splash-screen">
+<div id="splash-screen">
         <div class="splash-card">
             <div class="splash-img-wrap">
                 <svg xmlns="http://w3.org" viewBox="0 0 800 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
@@ -110,7 +109,7 @@
             </div>
             <div class="splash-percent" id="splash-percent">ЗАГРУЗКА СИСТЕМЫ: 0%</div>
             <div class="splash-file-box">
-                <span class="splash-file-name" id="splash-file">⚙️ Инициализация ядра МСБ-55115...</span>
+                <span class="splash-file-name" id="splash-file">⚙️ boot/kernel_msb55115.sys</span>
                 <span class="splash-file-tag" id="splash-tag">[0%]</span>
             </div>
         </div>
@@ -192,7 +191,6 @@
             <tbody id="table-body"></tbody>
         </table>
     </div>
-
 <script>
     const USERS_CONFIG = [
         { name: "ШР", pass: "551151111", color: "#3b82f6" },
@@ -202,7 +200,6 @@
         { name: "АДМИН", pass: "5555", color: "#ef4444" }
     ];
     const ADMIN_NAME = "АДМИН";
-
     const COLUMNS_CONFIG = [
         { label: "ГРУППА", options: ["1", "2", "3", "4", "5"] },
         { label: "ИСХОДНИКИ", options: [
@@ -258,6 +255,7 @@
     let publicVapidKey = null;
     let deferredPrompt = null;
     let splashStarted = false;
+
     const SPLASH_FILES = [
         "⚙️ boot/kernel_msb55115.sys",
         "🔐 crypto/cipher_channel_v4.dat",
@@ -270,7 +268,6 @@
         "🔊 audio/siren_emergency_synth.wav",
         "✅ system/msb55115_ready_state.ok"
     ];
-
     function startSplashScreen() {
         if (splashStarted) return;
         splashStarted = true;
@@ -358,7 +355,6 @@
             }
         } catch (e) { console.error('Push error:', e); }
     }
-
     function sendLocalNotification(target, text, sender) {
         const fromWho = sender || 'АДМИН';
         const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -530,6 +526,7 @@
         if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
         return false;
     }
+
     function renderNotificationsWindow() {
         const list = document.getElementById('notifications-list');
         if (!list) return;
@@ -561,7 +558,6 @@
 
         list.scrollTop = list.scrollHeight;
     }
-
     function getAlertsQueue(target) {
         const raw = pendingAlerts[target];
         if (!raw) return new Array();
@@ -660,7 +656,6 @@
 
         ws.onclose = function() { setTimeout(connectWS, 1500); };
     }
-
     setInterval(function() {
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'ping' }));
@@ -687,6 +682,7 @@
             }
         });
     }
+
     function applyUserUI() {
         document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('input-panel').style.display = 'block';
@@ -798,7 +794,6 @@
             document.getElementById('login-error').style.display = 'block';
         }
     }
-
     function logoutUser() {
         localStorage.removeItem('journal_user');
         localStorage.removeItem('journal_color');
@@ -852,7 +847,7 @@
             const myQueue = getAlertsQueue(currentUser).filter(function(a) { return a.sender !== currentUser; });
             if (myQueue.length > 0) {
                 targetToShow = currentUser;
-                alertObj = myQueue.at(0);
+                alertObj = myQueue[0];
             }
         }
 
@@ -860,7 +855,7 @@
             const allQueue = getAlertsQueue("ВСЕМ").filter(function(a) { return !currentUser || a.sender !== currentUser; });
             if (allQueue.length > 0) {
                 targetToShow = "ВСЕМ";
-                alertObj = allQueue.at(0);
+                alertObj = allQueue[0];
             }
         }
 
@@ -954,7 +949,7 @@
         let isEmpty = true;
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
             let val = document.getElementById('in-' + i).value;
-            if (COLUMNS_CONFIG.at(i).digitsOnly && val) {
+            if (COLUMNS_CONFIG[i].digitsOnly && val) {
                 val = val.replace(/[^0-9.,\/\\]/g, '');
             }
             values.push(val);
@@ -975,8 +970,8 @@
     }
 
     function appendRow(row) {
-        if (row.values && row.values.at(0)) {
-            const firstCol = String(row.values.at(0));
+        if (row.values && row.values[0]) {
+            const firstCol = String(row.values[0]);
             if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
                 return;
             }
@@ -987,7 +982,7 @@
         let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
         
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            const val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
+            const val = (row.values && row.values[i] !== undefined) ? row.values[i] : '-';
             html += '<td>' + (val || '-') + '</td>';
         }
         
