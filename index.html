@@ -15,6 +15,18 @@
     <style>
         :root { --bg: #0f172a; --panel: #1e293b; --accent: #3b82f6; --text: #f1f5f9; --border: #334155; --danger: #ef4444; }
         body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
+        #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%); z-index: 200000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.6s ease; }
+        .splash-card { width: 100%; max-width: 440px; text-align: center; background: rgba(15, 23, 42, 0.85); border: 1px solid #334155; border-radius: 20px; padding: 28px 24px; box-shadow: 0 0 50px rgba(59, 130, 246, 0.25); }
+        .splash-img-wrap { position: relative; width: 100%; height: 230px; border-radius: 14px; overflow: hidden; border: 2px solid #3b82f6; box-shadow: 0 0 25px rgba(59, 130, 246, 0.4); margin-bottom: 18px; background: #0f172a; }
+        .splash-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .splash-title { font-size: 32px; font-weight: 900; letter-spacing: 3px; color: #f8fafc; margin: 0 0 18px 0; text-shadow: 0 0 15px rgba(59, 130, 246, 0.9), 0 2px 4px #000; }
+        .progress-track { width: 100%; height: 16px; background: #090d16; border: 1px solid #334155; border-radius: 999px; overflow: hidden; position: relative; box-shadow: inset 0 2px 6px rgba(0,0,0,0.8); }
+        .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #2563eb, #06b6d4, #22c55e, #3b82f6); background-size: 300% 100%; animation: moveGrad 2s linear infinite; border-radius: 999px; transition: width 0.2s linear; }
+        @keyframes moveGrad { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+        .splash-percent { margin-top: 10px; font-size: 16px; font-weight: bold; color: #38bdf8; font-family: monospace; }
+        .splash-file-box { margin-top: 12px; background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 10px 12px; font-family: monospace; font-size: 12px; color: #94a3b8; text-align: left; min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .splash-file-name { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .splash-file-tag { color: #22c55e; font-weight: bold; flex-shrink: 0; }
         #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.98); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
         .login-box { background: var(--panel); padding: 40px; border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 320px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.7); box-sizing: border-box; }
         .login-box select, .login-box input { width: 100%; padding: 14px; margin-bottom: 20px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
@@ -22,7 +34,7 @@
         .login-box button:hover { background: #2563eb; }
         .viewer-btn { background: transparent !important; border: 1px solid #475569 !important; color: #94a3b8 !important; margin-top: 15px; }
         .viewer-btn:hover { background: #1e293b !important; color: white !important; }
-        .install-btn { display: none; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
+        .install-btn { display: inline-block; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
         .error-msg { color: var(--danger); font-size: 14px; margin-top: 10px; display: none; }
         .input-panel { background: var(--panel); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 1200px; margin-bottom: 20px; display: none; box-sizing: border-box; }
         .inputs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 20px; }
@@ -58,26 +70,22 @@
         .notif-status { font-size: 12px; font-weight: bold; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
         .notif-item.read .notif-status { background: rgba(34, 197, 94, 0.25); color: #86efac; }
         .history-container { width: 100%; max-width: 1400px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
-        table { width: 100%; border-collapse: collapse; min-width: 850px; }
-        th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 14px; }
-        th { background: #1e293b; color: #94a3b8; }
-        .new-row { animation: fadeIn 0.5s ease; }
-        .time-cell { color: #facc15; font-family: monospace; }
-        .user-cell { font-weight: bold; }
-        @media (max-width: 768px) {
-            body { padding: 10px; }
-            .login-box { padding: 25px 20px; }
-            .input-panel { padding: 15px; margin-bottom: 20px; }
-            .inputs-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .admin-controls, .stream-controls { flex-direction: column; }
-            .admin-controls select, .admin-controls input, .admin-controls button, .stream-controls input, .stream-controls button { width: 100%; box-sizing: border-box; }
-            .alert-content h1 { font-size: 28px !important; }
-            #alert-text { font-size: 22px !important; padding: 15px !important; word-break: break-word; }
-        }
-        @media (max-width: 480px) { .inputs-grid { grid-template-columns: 1fr; } }
-    </style>
-</head>
-<body>
+    <div id="splash-screen">
+        <div class="splash-card">
+            <div class="splash-img-wrap">
+                <img src="/logo.jpg" alt="МСБ-55115">
+            </div>
+            <h1 class="splash-title">МСБ-55115</h1>
+            <div class="progress-track">
+                <div class="progress-fill" id="splash-bar"></div>
+            </div>
+            <div class="splash-percent" id="splash-percent">ЗАГРУЗКА СИСТЕМЫ: 0%</div>
+            <div class="splash-file-box">
+                <span class="splash-file-name" id="splash-file">⚙️ Инициализация ядра МСБ-55115...</span>
+                <span class="splash-file-tag" id="splash-tag">[OK]</span>
+            </div>
+        </div>
+    </div>
     <div id="alert-modal">
         <div class="alert-content">
             <h1 style="font-size: 40px; margin: 0;">🛑 СООБЩЕНИЕ!</h1>
@@ -219,6 +227,50 @@
     let sirenAudio = null;
     let publicVapidKey = null;
     let deferredPrompt = null;
+    const SPLASH_FILES = [
+        "⚙️ boot/kernel_msb55115.sys",
+        "🔐 crypto/cipher_channel_v4.dat",
+        "📡 net/websocket_sync_protocol.dll",
+        "🗺️ maps/tactical_forest_sectors.db",
+        "🛡️ auth/unit_credentials_guard.bin",
+        "🔔 push/vapid_service_worker.js",
+        "🎥 stream/salutejazz_rtc_bridge.mod",
+        "📊 journal/history_storage_engine.json",
+        "🔊 audio/siren_ emergency_synth.wav",
+        "✅ system/msb55115_ready_state.ok"
+    ];
+
+    function startSplashScreen() {
+        const splash = document.getElementById('splash-screen');
+        const bar = document.getElementById('splash-bar');
+        const pct = document.getElementById('splash-percent');
+        const fileEl = document.getElementById('splash-file');
+        const tagEl = document.getElementById('splash-tag');
+        if (!splash) return;
+
+        let step = 0;
+        const totalSteps = 100;
+        const intervalMs = 200; // 100 * 200ms = 20 000ms (20 секунд)
+
+        const timer = setInterval(function() {
+            step++;
+            if (bar) bar.style.width = step + '%';
+            if (pct) pct.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + step + '%';
+
+            const fileIndex = Math.min(Math.floor((step / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
+            if (fileEl) fileEl.innerText = SPLASH_FILES.at(fileIndex);
+            if (tagEl) tagEl.innerText = (step < 100) ? '[' + step + '%]' : '[ГОТОВО]';
+
+            if (step >= totalSteps) {
+                clearInterval(timer);
+                splash.style.opacity = '0';
+                setTimeout(function() {
+                    splash.style.display = 'none';
+                }, 600);
+            }
+        }, intervalMs);
+    }
+
     window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         deferredPrompt = e;
@@ -239,11 +291,8 @@
             deferredPrompt.prompt();
             await deferredPrompt.userChoice;
             deferredPrompt = null;
-            document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-                btn.style.display = 'none';
-            });
         } else {
-            alert('Для установки приложения откройте меню браузера (три точки или "Поделиться") и выберите "Установить приложение" или "На экран Домой".');
+            alert('Чтобы установить приложение МСБ55115 на устройство, откройте меню браузера (⋮ или "Поделиться") и нажмите "Установить приложение" / "Добавить на главный экран".');
         }
     }
 
@@ -255,7 +304,6 @@
         for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
         return outputArray;
     }
-
     async function subscribeToWebPush() {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
         try {
@@ -300,6 +348,7 @@
             });
         }
     }
+
     function createWavUrl(freq, durationSec, volume) {
         const sr = 8000;
         const numSamples = sr * durationSec;
@@ -629,7 +678,14 @@
     }
 
     function initApp() {
+        startSplashScreen();
         document.getElementById('login-error').style.display = 'none';
+
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
+            document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
+                btn.style.display = 'none';
+            });
+        }
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').catch(function() {});
