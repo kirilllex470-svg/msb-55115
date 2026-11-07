@@ -1,5 +1,6 @@
 const http = require('http');
 const fs = require('fs');
+const zlib = require('zlib');
 const WebSocket = require('ws');
 const webpush = require('web-push');
 
@@ -11,10 +12,14 @@ const VAPID_FILE = DATA_DIR + 'vapid.json';
 
 let vapidKeys;
 if (fs.existsSync(VAPID_FILE)) {
-    vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
+    try {
+        vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
+    } catch (e) {
+        vapidKeys = webpush.generateVAPIDKeys();
+    }
 } else {
     vapidKeys = webpush.generateVAPIDKeys();
-    fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys));
+    try { fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys)); } catch (e) {}
 }
 
 webpush.setVapidDetails(
@@ -32,22 +37,70 @@ if (fs.existsSync(SUBS_FILE)) {
     }
 }
 
-const BEAR_SVG = [
-    '<svg xmlns="http://w3.org" viewBox="0 0 512 512" width="512" height="512">',
-    '<rect width="512" height="512" rx="90" fill="#0f172a"/>',
-    '<polygon points="80,120 20,420 150,420" fill="#14532d" opacity="0.7"/>',
-    '<polygon points="430,110 360,420 490,420" fill="#14532d" opacity="0.7"/>',
-    '<path d="M40,512 L110,410 L260,390 L410,405 L480,512 Z" fill="#475569"/>',
-    '<circle cx="175" cy="165" r="34" fill="#452306"/>',
-    '<circle cx="337" cy="165" r="34" fill="#452306"/>',
-    '<ellipse cx="256" cy="260" rx="115" ry="105" fill="#713f12" stroke="#2e1905" stroke-width="6"/>',
-    '<ellipse cx="256" cy="290" rx="52" ry="42" fill="#ca8a04"/>',
-    '<ellipse cx="256" cy="272" rx="24" ry="18" fill="#0f172a"/>',
-    '<circle cx="210" cy="230" r="10" fill="#090d16"/>',
-    '<circle cx="302" cy="230" r="10" fill="#090d16"/>',
-    '<text x="256" y="475" font-family="monospace" font-size="44" font-weight="bold" fill="#f8fafc" text-anchor="middle">55115</text>',
-    '</svg>'
-].join('');
+function makeValidPng(size) {
+    const crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) {
+            c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        }
+        crcTable.fill(c, n, n + 1);
+    }
+    function crc32(buf) {
+        let c = -1;
+        for (let i = 0; i < buf.length; i++) {
+            const b = buf.readUInt8(i);
+            const t = crcTable.at((c ^ b) & 0xff);
+            c = (c >>> 8) ^ t;
+        }
+        return (c ^ -1) >>> 0;
+    }
+    function makeChunk(type, data) {
+        const len = Buffer.alloc(4);
+        len.writeUInt32BE(data.length, 0);
+        const typeBuf = Buffer.from(type, 'ascii');
+        const crc = Buffer.alloc(4);
+        crc.writeUInt32BE(crc32(Buffer.concat(Array.of(typeBuf, data))), 0);
+        return Buffer.concat(Array.of(len, typeBuf, data, crc));
+    }
+
+    const ihdr = Buffer.alloc(13, 0);
+    ihdr.writeUInt32BE(size, 0);
+    ihdr.writeUInt32BE(size, 4);
+    ihdr.writeUInt8(8, 8);
+    ihdr.writeUInt8(2, 9);
+
+    const rowLen = 1 + size * 3;
+    const raw = Buffer.alloc(size * rowLen, 0);
+    const half = size / 2;
+    const radSq = (size * 0.35) * (size * 0.35);
+
+    for (let y = 0; y < size; y++) {
+        const rowOff = y * rowLen;
+        raw.writeUInt8(0, rowOff);
+        for (let x = 0; x < size; x++) {
+            const p = rowOff + 1 + x * 3;
+            const dx = x - half;
+            const dy = y - half;
+            if (dx * dx + dy * dy < radSq) {
+                raw.writeUInt8(59, p);
+                raw.writeUInt8(130, p + 1);
+                raw.writeUInt8(246, p + 2);
+            } else {
+                raw.writeUInt8(15, p);
+                raw.writeUInt8(23, p + 1);
+                raw.writeUInt8(42, p + 2);
+            }
+        }
+    }
+
+    const idat = zlib.deflateSync(raw);
+    const sig = Buffer.from('89504e470d0a1a0a', 'hex');
+    return Buffer.concat(Array.of(sig, makeChunk('IHDR', ihdr), makeChunk('IDAT', idat), makeChunk('IEND', Buffer.alloc(0))));
+}
+
+const PNG_192 = makeValidPng(192);
+const PNG_512 = makeValidPng(512);
 
 const MANIFEST_JSON = JSON.stringify({
     id: "/",
@@ -58,10 +111,10 @@ const MANIFEST_JSON = JSON.stringify({
     display: "standalone",
     background_color: "#0f172a",
     theme_color: "#0f172a",
-    icons: [
-        { src: "/icon-192.png", sizes: "192x192", type: "image/svg+xml", purpose: "any" },
-        { src: "/icon-192.png", sizes: "512x512", type: "image/svg+xml", purpose: "any" }
-    ]
+    icons: Array.of(
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" }
+    )
 });
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
@@ -114,21 +167,21 @@ const server = http.createServer(function(req, res) {
         return;
     }
     if (urlPath === '/manifest.json') {
-        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
+        res.writeHead(200, { 
+            'Content-Type': 'application/manifest+json; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        });
         res.end(MANIFEST_JSON);
         return;
     }
-    if (urlPath === '/icon-192.png' || urlPath === '/logo.jpg' || urlPath === '/favicon.ico') {
-        if (fs.existsSync('logo.jpg')) {
-            res.writeHead(200, { 'Content-Type': 'image/jpeg' });
-            res.end(fs.readFileSync('logo.jpg'));
-        } else if (fs.existsSync('icon-192.png')) {
-            res.writeHead(200, { 'Content-Type': 'image/png' });
-            res.end(fs.readFileSync('icon-192.png'));
-        } else {
-            res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8' });
-            res.end(BEAR_SVG);
-        }
+    if (urlPath === '/icon-192.png' || urlPath === '/favicon.ico') {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': PNG_192.length });
+        res.end(PNG_192);
+        return;
+    }
+    if (urlPath === '/icon-512.png') {
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': PNG_512.length });
+        res.end(PNG_512);
         return;
     }
 
@@ -145,6 +198,8 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
+
+
 const wss = new WebSocket.Server({ server: server });
 
 let tableHistory = new Array(); 
