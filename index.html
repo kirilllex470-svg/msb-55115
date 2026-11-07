@@ -268,7 +268,7 @@
         "🔊 audio/siren_emergency_synth.wav",
         "✅ system/msb55115_ready_state.ok"
     ];
-    function startSplashScreen() {
+       function startSplashScreen() {
         if (splashStarted) return;
         splashStarted = true;
         const splash = document.getElementById('splash-screen');
@@ -285,7 +285,7 @@
             if (pct) pct.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + step + '%';
 
             const idx = Math.min(Math.floor((step / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
-            if (fileEl) fileEl.innerText = SPLASH_FILES[idx];
+            if (fileEl) fileEl.innerText = SPLASH_FILES.at(idx);
             if (tagEl) tagEl.innerText = (step < 100) ? '[' + step + '%]' : '[ГОТОВО]';
 
             if (step >= 100) {
@@ -771,14 +771,13 @@
         connectWS();
     }
     
-    document.addEventListener('DOMContentLoaded', initApp);
-    window.onload = initApp;
+    initApp();
 
     function attemptLogin() {
         unlockMobileFeatures();
         const userIndex = Number(document.getElementById('login-select').value);
         const pass = document.getElementById('login-pass').value.trim();
-        const user = USERS_CONFIG[userIndex];
+        const user = USERS_CONFIG.at(userIndex);
 
         if (user && pass === user.pass) {
             document.getElementById('login-error').style.display = 'none';
@@ -847,7 +846,7 @@
             const myQueue = getAlertsQueue(currentUser).filter(function(a) { return a.sender !== currentUser; });
             if (myQueue.length > 0) {
                 targetToShow = currentUser;
-                alertObj = myQueue[0];
+                alertObj = myQueue.at(0);
             }
         }
 
@@ -855,7 +854,7 @@
             const allQueue = getAlertsQueue("ВСЕМ").filter(function(a) { return !currentUser || a.sender !== currentUser; });
             if (allQueue.length > 0) {
                 targetToShow = "ВСЕМ";
-                alertObj = allQueue[0];
+                alertObj = allQueue.at(0);
             }
         }
 
@@ -949,7 +948,7 @@
         let isEmpty = true;
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
             let val = document.getElementById('in-' + i).value;
-            if (COLUMNS_CONFIG[i].digitsOnly && val) {
+            if (COLUMNS_CONFIG.at(i).digitsOnly && val) {
                 val = val.replace(/[^0-9.,\/\\]/g, '');
             }
             values.push(val);
@@ -970,8 +969,8 @@
     }
 
     function appendRow(row) {
-        if (row.values && row.values[0]) {
-            const firstCol = String(row.values[0]);
+        if (row.values && row.values.at(0)) {
+            const firstCol = String(row.values.at(0));
             if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
                 return;
             }
@@ -982,7 +981,7 @@
         let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
         
         for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            const val = (row.values && row.values[i] !== undefined) ? row.values[i] : '-';
+            const val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
             html += '<td>' + (val || '-') + '</td>';
         }
         
@@ -993,3 +992,4 @@
 </script>
 </body>
 </html>
+
