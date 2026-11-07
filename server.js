@@ -11,14 +11,10 @@ const VAPID_FILE = DATA_DIR + 'vapid.json';
 
 let vapidKeys;
 if (fs.existsSync(VAPID_FILE)) {
-    try {
-        vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
-    } catch (e) {
-        vapidKeys = webpush.generateVAPIDKeys();
-    }
+    vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf8'));
 } else {
     vapidKeys = webpush.generateVAPIDKeys();
-    try { fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys)); } catch (e) {}
+    fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys));
 }
 
 webpush.setVapidDetails(
@@ -43,14 +39,18 @@ const MANIFEST_JSON = JSON.stringify({
     display: "standalone",
     background_color: "#0f172a",
     theme_color: "#0f172a",
-    icons: Array.of(
+    icons: [
         { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
         { src: "/icon-192.png", sizes: "512x512", type: "image/png" }
-    )
+    ]
 });
+
+const ICON_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
+    "self.addEventListener('fetch', function(e) {});",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 СООБЩЕНИЕ В ЖУРНАЛЕ!', body: 'Срочно откройте журнал!' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -86,31 +86,8 @@ const SW_CODE = [
     "    }));",
     "});"
 ].join('\n');
-
-const FALLBACK_PNG = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAMAAABlApw1AAAAA1BMVEX///+nxBvIAAAANElEQVR42u3BAQ0AAADCoPdPbQ8HFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA8G4wQAAB52y53AAAAABJRU5ErkJggg==",
-    "base64"
-);
-
-function serveImageFile(res) {
-    const candidates = Array.of('logo.jpg', 'logo.png', 'icon-192.png', 'bear.jpg', 'bear.png');
-    for (let i = 0; i < candidates.length; i++) {
-        const f = candidates.at(i);
-        if (fs.existsSync(f)) {
-            const ct = f.indexOf('.png') !== -1 ? 'image/png' : 'image/jpeg';
-            res.writeHead(200, { 'Content-Type': ct });
-            res.end(fs.readFileSync(f));
-            return;
-        }
-    }
-    res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': FALLBACK_PNG.length });
-    res.end(FALLBACK_PNG);
-}
-
 const server = http.createServer(function(req, res) {
-    const urlPath = (req.url || '/').split('?').at(0);
-
-    if (urlPath === '/sw.js') {
+    if (req.url && req.url.indexOf('/sw.js') === 0) {
         res.writeHead(200, { 
             'Content-Type': 'application/javascript; charset=utf-8',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -118,25 +95,32 @@ const server = http.createServer(function(req, res) {
         res.end(SW_CODE);
         return;
     }
-    if (urlPath === '/manifest.json') {
+    if (req.url === '/manifest.json') {
         res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
         res.end(MANIFEST_JSON);
         return;
     }
-    if (urlPath === '/logo.jpg' || urlPath === '/logo.png' || urlPath === '/icon-192.png' || urlPath === '/favicon.ico') {
-        serveImageFile(res);
+    if (req.url === '/icon-192.png') {
+        if (fs.existsSync('icon-192.png')) {
+            res.writeHead(200, { 'Content-Type': 'image/png' });
+            res.end(fs.readFileSync('icon-192.png'));
+        } else {
+            res.writeHead(200, { 'Content-Type': 'image/png' });
+            res.end(Buffer.from(ICON_BASE64, 'base64'));
+        }
         return;
     }
-
-    fs.readFile('index.html', function(err, data) {
-        if (err) { 
-            res.writeHead(500); 
-            res.end('Error loading index.html'); 
-        } else { 
-            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); 
-            res.end(data); 
-        }
-    });
+    if (req.url === '/' || req.url.indexOf('/?') === 0) {
+        fs.readFile('index.html', function(err, data) {
+            if (err) { 
+                res.writeHead(500); 
+                res.end('Error loading index.html'); 
+            } else { 
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); 
+                res.end(data); 
+            }
+        });
+    }
 });
 
 const wss = new WebSocket.Server({ server: server });
@@ -169,7 +153,6 @@ if (fs.existsSync(NOTIFS_FILE)) {
         notificationsHistory = new Array();
     }
 }
-
 function broadcastAlert(sender, color, timeStr, target, text) {
     const notifId = Date.now() + Math.floor(Math.random() * 1000);
     const newNotif = {
@@ -229,6 +212,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     });
 }
+
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({ 
         type: 'init', 
@@ -247,7 +231,6 @@ wss.on('connection', function(ws) {
                 ws.send(JSON.stringify({ type: 'pong' }));
                 return;
             }
-
             if (msg.type === 'save_sub' && msg.sub) {
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub.endpoint === msg.sub.endpoint; });
                 if (idx !== -1) {
