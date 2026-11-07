@@ -69,39 +69,10 @@
         .notif-status { font-size: 12px; font-weight: bold; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
         .notif-item.read .notif-status { background: rgba(34, 197, 94, 0.25); color: #86efac; }
         .history-container { width: 100%; max-width: 1400px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
- <div id="splash-screen">
+    <div id="splash-screen">
         <div class="splash-card">
             <div class="splash-img-wrap">
-                <svg xmlns="http://w3.org" viewBox="0 0 800 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
-                    <defs>
-                        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>
-                        <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#854d0e"/><stop offset="50%" stop-color="#5c3409"/><stop offset="100%" stop-color="#2e1905"/></linearGradient>
-                        <linearGradient id="furLight" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a16207"/><stop offset="100%" stop-color="#713f12"/></linearGradient>
-                    </defs>
-                    <rect width="800" height="500" fill="url(#sky)"/>
-                    <g fill="#14532d" opacity="0.65">
-                        <polygon points="80,70 10,400 150,400"/><polygon points="190,40 110,400 270,400"/>
-                        <polygon points="630,50 550,400 710,400"/><polygon points="730,90 660,400 800,400"/>
-                        <polygon points="320,100 250,390 390,390"/><polygon points="500,85 430,390 570,390"/>
-                    </g>
-                    <g fill="#166534" opacity="0.8">
-                        <polygon points="135,120 55,420 215,420"/><polygon points="590,110 510,420 670,420"/>
-                    </g>
-                    <path d="M20,500 L130,395 L330,365 L570,372 L740,415 L790,500 Z" fill="#64748b"/>
-                    <path d="M130,395 L330,365 L570,372 L650,420 L240,435 Z" fill="#94a3b8"/>
-                    <path d="M210,405 Q380,378 580,405" stroke="#4d7c0f" stroke-width="16" fill="none" stroke-linecap="round"/>
-                    <g>
-                        <path d="M350,125 Q435,105 520,160 Q600,205 588,310 L568,385 L505,385 L500,320 L455,320 L445,385 L385,385 L375,325 L340,385 L278,385 L272,260 Q272,160 350,125 Z" fill="url(#fur)" stroke="#1c0f02" stroke-width="4"/>
-                        <circle cx="268" cy="150" r="24" fill="#452306"/><circle cx="268" cy="150" r="13" fill="#271202"/>
-                        <circle cx="386" cy="145" r="24" fill="#452306"/><circle cx="386" cy="145" r="13" fill="#271202"/>
-                        <ellipse cx="328" cy="212" rx="78" ry="70" fill="url(#furLight)"/>
-                        <ellipse cx="312" cy="234" rx="36" ry="29" fill="#ca8a04"/>
-                        <ellipse cx="305" cy="222" rx="16" ry="12" fill="#0f172a"/>
-                        <path d="M292,244 Q308,255 328,244" stroke="#1e293b" stroke-width="4" fill="none" stroke-linecap="round"/>
-                        <circle cx="295" cy="192" r="6" fill="#090d16"/><circle cx="293" cy="190" r="2" fill="#fff"/>
-                        <circle cx="352" cy="192" r="6" fill="#090d16"/><circle cx="350" cy="190" r="2" fill="#fff"/>
-                    </g>
-                </svg>
+                <img src="/logo.jpg" alt="МСБ-55115" style="width:100%; height:100%; object-fit:cover; display:block;">
             </div>
             <h1 class="splash-title">МСБ-55115</h1>
             <div class="progress-track">
@@ -114,6 +85,28 @@
             </div>
         </div>
     </div>
+    <div id="alert-modal">
+        <div class="alert-content">
+            <h1 style="font-size: 40px; margin: 0;">🛑 СООБЩЕНИЕ!</h1>
+            <p id="alert-target-label" style="font-size: 18px; margin-top: 10px; font-weight: bold;">ВАМ ПИШУТ:</p>
+            <h2 id="alert-text" style="font-size: 32px; border-top: 2px solid #b91c1c; border-bottom: 2px solid #b91c1c; padding: 20px;">...</h2>
+            <button type="button" class="alert-btn" onclick="confirmAlert()">ДА, Я ПОНЯЛ</button>
+        </div>
+    </div>
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2 style="color:white; margin-top:0;">🔐 Доступ в МСБ55115</h2>
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Подразделение:</div>
+            <select id="login-select" onchange="document.getElementById('login-error').style.display='none'"></select>
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Пароль:</div>
+            <input type="password" id="login-pass" placeholder="••••" autocomplete="off" oninput="document.getElementById('login-error').style.display='none'">
+            <button type="button" onclick="attemptLogin()">ВОЙТИ</button>
+            <button type="button" class="viewer-btn" onclick="loginAsViewer()">Просто смотреть</button>
+            <button type="button" class="install-btn pwa-install-btn" onclick="installPWA()">📲 УСТАНОВИТЬ ПРИЛОЖЕНИЕ</button>
+            <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none;">❌ Неверный пароль</div>
+        </div>
+    </div>
+
     <div id="alert-modal">
         <div class="alert-content">
             <h1 style="font-size: 40px; margin: 0;">🛑 СООБЩЕНИЕ!</h1>
