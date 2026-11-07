@@ -22,13 +22,21 @@
         .login-box button:hover { background: #2563eb; }
         .viewer-btn { background: transparent !important; border: 1px solid #475569 !important; color: #94a3b8 !important; margin-top: 15px; }
         .viewer-btn:hover { background: #1e293b !important; color: white !important; }
-        .install-btn { display: none; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
+        .install-btn { display: inline-block; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
         .error-msg { color: var(--danger); font-size: 14px; margin-top: 10px; display: none; }
         .input-panel { background: var(--panel); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 1200px; margin-bottom: 20px; display: none; box-sizing: border-box; }
         .inputs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 20px; }
         .field-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; font-weight: bold; }
         .field-group select, .field-group input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 16px; outline: none; box-sizing: border-box; }
         .send-btn { width: 100%; padding: 15px; background: #22c55e; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .stream-toggle-btn { width: 100%; padding: 15px; background: #8b5cf6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 12px; transition: 0.2s; }
+        .stream-toggle-btn:hover { background: #7c3aed; }
+        #stream-panel { display: none; margin-top: 15px; padding: 18px; background: #0f172a; border: 2px solid #8b5cf6; border-radius: 10px; box-sizing: border-box; }
+        .stream-controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+        .stream-controls input { flex-grow: 1; min-width: 220px; padding: 12px; background: #1e293b; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 15px; outline: none; }
+        .stream-controls button { padding: 12px 18px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; font-size: 14px; }
+        #stream-frame-wrap { display: none; width: 100%; height: 600px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); background: #000; position: relative; }
+        #stream-iframe { width: 100%; height: 100%; border: none; }
         #admin-zone { display: none; margin-top: 30px; padding: 20px; border: 2px solid var(--danger); border-radius: 10px; background: rgba(239, 68, 68, 0.1); }
         .admin-controls { display: flex; gap: 10px; }
         .admin-controls select { width: 200px; padding: 12px; border-radius: 6px; border: none; font-size: 16px; }
@@ -60,8 +68,9 @@
             .login-box { padding: 25px 20px; }
             .input-panel { padding: 15px; margin-bottom: 20px; }
             .inputs-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .admin-controls { flex-direction: column; }
-            .admin-controls select, .admin-controls input, .admin-controls button { width: 100%; box-sizing: border-box; }
+            .admin-controls, .stream-controls { flex-direction: column; }
+            .admin-controls select, .admin-controls input, .admin-controls button, .stream-controls input, .stream-controls button { width: 100%; box-sizing: border-box; }
+            #stream-frame-wrap { height: 420px; }
             .alert-content h1 { font-size: 28px !important; }
             #alert-text { font-size: 22px !important; padding: 15px !important; word-break: break-word; }
         }
@@ -94,12 +103,25 @@
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
             <h3 style="margin:0;">📝 ПОДРАЗДЕЛЕНИЕ: <span id="my-name"></span></h3>
             <div style="display:flex; gap:10px;">
-                <button type="button" class="install-btn pwa-install-btn" style="width:auto; margin-top:0; padding:8px 15px;" onclick="installPWA()">📲 Установить</button>
+                <button type="button" class="install-btn pwa-install-btn" style="width:auto; margin-top:0; padding:8px 15px;" onclick="installPWA()">📲 Установить приложение</button>
                 <button type="button" onclick="logoutUser()" style="background:#334155; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer; font-weight:bold;">Выход</button>
             </div>
         </div>
         <div class="inputs-grid" id="dynamic-inputs"></div>
         <button type="button" class="send-btn" onclick="submitRow()">📤 ЗАПИСАТЬ В ЖУРНАЛ</button>
+        <button type="button" class="stream-toggle-btn" onclick="toggleStreamPanel()">📹 ВИДЕОСТРИМ МСБ-55115</button>
+        <div id="stream-panel">
+            <div style="color:#c4b5fd; font-size:14px; margin-bottom:8px; font-weight:bold;">🔗 Ссылка на видеострим (например, https://salutejazz.ru...):</div>
+            <div class="stream-controls">
+                <input type="text" id="stream-url-input" placeholder="Вставьте ссылку https://salutejazz.ru..." value="https://salutejazz.ru">
+                <button type="button" style="background:#22c55e;" onclick="openStreamInWindow()">▶️ ОТКРЫТЬ В ЭТОМ ОКНЕ</button>
+                <button type="button" style="background:#3b82f6;" onclick="navigateSameTabStream()">🌐 ПЕРЕЙТИ ПО ССЫЛКЕ</button>
+                <button type="button" style="background:#ef4444;" onclick="closeStreamInWindow()">✖ ЗАКРЫТЬ СТРИМ</button>
+            </div>
+            <div id="stream-frame-wrap">
+                <iframe id="stream-iframe" allow="camera; microphone; display-capture; fullscreen; autoplay; clipboard-read; clipboard-write" allowfullscreen></iframe>
+            </div>
+        </div>
         <div id="admin-zone">
             <h3 style="color: #ef4444; margin-top: 0;">⚡ УПРАВЛЕНИЕ И СВЯЗЬ</h3>
             <div style="color: #fca5a5; margin-bottom: 10px; font-size: 14px;">Отправить уведомление подразделению:</div>
@@ -123,10 +145,7 @@
     <div class="history-container">
         <table>
             <thead>
-                <tr id="table-headers">
-                    <th style="width: 130px;">🕒 Время</th>
-                    <th style="width: 110px;">👤 Кто</th>
-                </tr>
+                <tr id="table-headers"><th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th></tr>
             </thead>
             <tbody id="table-body"></tbody>
         </table>
@@ -140,84 +159,67 @@
         { name: "АДМИН", pass: "5555", color: "#ef4444" }
     ];
     const ADMIN_NAME = "АДМИН";
-
     const COLUMNS_CONFIG = [
         { label: "ГРУППА", options: ["1", "2", "3", "4", "5"] },
-        { label: "ИСХОДНИКИ", options: [
-            "НАЧАЛИ ДВИЖЕНИЕ", "ЖДУТ", "ИДУТ", "ПЕРЕСЕКАЮТ ОТКРЫТКУ",
-            "ПРОШЛИ ИСХОДНЫЙ ПУНКТ", "ЗАНЯТИЕ Р-НА ФОР-Я ГРУПП",
-            "ЗАНЯТИЕ ПЕРЕФОР-Я Р-НА ГРУПП", "ВЫХОД НА РУБЕЖ АТАКИ",
-            "ВЫХОД НА РУБЕЖ ШТУРМА", "ЗАНИМАЮТСЯ МЕДИЦИНОЙ",
-            "ЗАНИМАЮТСЯ СВЯЗЬЮ", "ОБОРОНА", "РАБОТАЮТ В ОБОРОНЕ",
-            "ШТУРМУЮТ", "РВБС"
-        ]},
-        { label: "ЦВЕТ ТОЧКИ", options: [
-            "ФИОЛЕТОВЫЙ", "БИРЮЗОВАЯ", "БИРЮЗОВАЯ-А", "СЕРАЯ", "ЗЕЛЕНАЯ",
-            "СИНИЯ", "ЖЕЛТАЯ", "ОРАНЖЕВАЯ", "КРАСНАЯ", "РОЗОВАЯ",
-            "РОЗОВАЯ-А", "БЕЖЕВАЯ", "КОРИЧНЕВАЯ", "ЧЕРНАЯ", "БОРДОВАЯ"
-        ]},
+        { label: "ИСХОДНИКИ", options: ["НАЧАЛИ ДВИЖЕНИЕ", "ЖДУТ", "ИДУТ", "ПЕРЕСЕКАЮТ ОТКРЫТКУ", "ПРОШЛИ ИСХОДНЫЙ ПУНКТ", "ЗАНЯТИЕ Р-НА ФОР-Я ГРУПП", "ЗАНЯТИЕ ПЕРЕФОР-Я Р-НА ГРУПП", "ВЫХОД НА РУБЕЖ АТАКИ", "ВЫХОД НА РУБЕЖ ШТУРМА", "ЗАНИМАЮТСЯ МЕДИЦИНОЙ", "ЗАНИМАЮТСЯ СВЯЗЬЮ", "ОБОРОНА", "РАБОТАЮТ В ОБОРОНЕ", "ШТУРМУЮТ", "РВБС"] },
+        { label: "ЦВЕТ ТОЧКИ", options: ["ФИОЛЕТОВЫЙ", "БИРЮЗОВАЯ", "БИРЮЗОВАЯ-А", "СЕРАЯ", "ЗЕЛЕНАЯ", "СИНИЯ", "ЖЕЛТАЯ", "ОРАНЖЕВАЯ", "КРАСНАЯ", "РОЗОВАЯ", "РОЗОВАЯ-А", "БЕЖЕВАЯ", "КОРИЧНЕВАЯ", "ЧЕРНАЯ", "БОРДОВАЯ"] },
         { label: "НОМЕР ТОЧКИ", options: new Array(), digitsOnly: true },
-        { label: "ЛЕСОПОЛОСА", options: [
-            "ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "ЗАМЕНА", "КРАСКА",
-            "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7",
-            "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1",
-            "ИРБИС", "СЕЗОН", "КАРАЗ", "КВАС", "КАФР", "СТЕНА", "ТРАКТ",
-            "СЛЕЖКА", "МОНАРХ", "ГИК", "МУРАЛ", "ГРЕК", "БАКУ", "БАКУ-1",
-            "САЛАТ", "САЛАТ-1", "ГУК", "СМЕНА-1", "КАБАН", "КАБАН-2",
-            "КАБАН-3", "ЛИС-1", "ЛИС-2", "ЛИС-3",
-            "-->ФАКС", "-->ЗУБР1", "-->ПОЭТ", "-->СУДЬЯ", "-->СОР4",
-            "-->ЗАМЕНА", "-->КРАСКА", "-->МАСТАК1", "-->ВОЛК3", "-->АНГЕЛ",
-            "-->ВАЛИК1", "-->ЛЕЖАК", "-->ЛОТ ", "-->ПРИНТ7", "-->ГОН1",
-            "-->СТОП-3", "-->ТАБЛА", "-->ПОКЕР", "-->ЛОКОН", "-->КАЛЫМ",
-            "-->КАРМАН1", "-->ИРБИС", "-->СЕЗОН", "-->КАРАЗ", "-->КВАС",
-            "-->КАФР", "-->СТЕНА", "-->ТРАКТ", "-->СЛЕЖКА", "-->МОНАРХ",
-            "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1",
-            "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН",
-            "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"
-        ]},
+        { label: "ЛЕСОПОЛОСА", options: ["ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "ЗАМЕНА", "КРАСКА", "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7", "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1", "ИРБИС", "СЕЗОН", "КАРАЗ", "КВАС", "КАФР", "СТЕНА", "ТРАКТ", "СЛЕЖКА", "МОНАРХ", "ГИК", "МУРАЛ", "ГРЕК", "БАКУ", "БАКУ-1", "САЛАТ", "САЛАТ-1", "ГУК", "СМЕНА-1", "КАБАН", "КАБАН-2", "КАБАН-3", "ЛИС-1", "ЛИС-2", "ЛИС-3", "-->ФАКС", "-->ЗУБР1", "-->ПОЭТ", "-->СУДЬЯ", "-->СОР4", "-->ЗАМЕНА", "-->КРАСКА", "-->МАСТАК1", "-->ВОЛК3", "-->АНГЕЛ", "-->ВАЛИК1", "-->ЛЕЖАК", "-->ЛОТ ", "-->ПРИНТ7", "-->ГОН1", "-->СТОП-3", "-->ТАБЛА", "-->ПОКЕР", "-->ЛОКОН", "-->КАЛЫМ", "-->КАРМАН1", "-->ИРБИС", "-->СЕЗОН", "-->КАРАЗ", "-->КВАС", "-->КАФР", "-->СТЕНА", "-->ТРАКТ", "-->СЛЕЖКА", "-->МОНАРХ", "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1", "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН", "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"] },
         { label: "ПРИМЕЧАНИЯ", options: new Array() }
     ];
 
-    let ws = null;
-    let currentUser = null;
-    let userColor = '#fff';
-    let currentAlertId = null;
-    let currentAlertText = "";
-    let currentAlertTarget = "";
-    let currentAlertSender = "";
-    let pendingAlerts = {};
-    let allNotifications = new Array();
-    let titleInterval = null;
-    let soundInterval = null;
-    let audioCtx = null;
-    let keepAliveAudio = null;
-    let sirenAudio = null;
-    let publicVapidKey = null;
-    let deferredPrompt = null;
+    let ws = null, currentUser = null, userColor = '#fff', currentAlertId = null;
+    let currentAlertText = "", currentAlertTarget = "", currentAlertSender = "";
+    let pendingAlerts = {}, allNotifications = new Array();
+    let titleInterval = null, soundInterval = null, audioCtx = null;
+    let keepAliveAudio = null, sirenAudio = null, publicVapidKey = null, deferredPrompt = null;
 
     window.addEventListener('beforeinstallprompt', function(e) {
         e.preventDefault();
         deferredPrompt = e;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-            btn.style.display = 'inline-block';
-        });
+        document.querySelectorAll('.pwa-install-btn').forEach(function(b) { b.style.display = 'inline-block'; });
     });
-
     window.addEventListener('appinstalled', function() {
         deferredPrompt = null;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-            btn.style.display = 'none';
-        });
+        document.querySelectorAll('.pwa-install-btn').forEach(function(b) { b.style.display = 'none'; });
     });
-
     async function installPWA() {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-            btn.style.display = 'none';
-        });
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            return;
+        }
+        alert('📲 Для установки приложения:\n• В браузере: нажмите значок установки в адресной строке или меню (⋮) -> «Установить приложение».\n• На iPhone (Safari): «Поделиться» -> «На экран Домой».');
+    }
+    function toggleStreamPanel() {
+        const p = document.getElementById('stream-panel');
+        p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+    }
+    function normalizeStreamUrl(raw) {
+        let u = (raw || '').trim();
+        if (!u) return '';
+        if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+        return u;
+    }
+    function openStreamInWindow() {
+        const input = document.getElementById('stream-url-input');
+        const url = normalizeStreamUrl(input.value);
+        if (!url) return alert('Вставьте ссылку на видеострим!');
+        input.value = url;
+        document.getElementById('stream-frame-wrap').style.display = 'block';
+        document.getElementById('stream-iframe').src = url;
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'set_stream_url', url: url }));
+    }
+    function navigateSameTabStream() {
+        const url = normalizeStreamUrl(document.getElementById('stream-url-input').value);
+        if (!url) return alert('Вставьте ссылку на видеострим!');
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'set_stream_url', url: url }));
+        window.location.href = url;
+    }
+    function closeStreamInWindow() {
+        document.getElementById('stream-iframe').src = 'about:blank';
+        document.getElementById('stream-frame-wrap').style.display = 'none';
     }
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -227,18 +229,15 @@
         for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
         return outputArray;
     }
-
     async function subscribeToWebPush() {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
         try {
             if (Notification.permission === 'denied') return;
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') return;
-
             const reg = await navigator.serviceWorker.register('/sw.js');
             await reg.update();
             const readyReg = await navigator.serviceWorker.ready;
-
             if ('PushManager' in window && publicVapidKey) {
                 let sub = await readyReg.pushManager.getSubscription();
                 if (!sub) {
@@ -251,33 +250,24 @@
                     ws.send(JSON.stringify({ type: 'save_sub', user: currentUser || 'ГОСТЬ', sub: sub }));
                 }
             }
-        } catch (e) { console.error('Push error:', e); }
+        } catch (e) {}
     }
-
     function sendLocalNotification(target, text, sender) {
-        const fromWho = sender || 'АДМИН';
         const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
-        const body = fromWho + ': ' + text;
-
+        const body = (sender || 'АДМИН') + ': ' + text;
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then(function(reg) {
                 reg.showNotification(title, {
                     body: body,
                     vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
-                    silent: false,
-                    requireInteraction: true,
-                    renotify: true,
-                    tag: 'admin-alert'
+                    silent: false, requireInteraction: true, renotify: true, tag: 'admin-alert'
                 }).catch(function() {});
             });
         }
     }
-
     function createWavUrl(freq, durationSec, volume) {
-        const sr = 8000;
-        const numSamples = sr * durationSec;
-        const buf = new ArrayBuffer(44 + numSamples * 2);
-        const view = new DataView(buf);
+        const sr = 8000, numSamples = sr * durationSec;
+        const buf = new ArrayBuffer(44 + numSamples * 2), view = new DataView(buf);
         const writeStr = function(off, s) { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
         writeStr(0, 'RIFF'); view.setUint32(4, 36 + numSamples * 2, true); writeStr(8, 'WAVE');
         writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
@@ -294,468 +284,134 @@
         }
         return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
     }
-
     function unlockMobileFeatures() {
         try {
-            if (!keepAliveAudio) {
-                keepAliveAudio = new Audio(createWavUrl(100, 1, 0.0001));
-                keepAliveAudio.loop = true;
-            }
+            if (!keepAliveAudio) { keepAliveAudio = new Audio(createWavUrl(100, 1, 0.0001)); keepAliveAudio.loop = true; }
             keepAliveAudio.play().catch(function() {});
-
-            if (!sirenAudio) {
-                sirenAudio = new Audio(createWavUrl(880, 1, 0.9));
-                sirenAudio.loop = true;
-            }
-
+            if (!sirenAudio) { sirenAudio = new Audio(createWavUrl(880, 1, 0.9)); sirenAudio.loop = true; }
             if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: '🟢 Дежурный режим активен',
-                    artist: 'Журнал Работ (Ожидание команд)',
-                    album: 'Нажмите, чтобы открыть'
-                });
+                navigator.mediaSession.metadata = new MediaMetadata({ title: '🟢 Дежурный режим активен', artist: 'Журнал Работ' });
             }
         } catch(e) {}
-
-        if ('wakeLock' in navigator) {
-            navigator.wakeLock.request('screen').catch(function() {});
-        }
+        if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function() {});
     }
-
     function updateLockScreenAlert(target, text, sender) {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: '🛑 ТРЕВОГА ДЛЯ [' + target + '] ОТ [' + (sender || 'АДМИН') + ']!',
-                artist: text,
-                album: 'СРОЧНО ОТКРОЙТЕ БРАУЗЕР!'
+                artist: text, album: 'СРОЧНО ОТКРОЙТЕ БРАУЗЕР!'
             });
         }
     }
-
     function playBeep() {
         try {
             if (navigator.vibrate) navigator.vibrate(Array.of(600, 200, 600));
             if (sirenAudio) sirenAudio.play().catch(function() {});
-            
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(880, audioCtx.currentTime);
             gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            setTimeout(function() { osc.stop(); }, 450);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); setTimeout(function() { osc.stop(); }, 450);
         } catch(e) {}
     }
     function isNotificationVisibleForMe(notif) {
         if (!notif) return false;
-        if (notif.target === "ВСЕМ") return true;
-        if (currentUser === ADMIN_NAME) return true;
+        if (notif.target === "ВСЕМ" || currentUser === ADMIN_NAME) return true;
         if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
         return false;
     }
-
     function renderNotificationsWindow() {
         const list = document.getElementById('notifications-list');
         if (!list) return;
         list.innerHTML = '';
-
         const myNotifs = allNotifications.filter(isNotificationVisibleForMe).slice(-10);
-
         if (myNotifs.length === 0) {
             list.innerHTML = '<div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>';
             return;
         }
-
         myNotifs.forEach(function(notif) {
             const item = document.createElement('div');
             item.className = 'notif-item' + (notif.read ? ' read' : '');
-            const statusText = notif.read
-                ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : ''))
-                : '⏳ НЕ ПРОЧИТАНО';
-
-            item.innerHTML =
-                '<span class="notif-time">' + notif.time + '</span>' +
-                '<span class="notif-sender" style="color:' + (notif.color || '#ef4444') + '">' + notif.sender + '</span>' +
-                '<span class="notif-target">КОМУ: ' + notif.target + '</span>' +
-                '<span class="notif-text">' + notif.text + '</span>' +
-                '<span class="notif-status">' + statusText + '</span>';
-
+            const statusText = notif.read ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : '')) : '⏳ НЕ ПРОЧИТАНО';
+            item.innerHTML = '<span class="notif-time">' + notif.time + '</span><span class="notif-sender" style="color:' + (notif.color || '#ef4444') + '">' + notif.sender + '</span><span class="notif-target">КОМУ: ' + notif.target + '</span><span class="notif-text">' + notif.text + '</span><span class="notif-status">' + statusText + '</span>';
             list.appendChild(item);
         });
-
         list.scrollTop = list.scrollHeight;
     }
-
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
-
         ws.onmessage = function(event) {
             const msg = JSON.parse(event.data);
             if (msg.type === 'init') {
                 document.getElementById('table-body').innerHTML = '';
                 msg.data.forEach(appendRow);
-                allNotifications = msg.notifications || new Array();
-                renderNotificationsWindow();
-
-                if (msg.vapidPublicKey) {
-                    publicVapidKey = msg.vapidPublicKey;
-                    subscribeToWebPush();
-                }
-                if (msg.alerts) {
-                    pendingAlerts = msg.alerts;
-                    checkAndShowAlerts(false);
-                }
+                allNotifications = msg.notifications || new Array(); renderNotificationsWindow();
+                if (msg.streamUrl) document.getElementById('stream-url-input').value = msg.streamUrl;
+                if (msg.vapidPublicKey) { publicVapidKey = msg.vapidPublicKey; subscribeToWebPush(); }
+                if (msg.alerts) { pendingAlerts = msg.alerts; checkAndShowAlerts(false); }
             }
+            if (msg.type === 'stream_url_updated' && msg.url) document.getElementById('stream-url-input').value = msg.url;
             if (msg.type === 'new_row') appendRow(msg.row);
-            if (msg.type === 'history_cleared') {
-                document.getElementById('table-body').innerHTML = '';
-                allNotifications = new Array();
-                renderNotificationsWindow();
-            }
+            if (msg.type === 'history_cleared') { document.getElementById('table-body').innerHTML = ''; allNotifications = new Array(); renderNotificationsWindow(); }
             if (msg.type === 'admin_alert') {
-                if (msg.notif) {
-                    allNotifications.push(msg.notif);
-                    renderNotificationsWindow();
-                }
-                pendingAlerts[msg.target] = {
-                    id: msg.notif ? msg.notif.id : Date.now(),
-                    text: msg.text,
-                    sender: msg.sender || ADMIN_NAME
-                };
+                if (msg.notif) { allNotifications.push(msg.notif); renderNotificationsWindow(); }
+                pendingAlerts[msg.target] = { id: msg.notif ? msg.notif.id : Date.now(), text: msg.text, sender: msg.sender || ADMIN_NAME };
                 checkAndShowAlerts(true);
             }
             if (msg.type === 'alert_cleared') {
                 delete pendingAlerts[msg.target];
-                if (msg.notifId) {
-                    allNotifications.forEach(function(n) {
-                        if (n.id === msg.notifId) {
-                            n.read = true;
-                            n.readBy = msg.readBy || '';
-                        }
-                    });
-                } else {
-                    allNotifications.forEach(function(n) {
-                        if (n.target === msg.target && !n.read) {
-                            n.read = true;
-                            n.readBy = msg.readBy || '';
-                        }
-                    });
-                }
+                allNotifications.forEach(function(n) { if ((msg.notifId && n.id === msg.notifId) || (!msg.notifId && n.target === msg.target && !n.read)) { n.read = true; n.readBy = msg.readBy || ''; } });
                 renderNotificationsWindow();
                 if (currentAlertTarget === msg.target) stopAlertVisuals();
                 checkAndShowAlerts(false);
             }
         };
-
         ws.onclose = function() { setTimeout(connectWS, 1500); };
     }
-
-    setInterval(function() {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'ping' }));
-        } else {
-            connectWS();
-        }
-    }, 4000);
+    setInterval(function() { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' })); else connectWS(); }, 4000);
     function populateTargetSelect() {
-        const adminSelect = document.getElementById('admin-target');
-        adminSelect.innerHTML = '';
-
-        let optAll = document.createElement('option');
-        optAll.value = "ВСЕМ";
-        optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ";
-        adminSelect.appendChild(optAll);
-
-        USERS_CONFIG.forEach(function(u) {
-            if (u.name !== currentUser) {
-                let opt2 = document.createElement('option');
-                opt2.value = u.name;
-                opt2.innerText = u.name;
-                adminSelect.appendChild(opt2);
-            }
-        });
+        const s = document.getElementById('admin-target'); s.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ</option>';
+        USERS_CONFIG.forEach(function(u) { if (u.name !== currentUser) { let o = document.createElement('option'); o.value = u.name; o.innerText = u.name; s.appendChild(o); } });
     }
-
     function applyUserUI() {
-        document.getElementById('login-overlay').style.display = 'none';
-        document.getElementById('input-panel').style.display = 'block';
-        document.getElementById('my-name').innerText = currentUser;
-        document.getElementById('my-name').style.color = userColor;
-        
-        document.getElementById('admin-zone').style.display = 'block';
-        populateTargetSelect();
-        renderNotificationsWindow();
-
-        if (currentUser === ADMIN_NAME) {
-            document.getElementById('clear-history-box').style.display = 'block';
-        } else {
-            document.getElementById('clear-history-box').style.display = 'none';
-        }
+        document.getElementById('login-overlay').style.display = 'none'; document.getElementById('input-panel').style.display = 'block';
+        document.getElementById('my-name').innerText = currentUser; document.getElementById('my-name').style.color = userColor;
+        document.getElementById('admin-zone').style.display = 'block'; populateTargetSelect(); renderNotificationsWindow();
+        document.getElementById('clear-history-box').style.display = (currentUser === ADMIN_NAME) ? 'block' : 'none';
     }
-
     function initApp() {
-        document.getElementById('login-error').style.display = 'none';
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(function() {});
-        }
-
-        document.body.addEventListener('click', function firstTouch() {
-            unlockMobileFeatures();
-            subscribeToWebPush();
-            document.body.removeEventListener('click', firstTouch);
-        }, { once: true });
-
-        const loginSelect = document.getElementById('login-select');
-        loginSelect.innerHTML = '';
-
-        USERS_CONFIG.forEach(function(u, index) {
-            let opt = document.createElement('option');
-            opt.value = index; opt.innerText = u.name;
-            loginSelect.appendChild(opt);
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function() {});
+        document.body.addEventListener('click', function firstTouch() { unlockMobileFeatures(); subscribeToWebPush(); document.body.removeEventListener('click', firstTouch); }, { once: true });
+        const ls = document.getElementById('login-select'); ls.innerHTML = '';
+        USERS_CONFIG.forEach(function(u, idx) { let o = document.createElement('option'); o.value = idx; o.innerText = u.name; ls.appendChild(o); });
+        const hr = document.getElementById('table-headers'), ic = document.getElementById('dynamic-inputs');
+        hr.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>'; ic.innerHTML = '';
+        COLUMNS_CONFIG.forEach(function(col, idx) {
+            let th = document.createElement('th'); th.innerText = col.label; hr.appendChild(th);
+            let div = document.createElement('div'); div.className = 'field-group';
+            let h = (col.options && col.options.length > 0) ? '<select id="in-' + idx + '"><option value="" disabled selected>-</option>' + col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('') + '</select>' : (col.digitsOnly ? '<input type="text" id="in-' + idx + '" placeholder="Цифры, дробь, слэш..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">' : '<input type="text" id="in-' + idx + '" placeholder="...">');
+            div.innerHTML = '<label>' + col.label + '</label>' + h; ic.appendChild(div);
         });
-
-        const headerRow = document.getElementById('table-headers');
-        const inputContainer = document.getElementById('dynamic-inputs');
-        
-        headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
-        inputContainer.innerHTML = '';
-
-        COLUMNS_CONFIG.forEach(function(col, index) {
-            let th = document.createElement('th'); 
-            th.innerText = col.label; 
-            headerRow.appendChild(th);
-            
-            let div = document.createElement('div'); 
-            div.className = 'field-group';
-            let inputHtml = '';
-
-            if (col.options && col.options.length > 0) {
-                let opts = col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('');
-                inputHtml = '<select id="in-' + index + '"><option value="" disabled selected>-</option>' + opts + '</select>';
-            } else if (col.digitsOnly) {
-                inputHtml = '<input type="text" id="in-' + index + '" placeholder="Цифры, дробь, слэш..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">';
-            } else {
-                inputHtml = '<input type="text" id="in-' + index + '" placeholder="...">';
-            }
-            div.innerHTML = '<label>' + col.label + '</label>' + inputHtml;
-            inputContainer.appendChild(div);
-        });
-
-        const savedUser = localStorage.getItem('journal_user');
-        const savedColor = localStorage.getItem('journal_color');
-        if (savedUser) {
-            currentUser = savedUser;
-            userColor = savedColor || '#fff';
-            applyUserUI();
-        }
+        const su = localStorage.getItem('journal_user'), sc = localStorage.getItem('journal_color');
+        if (su) { currentUser = su; userColor = sc || '#fff'; applyUserUI(); }
         connectWS();
     }
-    
     window.onload = initApp;
-    function attemptLogin() {
-        unlockMobileFeatures();
-        const userIndex = Number(document.getElementById('login-select').value);
-        const pass = document.getElementById('login-pass').value.trim();
-        const user = USERS_CONFIG.at(userIndex);
-
-        if (user && pass === user.pass) {
-            document.getElementById('login-error').style.display = 'none';
-            currentUser = user.name;
-            userColor = user.color;
-            localStorage.setItem('journal_user', currentUser);
-            localStorage.setItem('journal_color', userColor);
-
-            applyUserUI();
-            subscribeToWebPush();
-            checkAndShowAlerts(false);
-        } else {
-            document.getElementById('login-error').style.display = 'block';
-        }
-    }
-
-    function logoutUser() {
-        localStorage.removeItem('journal_user');
-        localStorage.removeItem('journal_color');
-        location.reload();
-    }
-
-    function loginAsViewer() {
-        unlockMobileFeatures();
-        document.getElementById('login-overlay').style.display = 'none';
-        renderNotificationsWindow();
-        subscribeToWebPush();
-        checkAndShowAlerts(false);
-    }
-
-    function sendAdminAlert() {
-        if (!currentUser) return;
-        const target = document.getElementById('admin-target').value;
-        const msg = document.getElementById('admin-msg').value.trim();
-        if (!msg) return alert("Напишите текст!");
-
-        const now = new Date();
-        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-
-        ws.send(JSON.stringify({ 
-            type: 'admin_alert', 
-            sender: currentUser,
-            color: userColor,
-            time: timeString,
-            target: target, 
-            text: msg 
-        }));
-
-        document.getElementById('admin-msg').value = '';
-    }
-
-    function clearHistoryAdmin() {
-        if (currentUser !== ADMIN_NAME) return;
-        if (confirm("⚠️ Вы уверены, что хотите ПОЛНОСТЬЮ очистить весь журнал событий у всех участников?")) {
-            ws.send(JSON.stringify({ type: 'clear_history' }));
-        }
-    }
-
-    function getAlertObj(raw) {
-        if (!raw) return null;
-        if (typeof raw === 'string') return { id: null, text: raw, sender: ADMIN_NAME };
-        return raw;
-    }
-
-    function checkAndShowAlerts(isNew) {
-        let targetToShow = null;
-
-        if (currentUser) {
-            const myAlert = getAlertObj(pendingAlerts[currentUser]);
-            if (myAlert && myAlert.sender !== currentUser) {
-                targetToShow = currentUser;
-            }
-        }
-
-        if (!targetToShow) {
-            const allAlert = getAlertObj(pendingAlerts["ВСЕМ"]);
-            if (allAlert && (!currentUser || allAlert.sender !== currentUser)) {
-                targetToShow = "ВСЕМ";
-            }
-        }
-
-        if (targetToShow) {
-            const alertObj = getAlertObj(pendingAlerts[targetToShow]);
-            showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
-        }
-    }
-    function showAlert(target, text, sender, notifId, isNew) {
-        currentAlertId = notifId || null;
-        currentAlertTarget = target;
-        currentAlertText = text;
-        currentAlertSender = sender || ADMIN_NAME;
-
-        document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']:';
-        document.getElementById('alert-text').innerText = text;
-        document.getElementById('alert-modal').style.display = 'flex';
-
-        updateLockScreenAlert(target, text, currentAlertSender);
-        if (isNew || document.visibilityState === 'hidden') {
-            sendLocalNotification(target, text, currentAlertSender);
-        }
-
-        if (!titleInterval) {
-            let flag = false;
-            titleInterval = setInterval(function() {
-                document.title = flag ? "🛑 ТРЕВОГА! СООБЩЕНИЕ!" : "⚠️ ПРОЧИТАЙТЕ СООБЩЕНИЕ!";
-                flag = !flag;
-            }, 600);
-        }
-        playBeep();
-        if (!soundInterval) {
-            soundInterval = setInterval(playBeep, 2000);
-        }
-    }
-
-    function stopAlertVisuals() {
-        document.getElementById('alert-modal').style.display = 'none';
-        if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
-        if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
-        if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
-        if (navigator.vibrate) navigator.vibrate(0);
-        document.title = "МСБ55115";
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: '🟢 Дежурный режим активен',
-                artist: 'Журнал Работ (Ожидание команд)'
-            });
-        }
-    }
-
-    function confirmAlert() {
-        unlockMobileFeatures();
-        const whoConfirmed = currentUser || 'Просмотр';
-
-        stopAlertVisuals();
-        delete pendingAlerts[currentAlertTarget];
-
-        ws.send(JSON.stringify({
-            type: 'clear_alert',
-            target: currentAlertTarget,
-            notifId: currentAlertId,
-            readBy: whoConfirmed
-        }));
-
-        checkAndShowAlerts(false);
-    }
-
-    function submitRow() {
-        if (!currentUser) return;
-        let values = new Array();
-        let isEmpty = true;
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            let val = document.getElementById('in-' + i).value;
-            if (COLUMNS_CONFIG.at(i).digitsOnly && val) {
-                val = val.replace(/[^0-9.,\/\\]/g, '');
-            }
-            values.push(val);
-            if(val) isEmpty = false;
-        }
-        if (isEmpty) { alert("Пустая строка!"); return; }
-
-        const now = new Date();
-        ws.send(JSON.stringify({
-            type: 'add_row',
-            user: currentUser,
-            color: userColor,
-            time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5),
-            values: values
-        }));
-
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
-    }
-
-    function appendRow(row) {
-        if (row.values && row.values.at(0)) {
-            const firstCol = String(row.values.at(0));
-            if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
-                return;
-            }
-        }
-        const tbody = document.getElementById('table-body');
-        const tr = document.createElement('tr');
-        tr.className = 'new-row';
-        let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
-        
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            const val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
-            html += '<td>' + (val || '-') + '</td>';
-        }
-        
-        tr.innerHTML = html;
-        tbody.appendChild(tr);
-        requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
-    }
+    function attemptLogin() { unlockMobileFeatures(); const u = USERS_CONFIG.at(Number(document.getElementById('login-select').value)); if (u && document.getElementById('login-pass').value.trim() === u.pass) { document.getElementById('login-error').style.display = 'none'; currentUser = u.name; userColor = u.color; localStorage.setItem('journal_user', currentUser); localStorage.setItem('journal_color', userColor); applyUserUI(); subscribeToWebPush(); checkAndShowAlerts(false); } else document.getElementById('login-error').style.display = 'block'; }
+    function logoutUser() { localStorage.removeItem('journal_user'); localStorage.removeItem('journal_color'); location.reload(); }
+    function loginAsViewer() { unlockMobileFeatures(); document.getElementById('login-overlay').style.display = 'none'; renderNotificationsWindow(); subscribeToWebPush(); checkAndShowAlerts(false); }
+    function sendAdminAlert() { if (!currentUser) return; const t = document.getElementById('admin-target').value, m = document.getElementById('admin-msg').value.trim(); if (!m) return alert("Напишите текст!"); const n = new Date(); ws.send(JSON.stringify({ type: 'admin_alert', sender: currentUser, color: userColor, time: n.toLocaleDateString() + ' ' + n.toLocaleTimeString().slice(0, 5), target: t, text: m })); document.getElementById('admin-msg').value = ''; }
+    function clearHistoryAdmin() { if (currentUser === ADMIN_NAME && confirm("⚠️ Очистить весь журнал событий?")) ws.send(JSON.stringify({ type: 'clear_history' })); }
+    function getAlertObj(r) { return !r ? null : (typeof r === 'string' ? { id: null, text: r, sender: ADMIN_NAME } : r); }
+    function checkAndShowAlerts(isNew) { let t = null; if (currentUser) { const m = getAlertObj(pendingAlerts[currentUser]); if (m && m.sender !== currentUser) t = currentUser; } if (!t) { const a = getAlertObj(pendingAlerts["ВСЕМ"]); if (a && (!currentUser || a.sender !== currentUser)) t = "ВСЕМ"; } if (t) { const o = getAlertObj(pendingAlerts[t]); showAlert(t, o.text, o.sender, o.id, isNew); } }
+    function showAlert(t, txt, s, id, isNew) { currentAlertId = id || null; currentAlertTarget = t; currentAlertText = txt; currentAlertSender = s || ADMIN_NAME; document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + t + '] ОТ [' + currentAlertSender + ']:'; document.getElementById('alert-text').innerText = txt; document.getElementById('alert-modal').style.display = 'flex'; updateLockScreenAlert(t, txt, currentAlertSender); if (isNew || document.visibilityState === 'hidden') sendLocalNotification(t, txt, currentAlertSender); if (!titleInterval) { let f = false; titleInterval = setInterval(function() { document.title = f ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!"; f = !f; }, 600); } playBeep(); if (!soundInterval) soundInterval = setInterval(playBeep, 2000); }
+    function stopAlertVisuals() { document.getElementById('alert-modal').style.display = 'none'; if (titleInterval) { clearInterval(titleInterval); titleInterval = null; } if (soundInterval) { clearInterval(soundInterval); soundInterval = null; } if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; } if (navigator.vibrate) navigator.vibrate(0); document.title = "МСБ55115"; }
+    function confirmAlert() { unlockMobileFeatures(); stopAlertVisuals(); delete pendingAlerts[currentAlertTarget]; ws.send(JSON.stringify({ type: 'clear_alert', target: currentAlertTarget, notifId: currentAlertId, readBy: currentUser || 'Просмотр' })); checkAndShowAlerts(false); }
+    function submitRow() { if (!currentUser) return; let v = new Array(), emp = true; for (let i = 0; i < COLUMNS_CONFIG.length; i++) { let val = document.getElementById('in-' + i).value; if (COLUMNS_CONFIG.at(i).digitsOnly && val) val = val.replace(/[^0-9.,\/\\]/g, ''); v.push(val); if (val) emp = false; } if (emp) return alert("Пустая строка!"); const n = new Date(); ws.send(JSON.stringify({ type: 'add_row', user: currentUser, color: userColor, time: n.toLocaleDateString() + ' ' + n.toLocaleTimeString().slice(0, 5), values: v })); for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = ""; }
+    function appendRow(row) { if (row.values && row.values.at(0) && (String(row.values.at(0)).indexOf("ОЗНАКОМЛЕН") !== -1 || String(row.values.at(0)).indexOf("УВЕДОМЛЕНИЕ") !== -1)) return; const tb = document.getElementById('table-body'), tr = document.createElement('tr'); tr.className = 'new-row'; let h = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>'; for (let i = 0; i < COLUMNS_CONFIG.length; i++) h += '<td>' + ((row.values && row.values.at(i)) ? row.values.at(i) : '-') + '</td>'; tr.innerHTML = h; tb.appendChild(tr); requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }); }
 </script>
 </body>
 </html>
