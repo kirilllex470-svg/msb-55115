@@ -5,6 +5,7 @@ const webpush = require('web-push');
 
 const DATA_DIR = fs.existsSync('/data') ? '/data/' : '';
 const DB_FILE = DATA_DIR + 'history.json';
+const NOTIFS_FILE = DATA_DIR + 'notifications.json';
 const SUBS_FILE = DATA_DIR + 'subscriptions.json';
 const VAPID_FILE = DATA_DIR + 'vapid.json';
 
@@ -94,6 +95,7 @@ const server = http.createServer(function(req, res) {
 const wss = new WebSocket.Server({ server: server });
 
 let tableHistory = new Array(); 
+let notificationsHistory = new Array();
 let activeAlerts = {}; 
 
 if (fs.existsSync(DB_FILE)) {
@@ -105,10 +107,20 @@ if (fs.existsSync(DB_FILE)) {
     }
 }
 
+if (fs.existsSync(NOTIFS_FILE)) {
+    try {
+        const notifContent = fs.readFileSync(NOTIFS_FILE, 'utf8');
+        notificationsHistory = notifContent.trim() ? JSON.parse(notifContent) : new Array();
+    } catch (e) {
+        notificationsHistory = new Array();
+    }
+}
+
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({ 
         type: 'init', 
         data: tableHistory, 
+        notifications: notificationsHistory,
         alerts: activeAlerts,
         vapidPublicKey: vapidKeys.publicKey 
     }));
@@ -133,7 +145,6 @@ wss.on('connection', function(ws) {
                 console.log('✅ Телефон подключен к шторке уведомлений:', msg.user || 'Гость');
                 return;
             }
-
             if (msg.type === 'add_row') {
                 const newRow = {
                     id: Date.now(),
@@ -151,10 +162,14 @@ wss.on('connection', function(ws) {
                     }
                 });
             }
+
             if (msg.type === 'clear_history') {
                 console.log('🗑️ АДМИН полностью очистил журнал событий');
                 tableHistory = new Array();
+                notificationsHistory = new Array();
+                activeAlerts = {};
                 fs.writeFile(DB_FILE, JSON.stringify(tableHistory), function() {});
+                fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
 
                 wss.clients.forEach(function(client) {
                     if (client.readyState === WebSocket.OPEN) {
@@ -168,38 +183,40 @@ wss.on('connection', function(ws) {
                 const color = msg.color || '#ef4444';
                 const now = new Date();
                 const timeStr = msg.time || (now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5));
+                const notifId = Date.now();
 
                 console.log('📢 [' + sender + '] пишет для [' + msg.target + ']: ' + msg.text);
+
+                const newNotif = {
+                    id: notifId,
+                    time: timeStr,
+                    sender: sender,
+                    color: color,
+                    target: msg.target,
+                    text: msg.text,
+                    read: false,
+                    readBy: ''
+                };
+
+                notificationsHistory.push(newNotif);
+                if (notificationsHistory.length > 200) {
+                    notificationsHistory = notificationsHistory.slice(-200);
+                }
+                fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
+
                 activeAlerts[msg.target] = {
+                    id: notifId,
                     text: msg.text,
                     sender: sender
                 };
-
-                const alertRow = {
-                    id: Date.now(),
-                    time: timeStr,
-                    user: sender,
-                    color: color,
-                    values: Array.of(
-                        "📢 УВЕДОМЛЕНИЕ",
-                        "КОМУ: " + msg.target,
-                        "-",
-                        "-",
-                        "-",
-                        "Текст: " + msg.text
-                    )
-                };
-                tableHistory.push(alertRow);
-                fs.writeFile(DB_FILE, JSON.stringify(tableHistory), function() {});
-
                 wss.clients.forEach(function(client) {
                     if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({ type: 'new_row', row: alertRow }));
                         client.send(JSON.stringify({
                             type: 'admin_alert',
                             sender: sender,
                             target: msg.target,
-                            text: msg.text
+                            text: msg.text,
+                            notif: newNotif
                         }));
                     }
                 });
@@ -216,13 +233,11 @@ wss.on('connection', function(ws) {
                     }
                 };
 
-                console.log('📲 Отправка в шторку для телефонов (' + pushSubscriptions.length + ' шт.)...');
                 pushSubscriptions.forEach(function(item, index) {
-                    if (msg.target === 'ВСЕМ' || !item.user || item.user === 'ГОСТЬ' || item.user === msg.target) {
+                    if (msg.target === 'ВСЕМ' || item.user === msg.target) {
                         webpush.sendNotification(item.sub, payload, pushOptions)
                             .then(function() { console.log('---> Успешно доставлено в шторку (' + (item.user || 'Гость') + ')'); })
                             .catch(function(err) {
-                                console.log('---> Ошибка доставки Push:', err.statusCode);
                                 if (err.statusCode === 410 || err.statusCode === 404) {
                                     pushSubscriptions.splice(index, 1);
                                     fs.writeFile(SUBS_FILE, JSON.stringify(pushSubscriptions), function() {});
@@ -234,9 +249,23 @@ wss.on('connection', function(ws) {
 
             if (msg.type === 'clear_alert') {
                 delete activeAlerts[msg.target];
+
+                notificationsHistory.forEach(function(n) {
+                    if ((msg.notifId && n.id === msg.notifId) || (!msg.notifId && n.target === msg.target && !n.read)) {
+                        n.read = true;
+                        n.readBy = msg.readBy || '';
+                    }
+                });
+                fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
+
                 wss.clients.forEach(function(client) {
                     if (client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify({ type: 'alert_cleared', target: msg.target }));
+                        client.send(JSON.stringify({
+                            type: 'alert_cleared',
+                            target: msg.target,
+                            notifId: msg.notifId || null,
+                            readBy: msg.readBy || ''
+                        }));
                     }
                 });
             }
