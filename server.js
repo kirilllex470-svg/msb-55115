@@ -1,6 +1,5 @@
 const http = require('http');
 const fs = require('fs');
-const zlib = require('zlib');
 const WebSocket = require('ws');
 const webpush = require('web-push');
 
@@ -34,85 +33,21 @@ if (fs.existsSync(SUBS_FILE)) {
 }
 
 const BEAR_SVG = [
-    '<svg xmlns="http://w3.org" viewBox="0 0 800 500" width="100%" height="100%">',
-    '<defs>',
-    '<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>',
-    '<linearGradient id="fur" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#854d0e"/><stop offset="50%" stop-color="#5c3409"/><stop offset="100%" stop-color="#2e1905"/></linearGradient>',
-    '<linearGradient id="furLight" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a16207"/><stop offset="100%" stop-color="#713f12"/></linearGradient>',
-    '</defs>',
-    '<rect width="800" height="500" fill="url(#sky)"/>',
-    '<g fill="#14532d" opacity="0.55">',
-    '<polygon points="80,90 20,380 140,380"/><polygon points="180,60 110,390 250,390"/>',
-    '<polygon points="640,70 570,390 710,390"/><polygon points="730,110 670,390 790,390"/>',
-    '<polygon points="310,120 250,380 370,380"/><polygon points="510,100 440,380 580,380"/>',
-    '</g>',
-    '<g fill="#166534" opacity="0.7">',
-    '<polygon points="130,130 60,410 200,410"/><polygon points="600,120 520,410 680,410"/>',
-    '</g>',
-    '<path d="M50,500 L140,395 L330,370 L560,375 L730,415 L780,500 Z" fill="#64748b"/>',
-    '<path d="M140,395 L330,370 L560,375 L640,420 L250,435 Z" fill="#94a3b8"/>',
-    '<path d="M220,405 Q380,380 570,405" stroke="#4d7c0f" stroke-width="14" fill="none" stroke-linecap="round"/>',
-    '<g id="bear">',
-    '<path d="M350,135 Q430,115 515,165 Q595,210 585,310 L565,385 L505,385 L500,320 L455,320 L445,385 L385,385 L375,325 L340,385 L280,385 L275,265 Q275,165 350,135 Z" fill="url(#fur)" stroke="#1c0f02" stroke-width="4"/>',
-    '<circle cx="270" cy="155" r="24" fill="#452306"/><circle cx="270" cy="155" r="13" fill="#271202"/>',
-    '<circle cx="385" cy="150" r="24" fill="#452306"/><circle cx="385" cy="150" r="13" fill="#271202"/>',
-    '<ellipse cx="328" cy="215" rx="76" ry="68" fill="url(#furLight)"/>',
-    '<ellipse cx="312" cy="235" rx="35" ry="28" fill="#ca8a04"/>',
-    '<ellipse cx="305" cy="224" rx="16" ry="12" fill="#0f172a"/>',
-    '<path d="M292,244 Q308,255 328,244" stroke="#1e293b" stroke-width="4" fill="none" stroke-linecap="round"/>',
-    '<circle cx="295" cy="195" r="6" fill="#090d16"/><circle cx="293" cy="193" r="2" fill="#fff"/>',
-    '<circle cx="352" cy="195" r="6" fill="#090d16"/><circle cx="350" cy="193" r="2" fill="#fff"/>',
-    '</g>',
+    '<svg xmlns="http://w3.org" viewBox="0 0 512 512" width="512" height="512">',
+    '<rect width="512" height="512" rx="90" fill="#0f172a"/>',
+    '<polygon points="80,120 20,420 150,420" fill="#14532d" opacity="0.7"/>',
+    '<polygon points="430,110 360,420 490,420" fill="#14532d" opacity="0.7"/>',
+    '<path d="M40,512 L110,410 L260,390 L410,405 L480,512 Z" fill="#475569"/>',
+    '<circle cx="175" cy="165" r="34" fill="#452306"/>',
+    '<circle cx="337" cy="165" r="34" fill="#452306"/>',
+    '<ellipse cx="256" cy="260" rx="115" ry="105" fill="#713f12" stroke="#2e1905" stroke-width="6"/>',
+    '<ellipse cx="256" cy="290" rx="52" ry="42" fill="#ca8a04"/>',
+    '<ellipse cx="256" cy="272" rx="24" ry="18" fill="#0f172a"/>',
+    '<circle cx="210" cy="230" r="10" fill="#090d16"/>',
+    '<circle cx="302" cy="230" r="10" fill="#090d16"/>',
+    '<text x="256" y="475" font-family="monospace" font-size="44" font-weight="bold" fill="#f8fafc" text-anchor="middle">55115</text>',
     '</svg>'
 ].join('');
-function createSolidPng(width, height, r, g, b) {
-    const crcTable = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-        crcTable[n] = c;
-    }
-    function crc32(buf) {
-        let c = -1;
-        for (let i = 0; i < buf.length; i++) {
-            c = (c >>> 8) ^ crcTable[(c ^ buf[i]) & 0xff];
-        }
-        return (c ^ -1) >>> 0;
-    }
-    function chunk(type, data) {
-        const len = Buffer.alloc(4);
-        len.writeUInt32BE(data.length, 0);
-        const typeBuf = Buffer.from(type);
-        const crc = Buffer.alloc(4);
-        crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
-        return Buffer.concat([len, typeBuf, data, crc]);
-    }
-    const ihdr = Buffer.alloc(13);
-    ihdr.writeUInt32BE(width, 0);
-    ihdr.writeUInt32BE(height, 4);
-    ihdr.writeUInt8(8, 8);
-    ihdr.writeUInt8(2, 9);
-    const raw = Buffer.alloc(height * (1 + width * 3));
-    for (let y = 0; y < height; y++) {
-        const rowStart = y * (1 + width * 3);
-        raw[rowStart] = 0;
-        for (let x = 0; x < width; x++) {
-            const p = rowStart + 1 + x * 3;
-            const dx = x - width / 2;
-            const dy = y - height / 2;
-            if (dx * dx + dy * dy < (width * 0.36) * (width * 0.36)) {
-                raw[p] = 133; raw[p + 1] = 77; raw[p + 2] = 14;
-            } else {
-                raw[p] = r; raw[p + 1] = g; raw[p + 2] = b;
-            }
-        }
-    }
-    const idat = zlib.deflateSync(raw);
-    const sig = Buffer.from('89504e470d0a1a0a', 'hex');
-    return Buffer.concat([sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))]);
-}
-
-const GENERATED_ICON = createSolidPng(192, 192, 15, 23, 42);
 
 const MANIFEST_JSON = JSON.stringify({
     id: "/",
@@ -124,15 +59,13 @@ const MANIFEST_JSON = JSON.stringify({
     background_color: "#0f172a",
     theme_color: "#0f172a",
     icons: [
-        { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-        { src: "/icon-192.png", sizes: "512x512", type: "image/png", purpose: "any" }
+        { src: "/icon-192.png", sizes: "192x192", type: "image/svg+xml", purpose: "any" },
+        { src: "/icon-192.png", sizes: "512x512", type: "image/svg+xml", purpose: "any" }
     ]
 });
-
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
-    "self.addEventListener('fetch', function(e) {});",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 СООБЩЕНИЕ В ЖУРНАЛЕ!', body: 'Срочно откройте журнал!' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -168,8 +101,11 @@ const SW_CODE = [
     "    }));",
     "});"
 ].join('\n');
+
 const server = http.createServer(function(req, res) {
-    if (req.url && req.url.indexOf('/sw.js') === 0) {
+    const urlPath = (req.url || '/').split('?').at(0);
+
+    if (urlPath === '/sw.js') {
         res.writeHead(200, { 
             'Content-Type': 'application/javascript; charset=utf-8',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
@@ -177,47 +113,38 @@ const server = http.createServer(function(req, res) {
         res.end(SW_CODE);
         return;
     }
-    if (req.url === '/manifest.json') {
+    if (urlPath === '/manifest.json') {
         res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
         res.end(MANIFEST_JSON);
         return;
     }
-    if (req.url === '/logo.jpg') {
+    if (urlPath === '/icon-192.png' || urlPath === '/logo.jpg' || urlPath === '/favicon.ico') {
         if (fs.existsSync('logo.jpg')) {
             res.writeHead(200, { 'Content-Type': 'image/jpeg' });
             res.end(fs.readFileSync('logo.jpg'));
-        } else if (fs.existsSync('logo.png')) {
+        } else if (fs.existsSync('icon-192.png')) {
             res.writeHead(200, { 'Content-Type': 'image/png' });
-            res.end(fs.readFileSync('logo.png'));
+            res.end(fs.readFileSync('icon-192.png'));
         } else {
             res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8' });
             res.end(BEAR_SVG);
         }
         return;
     }
-    if (req.url === '/icon-192.png') {
-        if (fs.existsSync('icon-192.png')) {
-            res.writeHead(200, { 'Content-Type': 'image/png' });
-            res.end(fs.readFileSync('icon-192.png'));
-        } else {
-            res.writeHead(200, { 'Content-Type': 'image/png' });
-            res.end(GENERATED_ICON);
-        }
-        return;
-    }
-    if (req.url === '/' || req.url.indexOf('/?') === 0) {
-        fs.readFile('index.html', function(err, data) {
-            if (err) { 
-                res.writeHead(500); 
-                res.end('Error loading index.html'); 
-            } else { 
-                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); 
-                res.end(data); 
-            }
-        });
-    }
-});
 
+    fs.readFile('index.html', function(err, data) {
+        if (err) { 
+            res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); 
+            res.end('Ошибка чтения index.html: ' + err.message); 
+        } else { 
+            res.writeHead(200, { 
+                'Content-Type': 'text/html; charset=utf-8',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+            }); 
+            res.end(data); 
+        }
+    });
+});
 const wss = new WebSocket.Server({ server: server });
 
 let tableHistory = new Array(); 
