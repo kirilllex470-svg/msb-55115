@@ -73,7 +73,36 @@
     <div id="splash-screen">
         <div class="splash-card">
             <div class="splash-img-wrap">
-                <img src="/logo.jpg" alt="МСБ-55115">
+                <svg xmlns="http://w3.org" viewBox="0 0 800 500" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+                    <defs>
+                        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f172a"/></linearGradient>
+                        <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#854d0e"/><stop offset="50%" stop-color="#5c3409"/><stop offset="100%" stop-color="#2e1905"/></linearGradient>
+                        <linearGradient id="furLight" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#a16207"/><stop offset="100%" stop-color="#713f12"/></linearGradient>
+                    </defs>
+                    <rect width="800" height="500" fill="url(#sky)"/>
+                    <g fill="#14532d" opacity="0.65">
+                        <polygon points="80,70 10,400 150,400"/><polygon points="190,40 110,400 270,400"/>
+                        <polygon points="630,50 550,400 710,400"/><polygon points="730,90 660,400 800,400"/>
+                        <polygon points="320,100 250,390 390,390"/><polygon points="500,85 430,390 570,390"/>
+                    </g>
+                    <g fill="#166534" opacity="0.8">
+                        <polygon points="135,120 55,420 215,420"/><polygon points="590,110 510,420 670,420"/>
+                    </g>
+                    <path d="M20,500 L130,395 L330,365 L570,372 L740,415 L790,500 Z" fill="#64748b"/>
+                    <path d="M130,395 L330,365 L570,372 L650,420 L240,435 Z" fill="#94a3b8"/>
+                    <path d="M210,405 Q380,378 580,405" stroke="#4d7c0f" stroke-width="16" fill="none" stroke-linecap="round"/>
+                    <g>
+                        <path d="M350,125 Q435,105 520,160 Q600,205 588,310 L568,385 L505,385 L500,320 L455,320 L445,385 L385,385 L375,325 L340,385 L278,385 L272,260 Q272,160 350,125 Z" fill="url(#fur)" stroke="#1c0f02" stroke-width="4"/>
+                        <circle cx="268" cy="150" r="24" fill="#452306"/><circle cx="268" cy="150" r="13" fill="#271202"/>
+                        <circle cx="386" cy="145" r="24" fill="#452306"/><circle cx="386" cy="145" r="13" fill="#271202"/>
+                        <ellipse cx="328" cy="212" rx="78" ry="70" fill="url(#furLight)"/>
+                        <ellipse cx="312" cy="234" rx="36" ry="29" fill="#ca8a04"/>
+                        <ellipse cx="305" cy="222" rx="16" ry="12" fill="#0f172a"/>
+                        <path d="M292,244 Q308,255 328,244" stroke="#1e293b" stroke-width="4" fill="none" stroke-linecap="round"/>
+                        <circle cx="295" cy="192" r="6" fill="#090d16"/><circle cx="293" cy="190" r="2" fill="#fff"/>
+                        <circle cx="352" cy="192" r="6" fill="#090d16"/><circle cx="350" cy="190" r="2" fill="#fff"/>
+                    </g>
+                </svg>
             </div>
             <h1 class="splash-title">МСБ-55115</h1>
             <div class="progress-track">
@@ -82,7 +111,7 @@
             <div class="splash-percent" id="splash-percent">ЗАГРУЗКА СИСТЕМЫ: 0%</div>
             <div class="splash-file-box">
                 <span class="splash-file-name" id="splash-file">⚙️ Инициализация ядра МСБ-55115...</span>
-                <span class="splash-file-tag" id="splash-tag">[OK]</span>
+                <span class="splash-file-tag" id="splash-tag">[0%]</span>
             </div>
         </div>
     </div>
@@ -163,6 +192,7 @@
             <tbody id="table-body"></tbody>
         </table>
     </div>
+
 <script>
     const USERS_CONFIG = [
         { name: "ШР", pass: "551151111", color: "#3b82f6" },
@@ -227,6 +257,7 @@
     let sirenAudio = null;
     let publicVapidKey = null;
     let deferredPrompt = null;
+    let splashStarted = false;
     const SPLASH_FILES = [
         "⚙️ boot/kernel_msb55115.sys",
         "🔐 crypto/cipher_channel_v4.dat",
@@ -236,11 +267,13 @@
         "🔔 push/vapid_service_worker.js",
         "🎥 stream/salutejazz_rtc_bridge.mod",
         "📊 journal/history_storage_engine.json",
-        "🔊 audio/siren_ emergency_synth.wav",
+        "🔊 audio/siren_emergency_synth.wav",
         "✅ system/msb55115_ready_state.ok"
     ];
 
     function startSplashScreen() {
+        if (splashStarted) return;
+        splashStarted = true;
         const splash = document.getElementById('splash-screen');
         const bar = document.getElementById('splash-bar');
         const pct = document.getElementById('splash-percent');
@@ -249,26 +282,21 @@
         if (!splash) return;
 
         let step = 0;
-        const totalSteps = 100;
-        const intervalMs = 200; // 100 * 200ms = 20 000ms (20 секунд)
-
         const timer = setInterval(function() {
             step++;
             if (bar) bar.style.width = step + '%';
             if (pct) pct.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + step + '%';
 
-            const fileIndex = Math.min(Math.floor((step / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
-            if (fileEl) fileEl.innerText = SPLASH_FILES.at(fileIndex);
+            const idx = Math.min(Math.floor((step / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
+            if (fileEl) fileEl.innerText = SPLASH_FILES[idx];
             if (tagEl) tagEl.innerText = (step < 100) ? '[' + step + '%]' : '[ГОТОВО]';
 
-            if (step >= totalSteps) {
+            if (step >= 100) {
                 clearInterval(timer);
                 splash.style.opacity = '0';
-                setTimeout(function() {
-                    splash.style.display = 'none';
-                }, 600);
+                setTimeout(function() { splash.style.display = 'none'; }, 600);
             }
-        }, intervalMs);
+        }, 200);
     }
 
     window.addEventListener('beforeinstallprompt', function(e) {
@@ -304,6 +332,7 @@
         for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
         return outputArray;
     }
+
     async function subscribeToWebPush() {
         if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
         try {
@@ -677,7 +706,10 @@
         }
     }
 
+    let appInitialized = false;
     function initApp() {
+        if (appInitialized) return;
+        appInitialized = true;
         startSplashScreen();
         document.getElementById('login-error').style.display = 'none';
 
@@ -743,13 +775,14 @@
         connectWS();
     }
     
+    document.addEventListener('DOMContentLoaded', initApp);
     window.onload = initApp;
 
     function attemptLogin() {
         unlockMobileFeatures();
         const userIndex = Number(document.getElementById('login-select').value);
         const pass = document.getElementById('login-pass').value.trim();
-        const user = USERS_CONFIG.at(userIndex);
+        const user = USERS_CONFIG[userIndex];
 
         if (user && pass === user.pass) {
             document.getElementById('login-error').style.display = 'none';
@@ -765,6 +798,7 @@
             document.getElementById('login-error').style.display = 'block';
         }
     }
+
     function logoutUser() {
         localStorage.removeItem('journal_user');
         localStorage.removeItem('journal_color');
