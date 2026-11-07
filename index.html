@@ -372,12 +372,12 @@
 
         list.appendChild(item);
 
-        const items = list.getElementsByClassName('notif-item');
-        while (items.length > 10) {
-            list.removeChild(items[0]);
+        while (list.children.length > 10) {
+            list.removeChild(list.firstElementChild);
         }
         list.scrollTop = list.scrollHeight;
     }
+
 
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
