@@ -6,6 +6,7 @@ const webpush = require('web-push');
 
 const DATA_DIR = fs.existsSync('/data') ? '/data/' : '';
 const DB_FILE = DATA_DIR + 'history.json';
+const ARCHIVE_FILE = DATA_DIR + 'archive.json';
 const NOTIFS_FILE = DATA_DIR + 'notifications.json';
 const MAPS_FILE = DATA_DIR + 'maps.json';
 const SUBS_FILE = DATA_DIR + 'subscriptions.json';
@@ -108,7 +109,6 @@ function makeTacticalIcon(size) {
 
 const TACTICAL_ICON_192 = makeTacticalIcon(192);
 const TACTICAL_ICON_512 = makeTacticalIcon(512);
-
 const MANIFEST_JSON = JSON.stringify({
     name: "МСБ-55115",
     short_name: "МСБ55115",
@@ -121,6 +121,7 @@ const MANIFEST_JSON = JSON.stringify({
         { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" }
     )
 });
+
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
@@ -172,11 +173,18 @@ const server = http.createServer(function(req, res) {
         return;
     }
 
+    if (req.method === 'GET' && urlPath === '/archive-data') {
+        res.writeHead(200, { 
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate'
+        });
+        res.end(JSON.stringify(archiveHistory));
+        return;
+    }
+
     if (req.method === 'POST' && urlPath === '/upload-map') {
         const chunks = new Array();
-        req.on('data', function(chunk) {
-            chunks.push(chunk);
-        });
+        req.on('data', function(chunk) { chunks.push(chunk); });
         req.on('end', function() {
             try {
                 const bodyStr = Buffer.concat(chunks).toString('utf8');
@@ -198,18 +206,12 @@ const server = http.createServer(function(req, res) {
     }
 
     if (urlPath === '/sw.js') {
-        res.writeHead(200, { 
-            'Content-Type': 'application/javascript; charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-        });
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
         res.end(SW_CODE);
         return;
     }
     if (urlPath === '/manifest.json') {
-        res.writeHead(200, { 
-            'Content-Type': 'application/manifest+json; charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-        });
+        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
         res.end(MANIFEST_JSON);
         return;
     }
@@ -240,10 +242,21 @@ const server = http.createServer(function(req, res) {
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 let tableHistory = new Array(); 
+let archiveHistory = {};
 let notificationsHistory = new Array();
 let mapsHistory = new Array();
 let activeAlerts = {}; 
 let streamState = { active: false, url: '' };
+
+function getIsoDateNow() {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return yyyy + '-' + mm + '-' + dd;
+}
+
+let currentActiveDay = getIsoDateNow();
 
 if (fs.existsSync(DB_FILE)) {
     try { 
@@ -253,6 +266,39 @@ if (fs.existsSync(DB_FILE)) {
         tableHistory = new Array(); 
     }
 }
+
+if (fs.existsSync(ARCHIVE_FILE)) {
+    try {
+        const archContent = fs.readFileSync(ARCHIVE_FILE, 'utf8');
+        archiveHistory = archContent.trim() ? JSON.parse(archContent) : {};
+    } catch (e) {
+        archiveHistory = {};
+    }
+}
+
+if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
+    archiveHistory[currentActiveDay] = tableHistory.slice();
+    try { fs.writeFileSync(ARCHIVE_FILE, JSON.stringify(archiveHistory)); } catch (e) {}
+}
+
+setInterval(function() {
+    const todayIso = getIsoDateNow();
+    if (todayIso !== currentActiveDay) {
+        if (tableHistory.length > 0) {
+            archiveHistory[currentActiveDay] = tableHistory.slice();
+            fs.writeFile(ARCHIVE_FILE, JSON.stringify(archiveHistory), function() {});
+        }
+        currentActiveDay = todayIso;
+        tableHistory = new Array();
+        fs.writeFile(DB_FILE, JSON.stringify(tableHistory), function() {});
+
+        wss.clients.forEach(function(client) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: 'daily_archived', date: currentActiveDay }));
+            }
+        });
+    }
+}, 30000);
 
 if (fs.existsSync(NOTIFS_FILE)) {
     try {
@@ -277,7 +323,6 @@ if (fs.existsSync(MAPS_FILE)) {
         mapsHistory = new Array();
     }
 }
-
 function saveAndBroadcastMap(msg) {
     const now = new Date();
     const timeStr = msg.time || (now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5));
@@ -409,6 +454,13 @@ wss.on('connection', function(ws) {
                 };
                 tableHistory.push(newRow);
                 fs.writeFile(DB_FILE, JSON.stringify(tableHistory), function() {});
+
+                const dayKey = getIsoDateNow();
+                if (!Array.isArray(archiveHistory[dayKey])) {
+                    archiveHistory[dayKey] = new Array();
+                }
+                archiveHistory[dayKey].push(newRow);
+                fs.writeFile(ARCHIVE_FILE, JSON.stringify(archiveHistory), function() {});
 
                 wss.clients.forEach(function(client) {
                     if (client.readyState === WebSocket.OPEN) {
