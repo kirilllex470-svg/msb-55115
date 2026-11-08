@@ -162,6 +162,30 @@ const SW_CODE = [
 const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
+    if (req.method === 'POST' && urlPath === '/upload-map') {
+        let body = '';
+        req.on('data', function(chunk) {
+            body += chunk.toString();
+        });
+        req.on('end', function() {
+            try {
+                const msg = JSON.parse(body);
+                if (msg && msg.image) {
+                    saveAndBroadcastMap(msg);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                } else {
+                    res.writeHead(400);
+                    res.end('No image');
+                }
+            } catch (e) {
+                res.writeHead(500);
+                res.end('Error');
+            }
+        });
+        return;
+    }
+
     if (urlPath === '/sw.js') {
         res.writeHead(200, { 
             'Content-Type': 'application/javascript; charset=utf-8',
@@ -202,10 +226,11 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
-const wss = new WebSocket.Server({ server: server });
+const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 let tableHistory = new Array(); 
 let notificationsHistory = new Array();
+let mapsHistory = new Array();
 let activeAlerts = {}; 
 let streamState = { active: false, url: '' };
 
@@ -231,6 +256,46 @@ if (fs.existsSync(NOTIFS_FILE)) {
     } catch (e) {
         notificationsHistory = new Array();
     }
+}
+
+if (fs.existsSync(MAPS_FILE)) {
+    try {
+        const mapsContent = fs.readFileSync(MAPS_FILE, 'utf8');
+        mapsHistory = mapsContent.trim() ? JSON.parse(mapsContent) : new Array();
+    } catch (e) {
+        mapsHistory = new Array();
+    }
+}
+
+function saveAndBroadcastMap(msg) {
+    const now = new Date();
+    const timeStr = msg.time || (now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5));
+    const mapItem = {
+        id: Date.now(),
+        sender: msg.sender || 'АДМИН',
+        target: msg.target || 'ВСЕМ',
+        time: timeStr,
+        image: msg.image
+    };
+    mapsHistory.push(mapItem);
+    if (mapsHistory.length > 30) {
+        mapsHistory = mapsHistory.slice(-30);
+    }
+    fs.writeFile(MAPS_FILE, JSON.stringify(mapsHistory), function() {});
+
+    wss.clients.forEach(function(client) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'new_map', mapItem: mapItem }));
+        }
+    });
+
+    broadcastAlert(
+        msg.sender || 'АДМИН',
+        msg.color || '#8b5cf6',
+        timeStr,
+        msg.target || 'ВСЕМ',
+        '🗺️ ЗАГРУЖЕНА НОВАЯ ВВОДНАЯ / КАРТА! Откройте раздел "ВВОДНЫЕ / КАРТА"'
+    );
 }
 
 function broadcastAlert(sender, color, timeStr, target, text) {
@@ -293,6 +358,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     });
 }
+
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({ 
         type: 'init', 
