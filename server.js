@@ -7,6 +7,7 @@ const webpush = require('web-push');
 const DATA_DIR = fs.existsSync('/data') ? '/data/' : '';
 const DB_FILE = DATA_DIR + 'history.json';
 const NOTIFS_FILE = DATA_DIR + 'notifications.json';
+const MAPS_FILE = DATA_DIR + 'maps.json';
 const SUBS_FILE = DATA_DIR + 'subscriptions.json';
 const VAPID_FILE = DATA_DIR + 'vapid.json';
 
@@ -162,25 +163,35 @@ const SW_CODE = [
 const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
+    if (req.method === 'GET' && urlPath === '/maps-list') {
+        res.writeHead(200, { 
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate'
+        });
+        res.end(JSON.stringify(mapsHistory));
+        return;
+    }
+
     if (req.method === 'POST' && urlPath === '/upload-map') {
-        let body = '';
+        const chunks = new Array();
         req.on('data', function(chunk) {
-            body += chunk.toString();
+            chunks.push(chunk);
         });
         req.on('end', function() {
             try {
-                const msg = JSON.parse(body);
+                const bodyStr = Buffer.concat(chunks).toString('utf8');
+                const msg = JSON.parse(bodyStr);
                 if (msg && msg.image) {
                     saveAndBroadcastMap(msg);
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ ok: true }));
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ ok: true, maps: mapsHistory }));
                 } else {
                     res.writeHead(400);
-                    res.end('No image');
+                    res.end(JSON.stringify({ ok: false }));
                 }
             } catch (e) {
                 res.writeHead(500);
-                res.end('Error');
+                res.end(JSON.stringify({ ok: false }));
             }
         });
         return;
@@ -278,14 +289,14 @@ function saveAndBroadcastMap(msg) {
         image: msg.image
     };
     mapsHistory.push(mapItem);
-    if (mapsHistory.length > 30) {
-        mapsHistory = mapsHistory.slice(-30);
+    if (mapsHistory.length > 18) {
+        mapsHistory = mapsHistory.slice(-18);
     }
     fs.writeFile(MAPS_FILE, JSON.stringify(mapsHistory), function() {});
 
     wss.clients.forEach(function(client) {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'new_map', mapItem: mapItem }));
+            client.send(JSON.stringify({ type: 'new_map', target: mapItem.target }));
         }
     });
 
@@ -358,7 +369,6 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     });
 }
-
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({ 
         type: 'init', 
@@ -407,6 +417,10 @@ wss.on('connection', function(ws) {
                 });
             }
 
+            if (msg.type === 'upload_map' && msg.image) {
+                saveAndBroadcastMap(msg);
+            }
+
             if (msg.type === 'stream_start') {
                 streamState = { active: true, url: msg.url };
                 wss.clients.forEach(function(client) {
@@ -431,9 +445,11 @@ wss.on('connection', function(ws) {
             if (msg.type === 'clear_history') {
                 tableHistory = new Array();
                 notificationsHistory = new Array();
+                mapsHistory = new Array();
                 activeAlerts = {};
                 fs.writeFile(DB_FILE, JSON.stringify(tableHistory), function() {});
                 fs.writeFile(NOTIFS_FILE, JSON.stringify(notificationsHistory), function() {});
+                fs.writeFile(MAPS_FILE, JSON.stringify(mapsHistory), function() {});
 
                 wss.clients.forEach(function(client) {
                     if (client.readyState === WebSocket.OPEN) {
