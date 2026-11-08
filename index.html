@@ -47,7 +47,7 @@
         .stream-start-btn { padding: 12px 18px; background: #22c55e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .stream-stop-btn { padding: 12px 18px; background: var(--danger); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
         .stream-link-btn { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-                .maps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; }
+        .maps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; }
         .map-tile { position: relative; height: 190px; border-radius: 14px; overflow: hidden; background: #090d16; border: 1px solid #334155; cursor: pointer; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease; box-shadow: 0 6px 18px rgba(0,0,0,0.45); -webkit-tap-highlight-color: transparent; }
         .map-tile:hover, .map-tile:active { transform: translateY(-5px) scale(1.02); border-color: #38bdf8; box-shadow: 0 14px 30px rgba(56, 189, 248, 0.35); }
         .map-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
@@ -159,7 +159,6 @@
             <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none;">❌ Неверный пароль</div>
         </div>
     </div>
-
     <div class="input-panel" id="input-panel">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
             <h3 style="margin:0;">📝 ПОДРАЗДЕЛЕНИЕ: <span id="my-name"></span></h3>
@@ -460,7 +459,6 @@
             navigator.wakeLock.request('screen').catch(function() {});
         }
     }
-   
     function updateLockScreenAlert(target, text, sender) {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
@@ -702,6 +700,17 @@
             grid.appendChild(tile);
         });
     }
+    function fetchMapsFromServer() {
+        fetch('/maps-list?t=' + Date.now())
+            .then(function(r) { return r.json(); })
+            .then(function(list) {
+                if (Array.isArray(list)) {
+                    allMaps = list;
+                    renderMapsGrid();
+                }
+            })
+            .catch(function() {});
+    }
 
     function uploadMapPhoto() {
         if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
@@ -720,8 +729,8 @@
 
             img.onload = function() {
                 const canvas = document.createElement('canvas');
-                const maxW = 800;
-                const maxH = 800;
+                const maxW = 750;
+                const maxH = 750;
                 let w = img.width || 600;
                 let h = img.height || 600;
                 if (w > maxW || h > maxH) {
@@ -748,26 +757,19 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payloadObj)
-                }).then(function(res) {
-                    if (res.ok) {
-                        fileInput.value = '';
+                })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    fileInput.value = '';
+                    if (data && Array.isArray(data.maps)) {
+                        allMaps = data.maps;
+                        renderMapsGrid();
                     } else {
-                        alert('Ошибка отправки на сервер: ' + res.status);
+                        fetchMapsFromServer();
                     }
-                }).catch(function() {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({
-                            type: 'upload_map',
-                            sender: currentUser,
-                            color: userColor,
-                            target: target,
-                            time: timeStr,
-                            image: finalDataUrl
-                        }));
-                        fileInput.value = '';
-                    } else {
-                        alert('Нет соединения с сервером!');
-                    }
+                })
+                .catch(function() {
+                    alert('Ошибка при отправке фото на сервер!');
                 });
             };
 
@@ -824,7 +826,6 @@
         if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
         return Array.of(raw);
     }
-
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
@@ -835,9 +836,8 @@
                 document.getElementById('table-body').innerHTML = '';
                 msg.data.forEach(appendRow);
                 allNotifications = msg.notifications || new Array();
-                allMaps = msg.maps || new Array();
                 renderNotificationsWindow();
-                renderMapsGrid();
+                fetchMapsFromServer();
 
                 if (msg.streamState) {
                     activeStream = msg.streamState;
@@ -854,12 +854,10 @@
             }
             if (msg.type === 'new_row') appendRow(msg.row);
             if (msg.type === 'new_map') {
-                if (msg.mapItem) {
-                    allMaps.push(msg.mapItem);
-                    renderMapsGrid();
-                    if (isMapVisibleForMe(msg.mapItem)) {
-                        document.getElementById('maps-section-box').style.display = 'block';
-                    }
+                fetchMapsFromServer();
+                if (!msg.target || msg.target === 'ВСЕМ' || currentUser === ADMIN_NAME || msg.target === currentUser) {
+                    const box = document.getElementById('maps-section-box');
+                    if (box) box.style.display = 'block';
                 }
             }
             if (msg.type === 'stream_state') {
