@@ -173,7 +173,6 @@
             <tbody id="table-body"></tbody>
         </table>
     </div>
-
 <script>
     const USERS_CONFIG = [
         { name: "ШР", pass: "551151111", color: "#3b82f6" },
@@ -201,16 +200,16 @@
         ]},
         { label: "НОМЕР ТОЧКИ", options: new Array(), digitsOnly: true },
         { label: "ЛЕСОПОЛОСА", options: [
-            "ФАКС", "ЗУБР1", "ПОЭТ","ЗАЯЦ", "СУДЬЯ", "СОР4", "ЗАМЕНА", "КРАСКА",
-            "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК","СМОГ-1", "ЛОТ ", "ПРИНТ7",
+            "ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "ЗАМЕНА", "КРАСКА",
+            "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7",
             "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1",
             "ИРБИС", "СЕЗОН", "КАРАЗ", "КВАС", "КАФР", "СТЕНА", "ТРАКТ",
             "СЛЕЖКА", "МОНАРХ", "ГИК", "МУРАЛ", "ГРЕК", "БАКУ", "БАКУ-1",
             "САЛАТ", "САЛАТ-1", "ГУК", "СМЕНА-1", "КАБАН", "КАБАН-2",
             "КАБАН-3", "ЛИС-1", "ЛИС-2", "ЛИС-3",
-            "-->ФАКС", "-->ЗУБР1", "-->ПОЭТ","-->ЗАЯЦ","-->СУДЬЯ", "-->СОР4",
+            "-->ФАКС", "-->ЗУБР1", "-->ПОЭТ", "-->СУДЬЯ", "-->СОР4",
             "-->ЗАМЕНА", "-->КРАСКА", "-->МАСТАК1", "-->ВОЛК3", "-->АНГЕЛ",
-            "-->ВАЛИК1", "-->ЛЕЖАК","-->СМОГ-1", "-->ЛОТ ", "-->ПРИНТ7", "-->ГОН1",
+            "-->ВАЛИК1", "-->ЛЕЖАК", "-->ЛОТ ", "-->ПРИНТ7", "-->ГОН1",
             "-->СТОП-3", "-->ТАБЛА", "-->ПОКЕР", "-->ЛОКОН", "-->КАЛЫМ",
             "-->КАРМАН1", "-->ИРБИС", "-->СЕЗОН", "-->КАРАЗ", "-->КВАС",
             "-->КАФР", "-->СТЕНА", "-->ТРАКТ", "-->СЛЕЖКА", "-->МОНАРХ",
@@ -542,7 +541,7 @@
         const raw = pendingAlerts[target];
         if (!raw) return new Array();
         if (Array.isArray(raw)) return raw;
-        if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME });
+        if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
         return Array.of(raw);
     }
     function connectWS() {
@@ -591,21 +590,34 @@
                 queue.push({
                     id: msg.notif ? msg.notif.id : Date.now(),
                     text: msg.text,
-                    sender: msg.sender || ADMIN_NAME
+                    sender: msg.sender || ADMIN_NAME,
+                    readList: new Array()
                 });
                 pendingAlerts[msg.target] = queue;
                 checkAndShowAlerts(true);
             }
             if (msg.type === 'alert_cleared') {
                 const queue = getAlertsQueue(msg.target);
-                if (msg.notifId) {
-                    pendingAlerts[msg.target] = queue.filter(function(a) { return a.id !== msg.notifId; });
-                } else {
-                    queue.shift();
+                if (msg.target === 'ВСЕМ') {
+                    queue.forEach(function(a) {
+                        if (!msg.notifId || a.id === msg.notifId) {
+                            if (!Array.isArray(a.readList)) a.readList = new Array();
+                            if (msg.who && a.readList.indexOf(msg.who) === -1) {
+                                a.readList.push(msg.who);
+                            }
+                        }
+                    });
                     pendingAlerts[msg.target] = queue;
-                }
-                if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) {
-                    delete pendingAlerts[msg.target];
+                } else {
+                    if (msg.notifId) {
+                        pendingAlerts[msg.target] = queue.filter(function(a) { return a.id !== msg.notifId; });
+                    } else {
+                        queue.shift();
+                        pendingAlerts[msg.target] = queue;
+                    }
+                    if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) {
+                        delete pendingAlerts[msg.target];
+                    }
                 }
 
                 if (msg.notifId) {
@@ -618,7 +630,7 @@
                 } else {
                     let marked = false;
                     allNotifications.forEach(function(n) {
-                        if (!marked && n.target === msg.target && !n.read) {
+                        if (!marked && n.target === msg.target) {
                             n.read = true;
                             n.readBy = msg.readBy || '';
                             marked = true;
@@ -626,8 +638,12 @@
                     });
                 }
                 renderNotificationsWindow();
+
+                const myName = currentUser || 'Просмотр';
                 if (currentAlertTarget === msg.target && (!msg.notifId || currentAlertId === msg.notifId)) {
-                    stopAlertVisuals();
+                    if (msg.target !== 'ВСЕМ' || msg.who === myName) {
+                        stopAlertVisuals();
+                    }
                 }
                 checkAndShowAlerts(false);
             }
@@ -812,6 +828,13 @@
         }
     }
 
+    function isUnreadForMe(a) {
+        const me = currentUser || 'Просмотр';
+        if (currentUser && a.sender === currentUser) return false;
+        if (Array.isArray(a.readList) && a.readList.indexOf(me) !== -1) return false;
+        return true;
+    }
+
     function checkAndShowAlerts(isNew) {
         if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
 
@@ -819,7 +842,7 @@
         let alertObj = null;
 
         if (currentUser) {
-            const myQueue = getAlertsQueue(currentUser).filter(function(a) { return a.sender !== currentUser; });
+            const myQueue = getAlertsQueue(currentUser).filter(isUnreadForMe);
             if (myQueue.length > 0) {
                 targetToShow = currentUser;
                 alertObj = myQueue.at(0);
@@ -827,7 +850,7 @@
         }
 
         if (!targetToShow) {
-            const allQueue = getAlertsQueue("ВСЕМ").filter(function(a) { return !currentUser || a.sender !== currentUser; });
+            const allQueue = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
             if (allQueue.length > 0) {
                 targetToShow = "ВСЕМ";
                 alertObj = allQueue.at(0);
@@ -845,7 +868,7 @@
         currentAlertText = text;
         currentAlertSender = sender || ADMIN_NAME;
 
-        const queueLen = getAlertsQueue(target).filter(function(a) { return !currentUser || a.sender !== currentUser; }).length;
+        const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
         const countBadge = queueLen > 1 ? ' (1 из ' + queueLen + ')' : '';
 
         document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + countBadge + ':';
@@ -890,6 +913,8 @@
     function confirmAlert() {
         unlockMobileFeatures();
         const whoConfirmed = currentUser || 'Просмотр';
+        const now = new Date();
+        const readTime = now.toLocaleTimeString().slice(0, 5);
         const targetToClear = currentAlertTarget;
         const idToClear = currentAlertId;
 
@@ -897,21 +922,32 @@
 
         if (targetToClear) {
             const queue = getAlertsQueue(targetToClear);
-            if (idToClear) {
-                pendingAlerts[targetToClear] = queue.filter(function(a) { return a.id !== idToClear; });
-            } else {
-                queue.shift();
+            if (targetToClear === 'ВСЕМ') {
+                queue.forEach(function(a) {
+                    if (!idToClear || a.id === idToClear) {
+                        if (!Array.isArray(a.readList)) a.readList = new Array();
+                        if (a.readList.indexOf(whoConfirmed) === -1) a.readList.push(whoConfirmed);
+                    }
+                });
                 pendingAlerts[targetToClear] = queue;
-            }
-            if (pendingAlerts[targetToClear] && pendingAlerts[targetToClear].length === 0) {
-                delete pendingAlerts[targetToClear];
+            } else {
+                if (idToClear) {
+                    pendingAlerts[targetToClear] = queue.filter(function(a) { return a.id !== idToClear; });
+                } else {
+                    queue.shift();
+                    pendingAlerts[targetToClear] = queue;
+                }
+                if (pendingAlerts[targetToClear] && pendingAlerts[targetToClear].length === 0) {
+                    delete pendingAlerts[targetToClear];
+                }
             }
 
             ws.send(JSON.stringify({
                 type: 'clear_alert',
                 target: targetToClear,
                 notifId: idToClear,
-                readBy: whoConfirmed
+                readBy: whoConfirmed,
+                readTime: readTime
             }));
         }
 
