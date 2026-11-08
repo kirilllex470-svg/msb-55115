@@ -202,7 +202,6 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
-
 const wss = new WebSocket.Server({ server: server });
 
 let tableHistory = new Array(); 
@@ -226,13 +225,14 @@ if (fs.existsSync(NOTIFS_FILE)) {
         notificationsHistory.forEach(function(n) {
             if (!n.read) {
                 if (!Array.isArray(activeAlerts[n.target])) activeAlerts[n.target] = new Array();
-                activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender });
+                activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender, readList: new Array() });
             }
         });
     } catch (e) {
         notificationsHistory = new Array();
     }
 }
+
 function broadcastAlert(sender, color, timeStr, target, text) {
     const notifId = Date.now() + Math.floor(Math.random() * 1000);
     const newNotif = {
@@ -258,7 +258,8 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     activeAlerts[target].push({
         id: notifId,
         text: text,
-        sender: sender
+        sender: sender,
+        readList: new Array()
     });
 
     wss.clients.forEach(function(client) {
@@ -292,7 +293,6 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     });
 }
-
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({ 
         type: 'init', 
@@ -311,6 +311,7 @@ wss.on('connection', function(ws) {
                 ws.send(JSON.stringify({ type: 'pong' }));
                 return;
             }
+
             if (msg.type === 'save_sub' && msg.sub) {
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub.endpoint === msg.sub.endpoint; });
                 if (idx !== -1) {
@@ -384,27 +385,49 @@ wss.on('connection', function(ws) {
             }
 
             if (msg.type === 'clear_alert') {
+                const now = new Date();
+                const tStr = msg.readTime || now.toLocaleTimeString().slice(0, 5);
+                const whoStr = msg.readBy || 'Просмотр';
+                const stamp = whoStr + ' ' + tStr;
+
                 if (Array.isArray(activeAlerts[msg.target])) {
-                    if (msg.notifId) {
-                        activeAlerts[msg.target] = activeAlerts[msg.target].filter(function(a) { return a.id !== msg.notifId; });
+                    if (msg.target === 'ВСЕМ') {
+                        activeAlerts[msg.target].forEach(function(a) {
+                            if (!msg.notifId || a.id === msg.notifId) {
+                                if (!Array.isArray(a.readList)) a.readList = new Array();
+                                if (a.readList.indexOf(whoStr) === -1) a.readList.push(whoStr);
+                            }
+                        });
                     } else {
-                        activeAlerts[msg.target].shift();
-                    }
-                    if (activeAlerts[msg.target].length === 0) {
-                        delete activeAlerts[msg.target];
+                        if (msg.notifId) {
+                            activeAlerts[msg.target] = activeAlerts[msg.target].filter(function(a) { return a.id !== msg.notifId; });
+                        } else {
+                            activeAlerts[msg.target].shift();
+                        }
+                        if (activeAlerts[msg.target].length === 0) {
+                            delete activeAlerts[msg.target];
+                        }
                     }
                 } else {
                     delete activeAlerts[msg.target];
                 }
 
+                let updatedReadBy = stamp;
                 let marked = false;
                 notificationsHistory.forEach(function(n) {
-                    if (msg.notifId && n.id === msg.notifId) {
+                    const match = (msg.notifId && n.id === msg.notifId) || (!msg.notifId && !marked && n.target === msg.target);
+                    if (match) {
                         n.read = true;
-                        n.readBy = msg.readBy || '';
-                    } else if (!msg.notifId && !marked && n.target === msg.target && !n.read) {
-                        n.read = true;
-                        n.readBy = msg.readBy || '';
+                        if (n.target === 'ВСЕМ') {
+                            if (!n.readBy) {
+                                n.readBy = stamp;
+                            } else if (n.readBy.indexOf(whoStr) === -1) {
+                                n.readBy = n.readBy + ', ' + stamp;
+                            }
+                        } else {
+                            n.readBy = stamp;
+                        }
+                        updatedReadBy = n.readBy;
                         marked = true;
                     }
                 });
@@ -416,7 +439,8 @@ wss.on('connection', function(ws) {
                             type: 'alert_cleared',
                             target: msg.target,
                             notifId: msg.notifId || null,
-                            readBy: msg.readBy || ''
+                            who: whoStr,
+                            readBy: updatedReadBy
                         }));
                     }
                 });
