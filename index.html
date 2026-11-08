@@ -703,28 +703,27 @@
         });
     }
 
-
-    
-
     function uploadMapPhoto() {
-        if (currentUser !== ADMIN_NAME) return;
+        if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
         const fileInput = document.getElementById('map-file-input');
         const targetSelect = document.getElementById('map-target-select');
         if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-            return alert('Выберите фотографию или карту на устройстве!');
+            return alert('Сначала выберите фотографию или карту!');
         }
-        const file = fileInput.files.at(0);
-        const target = targetSelect ? targetSelect.value : 'ВСЕМ';
+        const file = fileInput.files.item(0);
+        const target = (targetSelect && targetSelect.value) ? targetSelect.value : 'ВСЕМ';
         const reader = new FileReader();
 
         reader.onload = function(e) {
+            const rawDataUrl = e.target.result;
             const img = new Image();
+
             img.onload = function() {
                 const canvas = document.createElement('canvas');
-                const maxW = 1280;
-                const maxH = 1280;
-                let w = img.width;
-                let h = img.height;
+                const maxW = 800;
+                const maxH = 800;
+                let w = img.width || 600;
+                let h = img.height || 600;
                 if (w > maxW || h > maxH) {
                     if (w > h) { h = Math.round(h * (maxW / w)); w = maxW; }
                     else { w = Math.round(w * (maxH / h)); h = maxH; }
@@ -733,22 +732,48 @@
                 canvas.height = h;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, w, h);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                const finalDataUrl = canvas.toDataURL('image/jpeg', 0.65);
 
                 const now = new Date();
                 const timeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-                ws.send(JSON.stringify({
-                    type: 'upload_map',
+                const payloadObj = {
                     sender: currentUser,
                     color: userColor,
                     target: target,
                     time: timeStr,
-                    image: dataUrl
-                }));
-                fileInput.value = '';
+                    image: finalDataUrl
+                };
+
+                fetch('/upload-map', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payloadObj)
+                }).then(function(res) {
+                    if (res.ok) {
+                        fileInput.value = '';
+                    } else {
+                        alert('Ошибка отправки на сервер: ' + res.status);
+                    }
+                }).catch(function() {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'upload_map',
+                            sender: currentUser,
+                            color: userColor,
+                            target: target,
+                            time: timeStr,
+                            image: finalDataUrl
+                        }));
+                        fileInput.value = '';
+                    } else {
+                        alert('Нет соединения с сервером!');
+                    }
+                });
             };
-            img.src = e.target.result;
+
+            img.src = rawDataUrl;
         };
+
         reader.readAsDataURL(file);
     }
 
@@ -799,6 +824,7 @@
         if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
         return Array.of(raw);
     }
+
     function connectWS() {
         if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
         ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
