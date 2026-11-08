@@ -553,7 +553,8 @@
             box.style.display = (box.style.display === 'block') ? 'none' : 'block';
         } else {
             if (activeStream && activeStream.active && activeStream.url) {
-                openActiveStreamWindow();
+                const uBox = document.getElementById('user-stream-box');
+                uBox.style.display = (uBox.style.display === 'block') ? 'none' : 'block';
             } else {
                 alert('Видеострим сейчас не запущен администратором.');
             }
@@ -562,12 +563,7 @@
 
     function openStreamInAppPage(url) {
         if (!url) return;
-        const page = document.getElementById('stream-page');
-        const iframe = document.getElementById('stream-iframe');
-        if (page && iframe) {
-            iframe.src = url;
-            page.style.display = 'flex';
-        }
+        window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
     }
 
     function closeStreamPage() {
@@ -579,12 +575,12 @@
 
     function openStreamExternalFallback() {
         const url = (activeStream && activeStream.url) ? activeStream.url : document.getElementById('stream-url-input').value.trim();
-        if (url) window.location.href = url;
+        if (url) window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
     }
 
     function openActiveStreamWindow() {
         if (activeStream && activeStream.url) {
-            openStreamInAppPage(activeStream.url);
+            window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
         }
     }
 
@@ -601,7 +597,7 @@
             color: userColor,
             time: timeString
         }));
-        openStreamInAppPage(url);
+        window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
     }
 
     function stopVideoStream() {
@@ -637,6 +633,7 @@
             if (viewerPanel) viewerPanel.style.display = 'none';
         }
     }
+
     function toggleMapsSection() {
         const box = document.getElementById('maps-section-box');
         if (!box) return;
