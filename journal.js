@@ -43,6 +43,7 @@ const COLUMNS_CONFIG = [
     ]},
     { label: "ПРИМЕЧАНИЯ", options: new Array() }
 ];
+
 let ws = null;
 let currentUser = null;
 let currentCallsign = "";
@@ -51,6 +52,7 @@ let myPermissions = { row: false, stream: false, maps: false, archive: false, ta
 let selectedSoundId = localStorage.getItem('msb_sound_id') || 'alarm1';
 let myMessengerFriends = new Array();
 let allUsersAvatars = {};
+let lastTargetOptionsSig = "";
 let currentAlertId = null;
 let currentAlertText = "";
 let currentAlertTarget = "";
@@ -70,7 +72,6 @@ let keepAliveAudio = null;
 let sirenAudio = null;
 let publicVapidKey = null;
 let deferredPrompt = null;
-
 function getStaticDateTime() {
     const d = new Date();
     const dd = String(d.getDate()).padStart(2, '0');
@@ -110,6 +111,7 @@ function runSplash() {
         }
     }, 200);
 }
+
 window.addEventListener('beforeinstallprompt', function(e) {
     e.preventDefault();
     deferredPrompt = e;
@@ -172,7 +174,6 @@ async function subscribeToWebPush() {
         }
     } catch (e) { console.error('Push error:', e); }
 }
-
 function sendLocalNotification(target, text, sender) {
     const fromWho = sender || 'АДМИН';
     const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -190,6 +191,7 @@ function sendLocalNotification(target, text, sender) {
         });
     }
 }
+
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
@@ -245,6 +247,7 @@ function updateLockScreenAlert(target, text, sender) {
         });
     }
 }
+
 const SOUND_PRESETS = [
     { id: 'alarm1', name: '🚨 Тревога 1 (Сирена МСБ — стандарт)', type: 'alarm' },
     { id: 'alarm2', name: '🚨 Тревога 2 (Двойной радарный импульс)', type: 'alarm' },
@@ -276,7 +279,6 @@ function playToneNotes(notes, waveType) {
         });
     } catch (e) {}
 }
-
 function playSoundById(soundId, isPreview) {
     const id = soundId || selectedSoundId || 'alarm1';
     try {
@@ -368,6 +370,7 @@ function closeSoundModal() {
     const modal = document.getElementById('sound-modal');
     if (modal) modal.style.display = 'none';
 }
+
 function handleStreamBtnClick() {
     if (currentUser === ADMIN_NAME) {
         const box = document.getElementById('admin-stream-box');
@@ -463,6 +466,7 @@ function isMapVisibleForMe(m) {
     if (currentUser && (m.target === currentUser || m.sender === currentUser)) return true;
     return false;
 }
+
 let photoZoom = 1, photoPanX = 0, photoPanY = 0, isDraggingPhoto = false, dragStartX = 0, dragStartY = 0, zoomEventsBound = false;
 
 function applyPhotoTransform() {
@@ -519,6 +523,7 @@ function closePhotoLightbox() {
     const lb = document.getElementById('photo-lightbox');
     if (lb) lb.style.display = 'none';
 }
+
 function renderMapsGrid() {
     const grid = document.getElementById('maps-tiles-grid');
     if (!grid) return;
@@ -544,7 +549,6 @@ function fetchMapsFromServer() {
         .then(function(list) { if (Array.isArray(list)) { allMaps = list; renderMapsGrid(); } })
         .catch(function() {});
 }
-
 function uploadMapPhoto() {
     if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
     const fileInput = document.getElementById('map-file-input');
@@ -585,6 +589,7 @@ function uploadMapPhoto() {
     };
     reader.readAsDataURL(file);
 }
+
 const MONTH_NAMES = Array.of("ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ", "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ");
 
 function formatIsoDate(y, m, d) {
@@ -744,6 +749,7 @@ function getAlertsQueue(target) {
     if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
     return Array.of(raw);
 }
+
 function connectWS() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
@@ -821,7 +827,7 @@ function connectWS() {
 
 setInterval(function() {
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ping' }));
+        ws.send(JSON.stringify({ type: 'ping', user: currentUser || '', callsign: currentCallsign || '' }));
     } else {
         connectWS();
     }
@@ -870,45 +876,40 @@ function populateTargetSelect() {
     const miniSelect = document.getElementById('mini-notif-target');
     const mapSelect = document.getElementById('map-target-select');
 
-    [adminSelect, miniSelect].forEach(function(sel) {
-        if (!sel) return;
-        // Запоминаем текущий выбор, чтобы он НЕ сбрасывался каждые 2 секунды
-        const prevVal = sel.value;
-        sel.innerHTML = '';
+    const onlyFriends = myMessengerFriends.filter(function(f) { return f && !f.isGroup; });
+    const sigParts = Array.of(currentUser || '');
+    onlyFriends.forEach(function(f) {
+        sigParts.push(f.name + ':' + (f.online ? '1' : '0') + ':' + (f.unit || ''));
+    });
+    const newSig = sigParts.join('|');
 
-        // 1. Опция "ВСЕМ" теперь доступна ВСЕМ подразделениям и позывным
-        let optAll = document.createElement('option');
-        optAll.value = "ВСЕМ";
-        optAll.innerText = "📢 ВСЕМ";
-        sel.appendChild(optAll);
+    if (newSig !== lastTargetOptionsSig) {
+        lastTargetOptionsSig = newSig;
+        Array.of(adminSelect, miniSelect).forEach(function(sel) {
+            if (!sel) return;
+            const prevVal = sel.value;
+            sel.innerHTML = '';
 
-        // 2. Все подразделения (чтобы все могли писать друг другу напрямую)
-        USERS_CONFIG.forEach(function(u) {
-            if (u.name !== currentUser) {
-                let optU = document.createElement('option');
-                optU.value = u.name;
-                optU.innerText = "🛡️ " + u.name;
-                sel.appendChild(optU);
+            let optAll = document.createElement('option');
+            optAll.value = "ВСЕМ";
+            optAll.innerText = "📢 ВСЕМ";
+            sel.appendChild(optAll);
+
+            onlyFriends.forEach(function(f) {
+                let opt = document.createElement('option');
+                opt.value = f.name;
+                const dot = f.online ? "🟢 " : "⚫ ";
+                opt.innerText = dot + f.name + (f.unit ? " (" + f.unit + ")" : "");
+                sel.appendChild(opt);
+            });
+
+            if (prevVal && Array.from(sel.options).some(function(o) { return o.value === prevVal; })) {
+                sel.value = prevVal;
             }
         });
+    }
 
-        // 3. Друзья из Мессенджера
-        const onlyFriends = myMessengerFriends.filter(function(f) { return !f.isGroup; });
-        onlyFriends.forEach(function(f) {
-            let opt = document.createElement('option');
-            opt.value = f.name;
-            opt.innerText = "👤 Друг: " + f.name + (f.unit ? " [" + f.unit + "]" : "");
-            sel.appendChild(opt);
-        });
-
-        // Восстанавливаем выбранное значение, если оно есть в списке
-        if (prevVal && Array.from(sel.options).some(function(o) { return o.value === prevVal; })) {
-            sel.value = prevVal;
-        }
-    });
-
-    if (mapSelect) {
-        const prevMapVal = mapSelect.value;
+    if (mapSelect && mapSelect.options.length === 0) {
         mapSelect.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ</option>';
         USERS_CONFIG.forEach(function(u) {
             if (u.name !== currentUser) {
@@ -917,9 +918,6 @@ function populateTargetSelect() {
                 mapSelect.appendChild(opt);
             }
         });
-        if (prevMapVal && Array.from(mapSelect.options).some(function(o) { return o.value === prevMapVal; })) {
-            mapSelect.value = prevMapVal;
-        }
     }
 }
 
@@ -956,10 +954,13 @@ function applyUserUI() {
     const badge = document.getElementById('my-callsign-badge');
     if (badge) badge.innerText = currentCallsign ? ('[' + currentCallsign + ']') : '';
 
-    document.getElementById('admin-zone').style.display = 'block';
+    const az = document.getElementById('admin-zone');
+    if (az) az.style.display = 'none';
+
     const miniBar = document.getElementById('mini-notif-reply-bar');
     if (miniBar) miniBar.style.display = 'flex';
 
+    lastTargetOptionsSig = "";
     applyPermissionsUI();
     populateTargetSelect();
     renderNotificationsWindow();
@@ -967,12 +968,10 @@ function applyUserUI() {
     updateStreamUI();
 
     if (currentUser === ADMIN_NAME) {
-        document.getElementById('clear-history-box').style.display = 'block';
         document.getElementById('admin-maps-upload').style.display = 'block';
         document.getElementById('admin-users-btn').style.display = 'inline-block';
         fetchAdminUsersList();
     } else {
-        document.getElementById('clear-history-box').style.display = 'none';
         document.getElementById('admin-stream-box').style.display = 'none';
         document.getElementById('admin-maps-upload').style.display = 'none';
         document.getElementById('admin-users-btn').style.display = 'none';
@@ -1155,7 +1154,6 @@ function attemptLogin() {
         errEl.style.display = 'block';
     });
 }
-
 function completeLoginSuccess(unitName, callsign, color) {
     hideAuthMessages();
     currentUser = unitName;
@@ -1170,6 +1168,7 @@ function completeLoginSuccess(unitName, callsign, color) {
     subscribeToWebPush();
     checkAndShowAlerts(false);
 }
+
 function openAdminUsersModal() {
     if (currentUser !== ADMIN_NAME) return;
     document.getElementById('admin-users-modal').style.display = 'flex';
@@ -1260,7 +1259,7 @@ function loginAsViewer() {
 function sendAdminAlert() {
     if (!currentUser) return;
     const target = document.getElementById('admin-target').value;
-    if (!target) return alert("Сначала добавьте друга в Мессенджере!");
+    if (!target) return alert("Выберите получателя!");
     const msg = document.getElementById('admin-msg').value.trim();
     if (!msg) return alert("Напишите текст!");
     const senderLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
@@ -1278,7 +1277,7 @@ function sendAdminAlert() {
 function sendMiniNotification() {
     if (!currentUser) return alert("Войдите в систему, чтобы отправлять сообщения!");
     const target = document.getElementById('mini-notif-target').value;
-    if (!target) return alert("Сначала добавьте друга в Мессенджере!");
+    if (!target) return alert("Выберите получателя!");
     const input = document.getElementById('mini-notif-input');
     const msg = input.value.trim();
     if (!msg) return;
@@ -1365,16 +1364,9 @@ function confirmAlert() {
     stopAlertVisuals();
 
     if (targetToClear) {
-        ws.send(JSON.stringify({
-            type: 'clear_alert',
-            target: targetToClear,
-            notifId: idToClear,
-            readBy: whoConfirmed,
-            readTime: readTime
-        }));
+        ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
     }
 
-    // Если уведомление пришло из Мессенджера — сразу открываем Мессенджер и чат с отправителем
     const isFromMessenger =
         alertTextCopy.indexOf('💬 Мессенджер:') === 0 ||
         alertTextCopy.indexOf('🎙️ Голосовое сообщение в Мессенджере') === 0 ||
@@ -1408,7 +1400,7 @@ function submitRow() {
 function appendRow(row) {
     if (row.values && row.values.at(0)) {
         const firstCol = String(row.values.at(0));
-        if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) return;
+        if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕН") !== -1) return;
     }
     const tbody = document.getElementById('table-body');
     const tr = document.createElement('tr');
