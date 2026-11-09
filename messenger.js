@@ -4,16 +4,14 @@ let currentRoomId = null;
 let isCurrentGroup = false;
 let friendsList = new Array();
 let friendRequests = new Array();
-let lastFriendsHash = '';
-let lastRequestsHash = '';
 let updateInterval = null;
+let lastMessagesCount = -1;
 let renderedMsgIds = new Set();
 let audioRecorder = null;
 let videoRecorder = null;
 let audioChunks = new Array();
 let videoChunks = new Array();
 let videoStreamRef = null;
-window.onlineUsersMap = {};
 
 let activeMessageId = null;
 let activeMessageText = null;
@@ -35,7 +33,7 @@ function getActiveChatIdentity() {
 }
 
 function makeDirectRoomId(u1, u2) {
-    const sorted = Array.of(String(u1 || '').toLowerCase(), String(u2 || '').toLowerCase()).sort();
+    const sorted = Array.of(String(u1 || '').trim().toLowerCase(), String(u2 || '').trim().toLowerCase()).sort();
     const pair = sorted.join(',');
     return pair + '_' + pair;
 }
@@ -83,7 +81,7 @@ function openMessengerWindow(targetPartnerName) {
                 cleanName = cleanName.substring(openIdx + 1, closeIdx).trim();
             }
             const foundFriend = friendsList.find(function(f) {
-                return f && !f.isGroup && String(f.name || '').toLowerCase() === cleanName.toLowerCase();
+                return f && !f.isGroup && String(f.name || '').trim().toLowerCase() === cleanName.toLowerCase();
             });
             if (foundFriend) {
                 selectChat(foundFriend);
@@ -105,15 +103,13 @@ function closeMessengerWindow() {
     });
 }
 window.closeMessengerWindow = closeMessengerWindow;
-function renderAvatarElement(el, name, avatarDataUrl, isOnline) {
+function renderAvatarElement(el, name, avatarDataUrl) {
     if (!el) return;
-    const dotHTML = (typeof isOnline === 'boolean')
-        ? ('<span class="online-dot ' + (isOnline ? 'online' : 'offline') + '"></span>')
-        : '';
     if (avatarDataUrl) {
-        el.innerHTML = '<img src="' + avatarDataUrl + '" alt="av">' + dotHTML;
+        el.innerHTML = '<img src="' + avatarDataUrl + '" alt="av">';
     } else {
-        el.innerHTML = ((name || '?').substring(0, 2).toUpperCase()) + dotHTML;
+        el.innerHTML = '';
+        el.textContent = (name || '?').substring(0, 2).toUpperCase();
     }
 }
 
@@ -138,8 +134,7 @@ function uploadMyAvatar(inputEl) {
                 body: JSON.stringify({ user: chatUser, avatar: dataUrl })
             }).then(function() {
                 if (typeof allUsersAvatars !== 'undefined') allUsersAvatars[chatUser.toLowerCase()] = dataUrl;
-                renderAvatarElement(document.getElementById('my-avatar'), chatUser, dataUrl, true);
-                lastFriendsHash = '';
+                renderAvatarElement(document.getElementById('my-avatar'), chatUser, dataUrl);
                 loadFriendsAndRequests();
             });
         };
@@ -156,70 +151,36 @@ document.addEventListener('DOMContentLoaded', function() {
     syncMessengerAuth();
 });
 
-function updatePartnerHeaderOnlineStatus() {
-    const st = document.getElementById('chat-status');
-    if (!st || !currentPartner) return;
-    if (isCurrentGroup) {
-        st.textContent = "👥 конференция";
-        st.style.color = "#38bdf8";
-        return;
-    }
-    const found = friendsList.find(function(f) { return !f.isGroup && f.name.toLowerCase() === currentPartner.toLowerCase(); });
-    const isOn = found ? Boolean(found.online) : Boolean(window.onlineUsersMap[currentPartner.toLowerCase()]);
-    st.textContent = isOn ? "🟢 в сети" : "⚫ не в сети";
-    st.style.color = isOn ? "#22c55e" : "#94a3b8";
-}
-
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
-    const uUnit = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : '';
-    fetch('/api/online?user=' + encodeURIComponent(chatUser) + '&unit=' + encodeURIComponent(uUnit))
-        .then(function(r) { return r.json(); })
-        .then(function(map) {
-            if (map && typeof map === 'object') {
-                window.onlineUsersMap = map;
-                if (typeof populateTargetSelect === 'function') populateTargetSelect();
-            }
-        }).catch(function() {});
-
-    fetch('/api/friends/get?user=' + encodeURIComponent(chatUser) + '&unit=' + encodeURIComponent(uUnit))
+    fetch('/api/friends/get?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (Array.isArray(data)) {
                 friendsList = data;
                 if (typeof myMessengerFriends !== 'undefined') myMessengerFriends = data;
                 if (typeof populateTargetSelect === 'function') populateTargetSelect();
-                const newHash = JSON.stringify(data) + '|' + (currentRoomId || '');
-                if (newHash !== lastFriendsHash) {
-                    lastFriendsHash = newHash;
-                    renderFriends();
-                }
-                updatePartnerHeaderOnlineStatus();
+                renderFriends();
                 updateTotalUnreadBadge();
             }
         }).catch(function() {});
-
-    fetch('/api/friends/requests?user=' + encodeURIComponent(chatUser))
+    fetch('/api/friends/requests?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (Array.isArray(data)) {
                 friendRequests = data;
-                const rHash = JSON.stringify(data);
-                if (rHash !== lastRequestsHash) {
-                    lastRequestsHash = rHash;
-                    renderRequests();
-                }
+                renderRequests();
                 updateTotalUnreadBadge();
             }
         }).catch(function() {});
-
-    fetch('/api/user/me?user=' + encodeURIComponent(chatUser))
+    fetch('/api/user/me?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            if (d && d.avatar) renderAvatarElement(document.getElementById('my-avatar'), chatUser, d.avatar, true);
+            if (d && d.avatar) renderAvatarElement(document.getElementById('my-avatar'), chatUser, d.avatar);
         }).catch(function() {});
 }
+
 function renderRequests() {
     const box = document.getElementById('requests-box');
     if (!box) return;
@@ -235,14 +196,13 @@ function renderRequests() {
         box.appendChild(item);
     });
 }
-
 function renderFriends() {
     chatUser = getActiveChatIdentity();
     const box = document.getElementById('friends-box');
     if (!box || !chatUser) return;
     box.innerHTML = '';
     if (friendsList.length === 0) {
-        box.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Список контактов пуст</div>';
+        box.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Список друзей пуст</div>';
         return;
     }
     friendsList.forEach(function(friend) {
@@ -254,14 +214,12 @@ function renderFriends() {
         const badgeHTML = (friend.unread > 0 && !isActive) ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
         const timeHTML = friend.time ? ('<div class="friend-time-label">' + friend.time + '</div>') : '';
         const unitTag = (!friend.isGroup && friend.unit) ? (' <span style="color:#38bdf8;font-size:12px;">(' + friend.unit + ')</span>') : '';
-        const isOn = Boolean(friend.online);
-        const statusDotText = !friend.isGroup ? ('<span style="font-size:11px; margin-left:6px; color:' + (isOn ? '#22c55e' : '#64748b') + ';">● ' + (isOn ? 'в сети' : 'не в сети') + '</span>') : '';
-        const displayName = (friend.isGroup ? ('👥 ' + friend.name) : friend.name) + unitTag + statusDotText;
-        const dotEl = !friend.isGroup ? ('<span class="online-dot ' + (isOn ? 'online' : 'offline') + '"></span>') : '';
-        const avInner = (friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : friend.name.substring(0, 2).toUpperCase()) + dotEl;
-        const friendDataEscaped = JSON.stringify({ id: friend.id, name: friend.name, isGroup: friend.isGroup }).replace(/"/g, '&quot;');
+        const statusDot = friend.isGroup ? '👥 ' : (friend.online ? '🟢 ' : '⚫ ');
+        const displayName = statusDot + friend.name + unitTag;
+        const avInner = friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : friend.name.substring(0, 2).toUpperCase();
+        const friendDataEscaped = JSON.stringify({ id: friend.id, name: friend.name, isGroup: friend.isGroup, avatar: friend.avatar || '', online: Boolean(friend.online) }).replace(/"/g, '&quot;');
         const delBtnHTML = '<button class="delete-friend-btn" onclick="deleteFriend(' + friendDataEscaped + ', event)">&times;</button>';
-        item.innerHTML = '<div class="friend-info"><div class="avatar" style="width:40px; height:40px; font-size:13px;">' + avInner + '</div>' +
+        item.innerHTML = '<div class="friend-info"><div class="avatar" style="width:38px; height:38px; font-size:13px;">' + avInner + '</div>' +
             '<div class="friend-meta"><div class="friend-name">' + displayName + '</div><div class="friend-last-msg">' + friend.lastMessage + '</div></div>' +
             '<div class="friend-status-box">' + timeHTML + badgeHTML + '</div></div>' + delBtnHTML;
         box.appendChild(item);
@@ -286,7 +244,7 @@ function submitCreateGroup() {
     })
     .then(function(res) { return res.json(); })
     .then(function(data) {
-        if (data.success) { nameInput.value = ''; membersInput.value = ''; closeGroupModal(); lastFriendsHash = ''; loadFriendsAndRequests(); }
+        if (data.success) { nameInput.value = ''; membersInput.value = ''; closeGroupModal(); loadFriendsAndRequests(); }
     });
 }
 
@@ -301,7 +259,7 @@ function deleteFriend(friendObj, event) {
             body: JSON.stringify({ groupId: friendObj.id })
         }).then(function() {
             if (isCurrentGroup && currentRoomId === friendObj.id) resetChatArea();
-            lastFriendsHash = ''; loadFriendsAndRequests();
+            loadFriendsAndRequests();
         });
         return;
     }
@@ -312,12 +270,12 @@ function deleteFriend(friendObj, event) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: chatUser, friends: cleanNames })
-    }).then(function() { lastFriendsHash = ''; loadFriendsAndRequests(); });
+    }).then(function() { loadFriendsAndRequests(); });
 }
 
 function resetChatArea() {
     currentPartner = null; currentRoomId = null; isCurrentGroup = false; cancelReply();
-    renderedMsgIds.clear();
+    lastMessagesCount = -1; renderedMsgIds.clear();
     document.getElementById('partner-display-name').textContent = "Чат не выбран";
     document.getElementById('chat-status').style.display = "none";
     document.getElementById('text-input').setAttribute('disabled', 'true');
@@ -328,16 +286,22 @@ function resetChatArea() {
 
 function selectChat(itemObj) {
     chatUser = getActiveChatIdentity();
+    const stEl = document.getElementById('chat-status');
     if (itemObj.isGroup) {
         currentPartner = itemObj.name; currentRoomId = itemObj.id; isCurrentGroup = true;
+        if (stEl) { stEl.textContent = "👥 конференция"; stEl.style.color = "#38bdf8"; }
     } else {
         currentPartner = itemObj.name; isCurrentGroup = false;
         currentRoomId = makeDirectRoomId(chatUser, currentPartner);
+        if (stEl) {
+            stEl.textContent = itemObj.online ? "🟢 в сети" : "⚫ не в сети";
+            stEl.style.color = itemObj.online ? "#4ade80" : "#94a3b8";
+        }
     }
     document.getElementById('partner-display-name').textContent = currentPartner;
-    renderAvatarElement(document.getElementById('partner-avatar'), currentPartner, itemObj.avatar, !itemObj.isGroup ? Boolean(itemObj.online) : undefined);
-    document.getElementById('chat-status').style.display = "block";
-    updatePartnerHeaderOnlineStatus();
+    renderAvatarElement(document.getElementById('partner-avatar'), currentPartner, itemObj.avatar);
+    if (stEl) stEl.style.display = "block";
+    lastMessagesCount = -1;
     renderedMsgIds.clear();
     cancelReply();
     document.getElementById('text-input').removeAttribute('disabled');
@@ -345,10 +309,7 @@ function selectChat(itemObj) {
     if (window.innerWidth < 768) document.getElementById('app-sidebar').classList.add('hidden');
     const mDiv = getMessagesDiv();
     if (mDiv) mDiv.innerHTML = '';
-    markChatAsRead(currentRoomId);
-    fetchMessages();
-    lastFriendsHash = '';
-    renderFriends();
+    markChatAsRead(currentRoomId); fetchMessages(); renderFriends();
 }
 
 function closeChatMobile() { document.getElementById('app-sidebar').classList.remove('hidden'); }
@@ -385,7 +346,7 @@ function toggleVoiceRecord() {
                 const formData = new FormData();
                 formData.append('sender', chatUser); formData.append('room', currentRoomId); formData.append('type', 'audio'); formData.append('media', blob, 'voice.' + ext);
                 if (quotedMessageId) { formData.append('quoteId', quotedMessageId); formData.append('quoteText', quotedMessageText); formData.append('quoteSender', quotedMessageSender); cancelReply(); }
-                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎙️"; fetchMessages(); }).catch(function() { btn.textContent = "🎙️"; });
+                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎙️"; lastMessagesCount = -1; fetchMessages(); }).catch(function() { btn.textContent = "🎙️"; });
                 stream.getTracks().forEach(function(track) { track.stop(); });
             };
             audioRecorder.start(400); btn.classList.add('recording'); btn.textContent = "🛑";
@@ -422,7 +383,7 @@ function toggleVideoRecord() {
                 const formData = new FormData();
                 formData.append('sender', chatUser); formData.append('room', currentRoomId); formData.append('type', 'video'); formData.append('media', blob, 'video.' + fileExt);
                 if (quotedMessageId) { formData.append('quoteId', quotedMessageId); formData.append('quoteText', quotedMessageText); formData.append('quoteSender', quotedMessageSender); cancelReply(); }
-                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎥"; fetchMessages(); }).catch(function() { btn.textContent = "🎥"; });
+                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎥"; lastMessagesCount = -1; fetchMessages(); }).catch(function() { btn.textContent = "🎥"; });
                 if (videoStreamRef) videoStreamRef.getTracks().forEach(function(t) { t.stop(); });
             };
             videoRecorder.start(400); btn.classList.add('recording'); btn.textContent = "🛑";
@@ -446,7 +407,7 @@ function uploadAnyFile(inputElement) {
         cancelReply();
     }
     fetch('/api/send', { method: 'POST', body: formData })
-        .then(function() { inputElement.value = ''; fetchMessages(); })
+        .then(function() { inputElement.value = ''; lastMessagesCount = -1; fetchMessages(); })
         .catch(function() { alert("Ошибка отправки файла!"); });
 }
 
@@ -468,6 +429,7 @@ function sendMessage() {
     }
     fetch('/api/send', { method: 'POST', body: formData }).then(function() {
         textInput.value = '';
+        lastMessagesCount = -1;
         fetchMessages();
     });
 }
@@ -512,6 +474,7 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
         currentX = 0;
     });
 }
+
 function handleQuoteTrigger(id, text, sender) {
     quotedMessageId = id; quotedMessageText = text; quotedMessageSender = sender;
     const bar = document.getElementById('reply-bar');
@@ -586,11 +549,14 @@ function fetchMessages() {
     chatUser = getActiveChatIdentity();
     const mDiv = getMessagesDiv();
     if (!chatUser || !currentRoomId || !mDiv) return;
-    fetch('/api/messages?room=' + encodeURIComponent(currentRoomId) + '&user=' + encodeURIComponent(chatUser))
+    const modal = document.getElementById('messenger-modal');
+    const isModalOpen = modal && modal.style.display === 'flex';
+
+    fetch('/api/messages?room=' + encodeURIComponent(currentRoomId) + '&user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
     .then(function(res) { return res.json(); })
     .then(function(resp) {
         const data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
-        const partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : true;
+        const partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
 
         if (!isCurrentGroup && currentPartner) {
             const stEl = document.getElementById('chat-status');
@@ -602,9 +568,11 @@ function fetchMessages() {
         }
 
         if (data.length === 0) {
-            renderedMsgIds.clear();
-            lastMessagesCount = 0;
-            mDiv.innerHTML = '<div class="chat-placeholder">История сообщений пуста.</div>';
+            if (lastMessagesCount !== 0) {
+                renderedMsgIds.clear();
+                lastMessagesCount = 0;
+                mDiv.innerHTML = '<div class="chat-placeholder">История сообщений пуста.</div>';
+            }
             return;
         }
 
@@ -621,12 +589,16 @@ function fetchMessages() {
         });
 
         let addedNew = false;
+        let hasUnreadIncoming = false;
+
         data.forEach(function(msg) {
-            const isMy = msg.sender.toLowerCase() === chatUser.toLowerCase();
+            const isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
+            if (!isMy && !msg.read) hasUnreadIncoming = true;
+
             const checkIcon = isMy
                 ? (msg.read
-                    ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:4px;" title="Прочитано">✓✓</span>'
-                    : ' <span class="msg-check" style="color:rgba(255,255,255,0.65);font-weight:bold;margin-left:4px;" title="Доставлено">✓</span>')
+                    ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;" title="Прочитано">✓✓</span>'
+                    : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;" title="Доставлено">✓</span>')
                 : '';
 
             if (renderedMsgIds.has(msg.id)) {
@@ -679,7 +651,7 @@ function fetchMessages() {
         if (addedNew) {
             setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 50);
         }
-        if (data.length > 0 && currentPartner) {
+        if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) {
             fetch('/api/messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: chatUser, room: currentRoomId }) });
         }
     }).catch(function() {});
