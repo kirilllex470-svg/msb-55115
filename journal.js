@@ -792,6 +792,7 @@ function populateTargetSelect() {
         }
     }
 }
+
 function applyPermissionsUI() {
     const isAdmin = (currentUser === ADMIN_NAME);
     const canRow = isAdmin || (myPermissions && myPermissions.row);
@@ -816,7 +817,6 @@ function applyPermissionsUI() {
     if (notifArchBtn) notifArchBtn.style.display = canArchive ? 'inline-block' : 'none';
     if (tableSection) tableSection.style.display = canTable ? 'block' : 'none';
 }
-
 function applyUserUI() {
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('input-panel').style.display = 'block';
@@ -877,7 +877,8 @@ function initApp() {
             regSelect.appendChild(optR);
         }
     });
-
+}
+function setupTableHeadersAndInputs() {
     const headerRow = document.getElementById('table-headers');
     const archHeaderRow = document.getElementById('archive-table-headers');
     const inputContainer = document.getElementById('dynamic-inputs');
@@ -913,6 +914,15 @@ function initApp() {
     }
     connectWS();
 }
+
+function initApp() {
+    const savedUser = localStorage.getItem('journal_user');
+    const savedCall = localStorage.getItem('journal_callsign');
+    const savedColor = localStorage.getItem('journal_color');
+    
+    // Перемещено наполнение списков и структуры в отдельную подфункцию для деления лимита
+    setupTableHeadersAndInputs();
+}
 initApp();
 
 function hideAuthMessages() {
@@ -928,7 +938,6 @@ function openRegisterModal() {
 function closeRegisterModal() {
     document.getElementById('register-modal').style.display = 'none';
 }
-
 function submitRegistration() {
     const unit = document.getElementById('reg-unit-select').value;
     const callsign = document.getElementById('reg-callsign').value.trim();
@@ -959,6 +968,7 @@ function submitRegistration() {
         }
     });
 }
+
 function refreshMyPermissionsFromServer() {
     if (!currentCallsign) return;
     if (currentUser === ADMIN_NAME) {
@@ -989,7 +999,6 @@ function attemptLogin() {
         errEl.style.display = 'block';
         return;
     }
-
     if (unitObj.name === ADMIN_NAME && pass === "551150000" && (!callsignInput || callsignInput.toLowerCase() === "муравей")) {
         myPermissions = { row: true, stream: true, maps: true, archive: true, table: true };
         completeLoginSuccess(ADMIN_NAME, "муравей", unitObj.color);
@@ -1022,6 +1031,7 @@ function attemptLogin() {
         errEl.style.display = 'block';
     });
 }
+
 function completeLoginSuccess(unitName, callsign, color) {
     hideAuthMessages();
     currentUser = unitName;
@@ -1042,7 +1052,6 @@ function openAdminUsersModal() {
     document.getElementById('admin-users-modal').style.display = 'flex';
     fetchAdminUsersList();
 }
-
 function closeAdminUsersModal() {
     document.getElementById('admin-users-modal').style.display = 'none';
 }
@@ -1058,6 +1067,7 @@ function renderPermCheckboxes(u) {
         '<label class="perm-chip"><input type="checkbox" ' + (p.archive ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'archive\', this.checked)"> 🗂️ Архив</label>' +
     '</div>';
 }
+
 function fetchAdminUsersList() {
     if (currentUser !== ADMIN_NAME) return;
     fetch('/api/admin/users?t=' + Date.now())
@@ -1097,7 +1107,6 @@ function toggleUserPerm(userKey, permName, val) {
         body: JSON.stringify({ key: userKey, action: 'set_perm', permName: permName, permVal: val })
     });
 }
-
 function adminUserAction(userKey, action) {
     fetch('/api/admin/users/action', {
         method: 'POST',
@@ -1113,6 +1122,7 @@ function logoutUser() {
     localStorage.removeItem('chat_username');
     location.reload();
 }
+
 function loginAsViewer() {
     unlockMobileFeatures();
     document.getElementById('login-overlay').style.display = 'none';
