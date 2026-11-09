@@ -246,3 +246,75 @@ th { background: #1e293b; color: #94a3b8; }
     .chat-image { max-width: 65vw; max-height: 210px; }
 }
 @media (max-width: 480px) { .inputs-grid, .maps-grid { grid-template-columns: 1fr; } }
+/* Полное скрытие красного блока Управление и связь */
+#admin-zone { display: none !important; }
+
+/* Красивый список контактов без моргания и цветные точки онлайна */
+.friend-item {
+    background: linear-gradient(145deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.75));
+    border: 1px solid rgba(56, 189, 248, 0.12);
+    border-radius: 14px;
+    margin-bottom: 6px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.friend-item:hover {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(56, 189, 248, 0.35);
+}
+.friend-item.active {
+    background: linear-gradient(135deg, rgba(0, 168, 132, 0.22), rgba(2, 132, 199, 0.18));
+    border: 1px solid #00ca9e;
+    box-shadow: 0 4px 14px rgba(0, 168, 132, 0.2);
+}
+.avatar { position: relative; }
+.online-dot {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid #0f172a;
+    box-sizing: border-box;
+    z-index: 3;
+}
+.online-dot.online {
+    background: #22c55e;
+    box-shadow: 0 0 8px #22c55e;
+}
+.online-dot.offline {
+    background: #64748b;
+}
+
+/* Галочки доставлено ✓ и прочитано ✓✓ */
+.msg-ticks {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    color: rgba(255, 255, 255, 0.65);
+}
+.msg-ticks.read {
+    color: #38bdf8;
+    text-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+}
+
+/* Красивый выпадающий список кому писать */
+.friends-nice-select {
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    color: #f8fafc;
+    border: 1px solid #38bdf8;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 14px;
+    outline: none;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+    cursor: pointer;
+}
+.friends-nice-select option {
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 8px;
+}
