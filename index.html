@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -12,109 +12,7 @@
     <link rel="icon" type="image/png" href="/icon-192.png">
     <link rel="apple-touch-icon" href="/icon-192.png">
     <title>МСБ55115</title>
-    <style>
-        :root { --bg: #0f172a; --panel: #1e293b; --accent: #3b82f6; --text: #f1f5f9; --border: #334155; --danger: #ef4444; }
-        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monospace; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; }
-        #splash-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 200000; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; transition: opacity 0.5s ease; }
-        .splash-card { width: 100%; max-width: 440px; text-align: center; background: #1e293b; border: 2px solid #3b82f6; border-radius: 16px; padding: 25px 20px; box-shadow: 0 0 40px rgba(59, 130, 246, 0.3); box-sizing: border-box; }
-        .splash-title { font-size: 30px; font-weight: 900; letter-spacing: 2px; color: #f8fafc; margin: 0 0 16px 0; text-shadow: 0 0 10px rgba(59, 130, 246, 0.8); }
-        .progress-track { width: 100%; height: 16px; background: #090d16; border: 1px solid #3b82f6; border-radius: 999px; overflow: hidden; position: relative; }
-        .progress-fill { width: 0%; height: 100%; background: #3b82f6; border-radius: 999px; transition: width 0.2s linear; }
-        .splash-percent { margin-top: 10px; font-size: 15px; font-weight: bold; color: #38bdf8; font-family: monospace; }
-        .splash-file-box { margin-top: 12px; background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; }
-        .splash-file-name { color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .splash-file-tag { color: #22c55e; font-weight: bold; flex-shrink: 0; }
-        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.98); z-index: 100; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
-        .login-box { background: var(--panel); padding: 40px; border-radius: 16px; border: 1px solid var(--border); width: 100%; max-width: 320px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.7); box-sizing: border-box; }
-        .login-box select, .login-box input { width: 100%; padding: 14px; margin-bottom: 20px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
-        .login-box button { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .login-box button:hover { background: #2563eb; }
-        .viewer-btn { background: transparent !important; border: 1px solid #475569 !important; color: #94a3b8 !important; margin-top: 15px; }
-        .install-btn { display: inline-block; width: 100%; background: #10b981 !important; color: white !important; border: none !important; margin-top: 15px; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; box-sizing: border-box; }
-        .input-panel { background: var(--panel); padding: 25px; border-radius: 12px; border: 1px solid var(--border); width: 100%; max-width: 1200px; margin-bottom: 20px; display: none; box-sizing: border-box; }
-        .inputs-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 15px; margin-bottom: 20px; }
-        .field-group label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 5px; font-weight: bold; }
-        .field-group select, .field-group input { width: 100%; padding: 12px; background: #0f172a; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 16px; outline: none; box-sizing: border-box; }
-        .send-btn { width: 100%; padding: 15px; background: #22c55e; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .stream-main-btn { width: 100%; margin-top: 12px; padding: 15px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .stream-main-btn.live { background: #dc2626; animation: pulseLive 1.5s infinite; }
-        .maps-main-btn { width: 100%; margin-top: 12px; padding: 15px; background: #8b5cf6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .maps-main-btn:hover { background: #7c3aed; }
-        .archive-main-btn { width: 100%; margin-top: 12px; padding: 15px; background: #f59e0b; color: #090d16; border: none; border-radius: 8px; font-size: 16px; font-weight: 900; cursor: pointer; transition: 0.2s; }
-        .archive-main-btn:hover { background: #d97706; color: white; }
-        @keyframes pulseLive { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
-        .stream-box { display: none; margin-top: 12px; padding: 15px; background: #0f172a; border: 1px solid var(--accent); border-radius: 8px; box-sizing: border-box; }
-        .stream-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-        .stream-controls input, .stream-controls select { flex-grow: 1; padding: 12px; background: #1e293b; border: 1px solid var(--border); color: white; border-radius: 6px; font-size: 15px; outline: none; }
-        .stream-start-btn { padding: 12px 18px; background: #22c55e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        .stream-stop-btn { padding: 12px 18px; background: var(--danger); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        .stream-link-btn { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .maps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; }
-        .map-tile { position: relative; height: 190px; border-radius: 14px; overflow: hidden; background: #090d16; border: 1px solid #334155; cursor: pointer; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease; box-shadow: 0 6px 18px rgba(0,0,0,0.45); -webkit-tap-highlight-color: transparent; }
-        .map-tile:hover, .map-tile:active { transform: translateY(-5px) scale(1.02); border-color: #38bdf8; box-shadow: 0 14px 30px rgba(56, 189, 248, 0.35); }
-        .map-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.4s ease; }
-        .map-tile:hover img, .map-tile:active img { transform: scale(1.07); }
-        .map-tile-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 28px 12px 10px 12px; background: linear-gradient(to top, rgba(9, 13, 22, 0.96) 0%, rgba(9, 13, 22, 0.65) 60%, transparent 100%); display: flex; justify-content: space-between; align-items: flex-end; }
-        .map-tile-time { color: #facc15; font-family: monospace; font-size: 12px; font-weight: bold; }
-        .map-tile-target { background: rgba(59, 130, 246, 0.85); color: white; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; }
-        .map-tile-fresh { position: absolute; top: 10px; left: 10px; background: #22c55e; color: #052e16; font-size: 10px; font-weight: 900; padding: 3px 8px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
-        #photo-lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(9, 13, 22, 0.98); z-index: 150000; flex-direction: column; box-sizing: border-box; user-select: none; }
-        .lb-toolbar { width: 100%; padding: 10px 15px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; box-sizing: border-box; z-index: 5; }
-        .lb-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .lb-btn { padding: 8px 14px; background: #334155; color: white; border: 1px solid #475569; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; }
-        .lb-btn:active { background: #3b82f6; }
-        .lb-viewport { flex-grow: 1; width: 100%; overflow: hidden; position: relative; display: flex; justify-content: center; align-items: center; touch-action: none; cursor: grab; }
-        .lb-viewport:active { cursor: grabbing; }
-        #lightbox-img { max-width: 92%; max-height: 82vh; object-fit: contain; transform-origin: center center; transition: transform 0.08s ease-out; pointer-events: none; border: 1px solid #334155; border-radius: 6px; }
-        #stream-page, #archive-page { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; z-index: 140000; flex-direction: column; box-sizing: border-box; }
-        .stream-page-header { width: 100%; padding: 12px 16px; background: #1e293b; border-bottom: 2px solid #3b82f6; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; box-sizing: border-box; }
-        #stream-iframe { flex-grow: 1; width: 100%; border: none; background: #090d16; }
-        .archive-body { flex-grow: 1; width: 100%; max-width: 1400px; margin: 0 auto; padding: 16px; overflow-y: auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; }
-        .calendar-card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 16px; width: 100%; max-width: 520px; margin: 0 auto; box-sizing: border-box; box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
-        .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .cal-month-title { font-size: 17px; font-weight: 900; color: #f8fafc; letter-spacing: 1px; }
-        .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; font-size: 12px; color: #94a3b8; font-weight: bold; margin-bottom: 6px; }
-        .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-        .cal-day { height: 46px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #cbd5e1; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; font-size: 14px; font-weight: bold; position: relative; transition: 0.2s; user-select: none; }
-        .cal-day:hover { border-color: #f59e0b; transform: translateY(-2px); }
-        .cal-day.empty { background: transparent; border-color: transparent; cursor: default; pointer-events: none; }
-        .cal-day.has-data { border-color: #22c55e; background: rgba(34, 197, 94, 0.12); color: #fff; }
-        .cal-day.selected { background: #f59e0b !important; color: #090d16 !important; border-color: #fbbf24 !important; font-weight: 900; }
-        .cal-dot { font-size: 10px; color: #4ade80; font-family: monospace; line-height: 1; margin-top: 2px; }
-        .cal-day.selected .cal-dot { color: #090d16; font-weight: 900; }
-        #admin-zone { display: none; margin-top: 30px; padding: 20px; border: 2px solid var(--danger); border-radius: 10px; background: rgba(239, 68, 68, 0.1); }
-        .admin-controls { display: flex; gap: 10px; }
-        .admin-controls select { width: 200px; padding: 12px; border-radius: 6px; border: none; font-size: 16px; }
-        .admin-controls input { flex-grow: 1; padding: 12px; border-radius: 6px; border: none; font-size: 16px; }
-        .admin-controls button { padding: 12px 20px; background: var(--danger); color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
-        #alert-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(185, 28, 28, 0.98); z-index: 99999; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 15px; box-sizing: border-box; }
-        .alert-content { background: white; color: #b91c1c; padding: 30px; border-radius: 20px; width: 100%; max-width: 600px; box-shadow: 0 0 50px rgba(0,0,0,0.5); animation: shake 0.5s infinite; box-sizing: border-box; }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-        .alert-btn { margin-top: 20px; width: 100%; padding: 18px; font-size: 20px; background: #b91c1c; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
-        .notifications-window { width: 100%; max-width: 1400px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
-        .notifications-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
-        .notif-item { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-left: 5px solid var(--danger); padding: 10px 12px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; }
-        .notif-item.read { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); border-left: 5px solid #22c55e; }
-        .notif-time { color: #facc15; font-family: monospace; }
-        .notif-sender { font-weight: bold; }
-        .notif-target { background: #334155; color: #f8fafc; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-        .notif-text { color: #f1f5f9; flex-grow: 1; word-break: break-word; font-weight: bold; }
-        .notif-status { font-size: 12px; font-weight: bold; padding: 3px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
-        .notif-item.read .notif-status { background: rgba(34, 197, 94, 0.25); color: #86efac; }
-        .history-container { width: 100%; max-width: 1400px; overflow-x: auto; border-radius: 8px; }
-        table { width: 100%; border-collapse: collapse; min-width: 850px; }
-        th, td { border: 1px solid var(--border); padding: 10px; text-align: center; font-size: 14px; }
-        th { background: #1e293b; color: #94a3b8; }
-        .time-cell { color: #facc15; font-family: monospace; }
-        .user-cell { font-weight: bold; }
-        @media (max-width: 768px) {
-            body { padding: 10px; }
-            .inputs-grid, .maps-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .admin-controls, .stream-controls { flex-direction: column; }
-            .admin-controls select, .admin-controls input, .admin-controls button, .stream-controls input, .stream-controls select, .stream-controls button { width: 100%; box-sizing: border-box; }
-        }
-        @media (max-width: 480px) { .inputs-grid, .maps-grid { grid-template-columns: 1fr; } }
-    </style>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <div id="splash-screen">
@@ -130,6 +28,7 @@
             </div>
         </div>
     </div>
+
     <div id="photo-lightbox">
         <div class="lb-toolbar">
             <div id="lightbox-caption" style="color:#f8fafc; font-weight:bold; font-size:14px;">Карта</div>
@@ -145,6 +44,7 @@
             <img id="lightbox-img" src="" alt="Карта">
         </div>
     </div>
+
     <div id="stream-page">
         <div class="stream-page-header">
             <button type="button" class="lb-btn" style="background:#2563eb; border-color:#3b82f6;" onclick="closeStreamPage()">⬅️ НАЗАД В ЖУРНАЛ</button>
@@ -188,6 +88,7 @@
             </div>
         </div>
     </div>
+
     <div id="alert-modal">
         <div class="alert-content">
             <h1 style="font-size: 40px; margin: 0;">🛑 СООБЩЕНИЕ!</h1>
@@ -196,23 +97,68 @@
             <button type="button" class="alert-btn" onclick="confirmAlert()">ДА, Я ПОНЯЛ</button>
         </div>
     </div>
+
     <div id="login-overlay">
         <div class="login-box">
             <h2 style="color:white; margin-top:0;">🔐 Доступ в МСБ55115</h2>
             <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Подразделение:</div>
-            <select id="login-select" onchange="document.getElementById('login-error').style.display='none'"></select>
+            <select id="login-select" onchange="hideAuthMessages()"></select>
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Позывной:</div>
+            <input type="text" id="login-callsign" placeholder="Введите ваш позывной..." autocomplete="off" oninput="hideAuthMessages()">
             <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Пароль:</div>
-            <input type="password" id="login-pass" placeholder="••••" autocomplete="off" oninput="document.getElementById('login-error').style.display='none'">
+            <input type="password" id="login-pass" placeholder="••••" autocomplete="off" oninput="hideAuthMessages()">
             <button type="button" onclick="attemptLogin()">ВОЙТИ</button>
+            <button type="button" class="reg-open-btn" onclick="openRegisterModal()">📝 РЕГИСТРАЦИЯ ПОЗЫВНОГО</button>
             <button type="button" class="viewer-btn" onclick="loginAsViewer()">Просто смотреть</button>
             <button type="button" class="install-btn pwa-install-btn" onclick="installPWA()">📲 УСТАНОВИТЬ ПРИЛОЖЕНИЕ</button>
-            <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none;">❌ Неверный пароль</div>
+            <div id="login-error" style="color: #ef4444; font-size: 14px; margin-top: 10px; display: none;">❌ Ошибка входа</div>
         </div>
     </div>
+    <div id="register-modal" class="custom-modal-overlay">
+        <div class="login-box" style="max-width:360px;">
+            <h2 style="color:#38bdf8; margin-top:0;">📝 Регистрация</h2>
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Подразделение:</div>
+            <select id="reg-unit-select"></select>
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Ваш Позывной:</div>
+            <input type="text" id="reg-callsign" placeholder="Придумайте позывной..." autocomplete="off">
+            <div style="text-align: left; color: #94a3b8; font-size: 13px; margin-bottom: 5px;">Ваш Пароль:</div>
+            <input type="password" id="reg-pass" placeholder="Задайте пароль..." autocomplete="off">
+            <button type="button" style="background:#00a884;" onclick="submitRegistration()">ОТПРАВИТЬ ЗАЯВКУ АДМИНУ</button>
+            <button type="button" class="viewer-btn" onclick="closeRegisterModal()">Отмена</button>
+            <div id="reg-status-msg" style="font-size: 13px; margin-top: 10px; display: none;"></div>
+        </div>
+    </div>
+
+    <div id="admin-users-modal" class="custom-modal-overlay">
+        <div class="admin-users-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #334155; padding-bottom:10px;">
+                <h3 style="margin:0; color:#38bdf8;">👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ И ПАРОЛЯМИ</h3>
+                <button type="button" class="lb-btn" style="background:#ef4444;" onclick="closeAdminUsersModal()">✖ ЗАКРЫТЬ</button>
+            </div>
+            <h4 style="color:#facc15; margin:10px 0 8px 0;">⏳ Заявки на регистрацию (ожидают одобрения):</h4>
+            <div id="admin-pending-list" class="admin-users-list"></div>
+            <h4 style="color:#4ade80; margin:18px 0 8px 0;">✅ Зарегистрированные пользователи (Позывной / Подразделение / Пароль):</h4>
+            <div id="admin-approved-list" class="admin-users-list"></div>
+        </div>
+    </div>
+
+    <div id="sound-modal" class="custom-modal-overlay" onclick="closeSoundModal()">
+        <div class="login-box" style="max-width:420px; text-align:left;" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; border-bottom:1px solid #334155; padding-bottom:10px;">
+                <h3 style="margin:0; color:#38bdf8;">🎵 Мелодия уведомлений</h3>
+                <button type="button" class="lb-btn" style="background:#ef4444; width:auto; padding:6px 12px;" onclick="closeSoundModal()">✖</button>
+            </div>
+            <div id="sound-options-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;"></div>
+            <button type="button" style="background:#22c55e;" onclick="closeSoundModal()">✅ ГОТОВО</button>
+        </div>
+    </div>
+
     <div class="input-panel" id="input-panel">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
-            <h3 style="margin:0;">📝 ПОДРАЗДЕЛЕНИЕ: <span id="my-name"></span></h3>
-            <div style="display:flex; gap:10px;">
+            <h3 style="margin:0;">📝 ПОДРАЗДЕЛЕНИЕ: <span id="my-name"></span> <span id="my-callsign-badge" style="color:#38bdf8; font-size:15px;"></span></h3>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button type="button" id="admin-users-btn" style="display:none; background:#0284c7; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:bold;" onclick="openAdminUsersModal()">👥 Пользователи и заявки <span id="pending-count-badge" style="background:#ef4444; padding:1px 6px; border-radius:99px; font-size:12px; display:none;">0</span></button>
+                <button type="button" onclick="openSoundModal()" title="Настройка звука уведомлений" style="background:#3b82f6; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-weight:bold;">🎵 Звук</button>
                 <button type="button" class="install-btn pwa-install-btn" style="width:auto; margin-top:0; padding:8px 15px;" onclick="installPWA()">📲 Установить</button>
                 <button type="button" onclick="logoutUser()" style="background:#334155; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer; font-weight:bold;">Выход</button>
             </div>
@@ -258,1259 +204,127 @@
             </div>
         </div>
     </div>
+
     <div class="notifications-window" id="notifications-window">
         <div id="viewer-stream-panel" style="display:none; margin-bottom: 12px;">
             <button type="button" class="stream-link-btn" style="background:#dc2626;" onclick="openActiveStreamWindow()">🎥 ИДЕТ ВИДЕОСТРИМ МСБ-55115 — ПЕРЕЙТИ ПО ССЫЛКЕ</button>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-            <h3 style="color:#94a3b8; margin:0; font-size:16px;">🔔 Уведомления подразделения (последние 10 шт.)</h3>
-            <button type="button" onclick="openArchivePage()" style="padding:6px 14px; background:#f59e0b; color:#090d16; border:none; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">🗂️ АРХИВ МСБ-55115</button>
+            <h3 style="color:#94a3b8; margin:0; font-size:16px; cursor:pointer;" onclick="openMessengerWindow()" title="Нажмите, чтобы развернуть Мессенджер">🔔 Уведомления и Связь (нажмите для открытия Мессенджера)</h3>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" onclick="openSoundModal()" title="Выбрать мелодию уведомлений" style="padding:6px 12px; background:#3b82f6; color:white; border:none; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">🎵</button>
+                <button type="button" onclick="openMessengerWindow()" style="padding:6px 14px; background:#00a884; color:white; border:none; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">💬 ОТКРЫТЬ МЕССЕНДЖЕР <span id="msg-unread-total" style="background:#ef4444; color:white; padding:1px 6px; border-radius:99px; font-size:11px; display:none;">0</span></button>
+                <button type="button" id="notif-archive-btn" onclick="openArchivePage()" style="display:none; padding:6px 14px; background:#f59e0b; color:#090d16; border:none; border-radius:6px; font-weight:900; font-size:13px; cursor:pointer;">🗂️ АРХИВ МСБ-55115</button>
+            </div>
         </div>
         <div class="notifications-list" id="notifications-list">
             <div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>
         </div>
+        <div id="mini-notif-reply-bar" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid #334155; gap:8px; flex-wrap:wrap; align-items:center;">
+            <select id="mini-notif-target" class="friends-nice-select"></select>
+            <input type="text" id="mini-notif-input" placeholder="Быстрое сообщение другу из списка..." style="flex:1; min-width:180px; padding:10px; background:#0f172a; color:white; border:1px solid #334155; border-radius:6px; font-size:14px; outline:none;">
+            <button type="button" onclick="sendMiniNotification()" style="padding:10px 16px; background:#ef4444; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">📢 ОТПРАВИТЬ</button>
+        </div>
     </div>
-    <div style="width:100%; max-width:1400px; margin:15px 0 10px 0; display:flex; justify-content:space-between; align-items:center; background:#1e293b; border:1px solid #334155; border-left:4px solid #3b82f6; padding:10px 15px; border-radius:8px; box-sizing:border-box;">
-        <span style="color:#f1f5f9; font-weight:bold; font-size:15px; letter-spacing:1px;">📊 ЖУРНАЛ СОБЫТИЙ МСБ-55115</span>
-        <span style="color:#22c55e; font-size:12px; font-weight:bold; background:rgba(34,197,94,0.15); padding:3px 8px; border-radius:4px; border:1px solid rgba(34,197,94,0.3); font-family:monospace;">● ОНЛАЙН (АВТОАРХИВ В 24:00)</span>
+
+    <div id="journal-table-section" style="width:100%; max-width:1400px; display:none;">
+        <div style="width:100%; margin:15px 0 10px 0; display:flex; justify-content:space-between; align-items:center; background:#1e293b; border:1px solid #334155; border-left:4px solid #3b82f6; padding:10px 15px; border-radius:8px; box-sizing:border-box;">
+            <span style="color:#f1f5f9; font-weight:bold; font-size:15px; letter-spacing:1px;">📊 ЖУРНАЛ СОБЫТИЙ МСБ-55115</span>
+            <span style="color:#22c55e; font-size:12px; font-weight:bold; background:rgba(34,197,94,0.15); padding:3px 8px; border-radius:4px; border:1px solid rgba(34,197,94,0.3); font-family:monospace;">● ОНЛАЙН (АВТОАРХИВ В 24:00)</span>
+        </div>
+        <div class="history-container">
+            <table>
+                <thead>
+                    <tr id="table-headers">
+                        <th style="width: 130px;">🕒 Дата и Время</th>
+                        <th style="width: 110px;">👤 Кто</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
     </div>
-    <div class="history-container">
-        <table>
-            <thead>
-                <tr id="table-headers">
-                    <th style="width: 130px;">🕒 Время</th>
-                    <th style="width: 110px;">👤 Кто</th>
-                </tr>
-            </thead>
-            <tbody id="table-body"></tbody>
-        </table>
+    <div id="messenger-modal">
+        <div class="stream-page-header" style="border-bottom-color:#00a884; background:#111827; flex-direction:column; align-items:stretch; gap:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <button type="button" class="lb-btn" style="background:#00a884; border-color:#059669;" onclick="closeMessengerWindow()">⬅️ НАЗАД В ЖУРНАЛ МСБ-55115</button>
+                <span style="color:#f8fafc; font-weight:bold; font-size:15px;">💬 ЗАКРЫТЫЙ МЕССЕНДЖЕР МСБ-55115</span>
+            </div>
+            <div class="msg-ticker-wrap">
+                <div class="msg-ticker-move" id="msg-broadcast-ticker">📢 СВОДКА «ВСЕМ»: Ожидание общих команд и событий...</div>
+            </div>
+        </div>
+        <div id="app-screen">
+            <video id="video-preview" autoplay muted playsinline style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 140px; height: 140px; border-radius: 50%; object-fit: cover; border: 4px solid #f43f5e; box-shadow: 0 0 20px rgba(244, 63, 94, 0.6); z-index: 100; background: black;"></video>
+            <div class="sidebar" id="app-sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-user">
+                        <div class="avatar" id="my-avatar" onclick="document.getElementById('avatar-file-input').click()" title="Нажмите, чтобы загрузить свою аватарку" style="cursor:pointer; position:relative;">?</div>
+                        <input type="file" id="avatar-file-input" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">
+                        <div style="display:flex; flex-direction:column; min-width:0;">
+                            <span id="msg-my-name">Профиль</span>
+                            <span style="font-size:11px; color:#38bdf8; cursor:pointer;" onclick="document.getElementById('avatar-file-input').click()">📷 Сменить аватарку</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="search-container">
+                    <div class="search-row">
+                        <input type="text" id="new-friend-name" class="search-input" placeholder="Позывной для добавления...">
+                        <button class="add-friend-btn" onclick="sendFriendRequest()">+</button>
+                    </div>
+                    <button class="create-group-btn" onclick="openCreateGroupModal()">👥 Создать конференцию</button>
+                </div>
+                <div class="requests-section" id="requests-box"></div>
+                <div class="friends-list" id="friends-box"></div>
+            </div>
+            <div class="chat-area">
+                <div class="chat-header">
+                    <button class="back-btn" onclick="closeChatMobile()">&larr;</button>
+                    <div class="avatar" id="partner-avatar">?</div>
+                    <div class="user-info">
+                        <h4 class="partner-title" id="partner-display-name">Чат не выбран</h4>
+                        <p class="partner-status" id="chat-status" style="display:none;">в сети</p>
+                    </div>
+                </div>
+                <div id="messages"><div class="chat-placeholder" id="placeholder-text">Выберите друга или конференцию слева, чтобы начать переписку.</div></div>
+                <div class="input-container">
+                    <div class="reply-preview-bar" id="reply-bar">
+                        <div class="reply-preview-text" id="reply-bar-text">Цитата: ...</div>
+                        <button class="reply-preview-close" onclick="cancelReply()">&times;</button>
+                    </div>
+                    <div class="tools-row">
+                        <button id="voice-btn" class="media-btn" onclick="toggleVoiceRecord()">🎙️</button>
+                        <button id="video-btn" class="media-btn" onclick="toggleVideoRecord()">🎥</button>
+                        <button id="file-btn" class="media-btn" onclick="document.getElementById('hidden-file-input').click()">📎</button>
+                        <input type="file" id="hidden-file-input" style="display:none;" onchange="uploadAnyFile(this)">
+                    </div>
+                    <div class="input-row">
+                        <input type="text" id="text-input" placeholder="Сообщение..." disabled>
+                        <button id="send-btn" onclick="sendMessage()">ОТПРАВИТЬ</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-<script>
-    const USERS_CONFIG = [
-        { name: "ШР", pass: "551151111", color: "#3b82f6" },
-        { name: "РОТА-1", pass: "551152222", color: "#a855f7" },
-        { name: "РОТА-2", pass: "551153333", color: "#22c55e" },
-        { name: "РОТА-3", pass: "551154444", color: "#eab308" },
-        { name: "АДМИН", pass: "5555", color: "#ef4444" }
-    ];
-    const ADMIN_NAME = "АДМИН";
 
-    const COLUMNS_CONFIG = [
-        { label: "ГРУППА", options: ["1", "2", "3", "4", "5"] },
-        { label: "ИСХОДНИКИ", options: [
-            "НАЧАЛИ ДВИЖЕНИЕ", "ЖДУТ", "ИДУТ", "ПЕРЕСЕКАЮТ ОТКРЫТКУ",
-            "ПРОШЛИ ИСХОДНЫЙ ПУНКТ", "ЗАНЯТИЕ Р-НА ФОР-Я ГРУПП",
-            "ЗАНЯТИЕ ПЕРЕФОР-Я Р-НА ГРУПП", "ВЫХОД НА РУБЕЖ АТАКИ",
-            "ВЫХОД НА РУБЕЖ ШТУРМА", "ЗАНИМАЮТСЯ МЕДИЦИНОЙ",
-            "ЗАНИМАЮТСЯ СВЯЗЬЮ", "ОБОРОНА", "РАБОТАЮТ В ОБОРОНЕ",
-            "ШТУРМУЮТ", "РВБС"
-        ]},
-        { label: "ЦВЕТ ТОЧКИ", options: [
-            "ФИОЛЕТОВЫЙ", "БИРЮЗОВАЯ", "БИРЮЗОВАЯ-А", "СЕРАЯ", "ЗЕЛЕНАЯ",
-            "СИНИЯ", "ЖЕЛТАЯ", "ОРАНЖЕВАЯ", "КРАСНАЯ", "РОЗОВАЯ",
-            "РОЗОВАЯ-А", "БЕЖЕВАЯ", "КОРИЧНЕВАЯ", "ЧЕРНАЯ", "БОРДОВАЯ"
-        ]},
-        { label: "НОМЕР ТОЧКИ", options: new Array(), digitsOnly: true },
-        { label: "ЛЕСОПОЛОСА", options: [
-            "ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4","СМОГ-1","ЗАЯЦ", "ЗАМЕНА", "КРАСКА",
-            "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7",
-            "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1",
-            "ИРБИС", "СЕЗОН", "КАРАЗ", "КВАС", "КАФР", "СТЕНА", "ТРАКТ",
-            "СЛЕЖКА", "МОНАРХ", "ГИК", "МУРАЛ", "ГРЕК", "БАКУ", "БАКУ-1",
-            "САЛАТ", "САЛАТ-1", "ГУК", "СМЕНА-1", "КАБАН", "КАБАН-2",
-            "КАБАН-3", "ЛИС-1", "ЛИС-2", "ЛИС-3",
-            "-->ФАКС", "-->ЗУБР1", "-->ПОЭТ","-->ЗАЯЦ","-->СМОГ-1", "-->СУДЬЯ", "-->СОР4",
-            "-->ЗАМЕНА", "-->КРАСКА", "-->МАСТАК1", "-->ВОЛК3", "-->АНГЕЛ",
-            "-->ВАЛИК1", "-->ЛЕЖАК", "-->ЛОТ ", "-->ПРИНТ7", "-->ГОН1",
-            "-->СТОП-3", "-->ТАБЛА", "-->ПОКЕР", "-->ЛОКОН", "-->КАЛЫМ",
-            "-->КАРМАН1", "-->ИРБИС", "-->СЕЗОН", "-->КАРАЗ", "-->КВАС",
-            "-->КАФР", "-->СТЕНА", "-->ТРАКТ", "-->СЛЕЖКА", "-->МОНАРХ",
-            "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1",
-            "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН",
-            "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"
-        ]},
-        { label: "ПРИМЕЧАНИЯ", options: new Array() }
-    ];
-
-    let ws = null;
-    let currentUser = null;
-    let userColor = '#fff';
-    let currentAlertId = null;
-    let currentAlertText = "";
-    let currentAlertTarget = "";
-    let currentAlertSender = "";
-    let pendingAlerts = {};
-    let allNotifications = new Array();
-    let allMaps = new Array();
-    let archiveData = {};
-    let calYear = new Date().getFullYear();
-    let calMonth = new Date().getMonth();
-    let selectedArchiveDate = "";
-    let activeStream = { active: false, url: "" };
-    let titleInterval = null;
-    let soundInterval = null;
-    let audioCtx = null;
-    let keepAliveAudio = null;
-    let sirenAudio = null;
-    let publicVapidKey = null;
-    let deferredPrompt = null;
-    const SPLASH_FILES = [
-        "boot/kernel_msb55115.sys",
-        "crypto/cipher_channel_v4.dat",
-        "net/websocket_sync_protocol.dll",
-        "maps/tactical_forest_sectors.db",
-        "auth/unit_credentials_guard.bin",
-        "push/vapid_service_worker.js",
-        "stream/salutejazz_rtc_bridge.mod",
-        "journal/history_storage_engine.json",
-        "audio/siren_emergency_synth.wav",
-        "system/msb55115_ready_state.ok"
-    ];
-
-    function runSplash() {
-        const s = document.getElementById('splash-screen');
-        const b = document.getElementById('splash-bar');
-        const p = document.getElementById('splash-percent');
-        const f = document.getElementById('splash-file');
-        const g = document.getElementById('splash-tag');
-        if (!s) return;
-
-        let cur = 0;
-        const timer = setInterval(function() {
-            cur++;
-            if (b) b.style.width = cur + '%';
-            if (p) p.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + cur + '%';
-            
-            const idx = Math.min(Math.floor((cur / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
-            if (f) f.innerText = SPLASH_FILES.at(idx);
-            if (g) g.innerText = (cur < 100) ? '[' + cur + '%]' : '[ГОТОВО]';
-
-            if (cur >= 100) {
-                clearInterval(timer);
-                s.style.opacity = '0';
-                setTimeout(function() { s.style.display = 'none'; }, 500);
-            }
-        }, 200);
-    }
-
-    window.addEventListener('beforeinstallprompt', function(e) {
-        e.preventDefault();
-        deferredPrompt = e;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-            btn.style.display = 'inline-block';
-        });
-    });
-
-    window.addEventListener('appinstalled', function() {
-        deferredPrompt = null;
-        document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-            btn.style.display = 'none';
-        });
-    });
-
-    async function installPWA() {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            await deferredPrompt.userChoice;
-            deferredPrompt = null;
-        } else {
-            alert('Чтобы установить приложение МСБ55115, откройте меню браузера (⋮ или "Поделиться") и нажмите "Установить приложение" / "Добавить на главный экран".');
-        }
-    }
-
-    function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
-        return outputArray;
-    }
-
-    async function subscribeToWebPush() {
-        if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
-        try {
-            if (Notification.permission === 'denied') return;
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') return;
-
-            const reg = await navigator.serviceWorker.register('/sw.js');
-            await reg.update();
-            const readyReg = await navigator.serviceWorker.ready;
-
-            if ('PushManager' in window && publicVapidKey) {
-                let sub = await readyReg.pushManager.getSubscription();
-                if (!sub) {
-                    sub = await readyReg.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-                }
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'save_sub', user: currentUser || 'ГОСТЬ', sub: sub }));
-                }
-            }
-        } catch (e) { console.error('Push error:', e); }
-    }
-    function sendLocalNotification(target, text, sender) {
-        const fromWho = sender || 'АДМИН';
-        const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
-        const body = fromWho + ': ' + text;
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready.then(function(reg) {
-                reg.showNotification(title, {
-                    body: body,
-                    vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
-                    silent: false,
-                    requireInteraction: true,
-                    renotify: true,
-                    tag: 'admin-alert-' + Date.now()
-                }).catch(function() {});
-            });
-        }
-    }
-
-    function createWavUrl(freq, durationSec, volume) {
-        const sr = 8000;
-        const numSamples = sr * durationSec;
-        const buf = new ArrayBuffer(44 + numSamples * 2);
-        const view = new DataView(buf);
-        const writeStr = function(off, s) { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
-        writeStr(0, 'RIFF'); view.setUint32(4, 36 + numSamples * 2, true); writeStr(8, 'WAVE');
-        writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
-        view.setUint16(22, 1, true); view.setUint32(24, sr, true); view.setUint32(28, sr * 2, true);
-        view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeStr(36, 'data');
-        view.setUint32(40, numSamples * 2, true);
-        for (let i = 0; i < numSamples; i++) {
-            let sample = 0;
-            if (volume > 0) {
-                const f = (i % sr < sr / 2) ? freq : freq * 1.3;
-                sample = Math.sin(2 * Math.PI * f * (i / sr)) * volume * 32767;
-            }
-            view.setInt16(44 + i * 2, sample, true);
-        }
-        return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
-    }
-
-    function unlockMobileFeatures() {
-        try {
-            if (!keepAliveAudio) {
-                keepAliveAudio = new Audio(createWavUrl(100, 1, 0.0001));
-                keepAliveAudio.loop = true;
-            }
-            keepAliveAudio.play().catch(function() {});
-
-            if (!sirenAudio) {
-                sirenAudio = new Audio(createWavUrl(880, 1, 0.9));
-                sirenAudio.loop = true;
-            }
-
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: '🟢 Дежурный режим активен',
-                    artist: 'Журнал Работ (Ожидание команд)',
-                    album: 'Нажмите, чтобы открыть'
-                });
-            }
-        } catch(e) {}
-        if ('wakeLock' in navigator) {
-            navigator.wakeLock.request('screen').catch(function() {});
-        }
-    }
-
-    function updateLockScreenAlert(target, text, sender) {
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: '🛑 ТРЕВОГА ДЛЯ [' + target + '] ОТ [' + (sender || 'АДМИН') + ']!',
-                artist: text,
-                album: 'СРОЧНО ОТКРОЙТЕ БРАУЗЕР!'
-            });
-        }
-    }
-
-    function playBeep() {
-        try {
-            if (navigator.vibrate) navigator.vibrate(Array.of(600, 200, 600));
-            if (sirenAudio) sirenAudio.play().catch(function() {});
-            
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            setTimeout(function() { osc.stop(); }, 450);
-        } catch(e) {}
-    }
-    function handleStreamBtnClick() {
-        if (currentUser === ADMIN_NAME) {
-            const box = document.getElementById('admin-stream-box');
-            box.style.display = (box.style.display === 'block') ? 'none' : 'block';
-        } else {
-            if (activeStream && activeStream.active && activeStream.url) {
-                const uBox = document.getElementById('user-stream-box');
-                uBox.style.display = (uBox.style.display === 'block') ? 'none' : 'block';
-            } else {
-                alert('Видеострим сейчас не запущен администратором.');
-            }
-        }
-    }
-
-    function openStreamInAppPage(url) {
-        if (!url) return;
-        window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
-    }
-
-    function closeStreamPage() {
-        const page = document.getElementById('stream-page');
-        const iframe = document.getElementById('stream-iframe');
-        if (page) page.style.display = 'none';
-        if (iframe) iframe.src = 'about:blank';
-    }
-
-    function openStreamExternalFallback() {
-        const url = (activeStream && activeStream.url) ? activeStream.url : document.getElementById('stream-url-input').value.trim();
-        if (url) window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
-    }
-
-    function openActiveStreamWindow() {
-        if (activeStream && activeStream.url) {
-            window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
-        }
-    }
-
-    function startVideoStream() {
-        if (currentUser !== ADMIN_NAME) return;
-        const url = document.getElementById('stream-url-input').value.trim();
-        if (!url) return alert('Вставьте ссылку на стрим!');
-        const now = new Date();
-        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-        ws.send(JSON.stringify({
-            type: 'stream_start',
-            url: url,
-            sender: currentUser,
-            color: userColor,
-            time: timeString
-        }));
-        window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
-    }
-
-    function stopVideoStream() {
-        if (currentUser !== ADMIN_NAME) return;
-        ws.send(JSON.stringify({ type: 'stream_stop' }));
-        closeStreamPage();
-    }
-
-    function updateStreamUI() {
-        const mainBtn = document.getElementById('stream-main-btn');
-        const userBox = document.getElementById('user-stream-box');
-        const viewerPanel = document.getElementById('viewer-stream-panel');
-        const urlInput = document.getElementById('stream-url-input');
-
-        if (activeStream && activeStream.active && activeStream.url) {
-            if (urlInput && currentUser !== ADMIN_NAME) urlInput.value = activeStream.url;
-            if (mainBtn) {
-                mainBtn.classList.add('live');
-                mainBtn.innerText = '🔴 ИДЕТ ВИДЕОСТРИМ МСБ-55115';
-            }
-            if (currentUser && currentUser !== ADMIN_NAME && userBox) {
-                userBox.style.display = 'block';
-            }
-            if (!currentUser && viewerPanel) {
-                viewerPanel.style.display = 'block';
-            }
-        } else {
-            if (mainBtn) {
-                mainBtn.classList.remove('live');
-                mainBtn.innerText = '🎥 ВИДЕОСТРИМ МСБ-55115';
-            }
-            if (userBox) userBox.style.display = 'none';
-            if (viewerPanel) viewerPanel.style.display = 'none';
-        }
-    }
-
-    function toggleMapsSection() {
-        const box = document.getElementById('maps-section-box');
-        if (!box) return;
-        box.style.display = (box.style.display === 'block') ? 'none' : 'block';
-        renderMapsGrid();
-    }
-
-    function isMapVisibleForMe(m) {
-        if (!m) return false;
-        if (m.target === "ВСЕМ") return true;
-        if (currentUser === ADMIN_NAME) return true;
-        if (currentUser && (m.target === currentUser || m.sender === currentUser)) return true;
-        return false;
-    }
-
-    let photoZoom = 1;
-    let photoPanX = 0;
-    let photoPanY = 0;
-    let isDraggingPhoto = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let zoomEventsBound = false;
-
-    function applyPhotoTransform() {
-        const img = document.getElementById('lightbox-img');
-        const lbl = document.getElementById('zoom-level-label');
-        if (img) {
-            img.style.transform = 'translate(' + photoPanX + 'px, ' + photoPanY + 'px) scale(' + photoZoom + ')';
-        }
-        if (lbl) lbl.innerText = Math.round(photoZoom * 100) + '%';
-    }
-
-    function changePhotoZoom(delta) {
-        photoZoom = Math.min(5, Math.max(1, photoZoom + delta));
-        if (photoZoom === 1) { photoPanX = 0; photoPanY = 0; }
-        applyPhotoTransform();
-    }
-
-    function resetPhotoZoom() {
-        photoZoom = 1;
-        photoPanX = 0;
-        photoPanY = 0;
-        applyPhotoTransform();
-    }
-
-    function bindPhotoZoomEvents() {
-        if (zoomEventsBound) return;
-        zoomEventsBound = true;
-        const vp = document.getElementById('lb-viewport');
-        if (!vp) return;
-
-        vp.addEventListener('wheel', function(e) {
-            e.preventDefault();
-            changePhotoZoom(e.deltaY < 0 ? 0.35 : -0.35);
-        }, { passive: false });
-
-        vp.addEventListener('pointerdown', function(e) {
-            if (photoZoom <= 1) return;
-            isDraggingPhoto = true;
-            dragStartX = e.clientX - photoPanX;
-            dragStartY = e.clientY - photoPanY;
-            vp.setPointerCapture(e.pointerId);
-        });
-
-        vp.addEventListener('pointermove', function(e) {
-            if (!isDraggingPhoto) return;
-            photoPanX = e.clientX - dragStartX;
-            photoPanY = e.clientY - dragStartY;
-            applyPhotoTransform();
-        });
-
-        vp.addEventListener('pointerup', function() { isDraggingPhoto = false; });
-        vp.addEventListener('pointercancel', function() { isDraggingPhoto = false; });
-    }
-
-    function openPhotoLightbox(src, caption) {
-        const lb = document.getElementById('photo-lightbox');
-        const img = document.getElementById('lightbox-img');
-        const cap = document.getElementById('lightbox-caption');
-        if (lb && img) {
-            img.src = src;
-            if (cap) cap.innerText = caption || '';
-            resetPhotoZoom();
-            bindPhotoZoomEvents();
-            lb.style.display = 'flex';
-        }
-    }
-
-    function closePhotoLightbox() {
-        const lb = document.getElementById('photo-lightbox');
-        if (lb) lb.style.display = 'none';
-    }
-    function renderMapsGrid() {
-        const grid = document.getElementById('maps-tiles-grid');
-        if (!grid) return;
-        grid.innerHTML = '';
-
-        const myMaps = allMaps.filter(isMapVisibleForMe).slice(-6).reverse();
-
-        if (myMaps.length === 0) {
-            grid.innerHTML = '<div style="color:#64748b; font-size:13px; grid-column: 1 / -1; padding:10px 0;">Нет загруженных карт или вводных</div>';
-            return;
-        }
-
-        myMaps.forEach(function(m, idx) {
-            const tile = document.createElement('div');
-            tile.className = 'map-tile';
-            const badge = (idx === 0) ? '<span class="map-tile-fresh">СВЕЖЕЕ</span>' : '';
-            tile.innerHTML =
-                badge +
-                '<img src="' + m.image + '" alt="Карта">' +
-                '<div class="map-tile-overlay">' +
-                    '<span class="map-tile-time">🕒 ' + m.time + '</span>' +
-                    '<span class="map-tile-target">' + m.target + '</span>' +
-                '</div>';
-            tile.onclick = function() {
-                openPhotoLightbox(m.image, 'КОМУ: ' + m.target + ' | ВРЕМЯ: ' + m.time);
-            };
-            grid.appendChild(tile);
-        });
-    }
-
-    function fetchMapsFromServer() {
-        fetch('/maps-list?t=' + Date.now())
-            .then(function(r) { return r.json(); })
-            .then(function(list) {
-                if (Array.isArray(list)) {
-                    allMaps = list;
-                    renderMapsGrid();
-                }
-            })
-            .catch(function() {});
-    }
-
-    function uploadMapPhoto() {
-        if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
-        const fileInput = document.getElementById('map-file-input');
-        const targetSelect = document.getElementById('map-target-select');
-        if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-            return alert('Сначала выберите фотографию или карту!');
-        }
-        const file = fileInput.files.item(0);
-        const target = (targetSelect && targetSelect.value) ? targetSelect.value : 'ВСЕМ';
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            const rawDataUrl = e.target.result;
-            const img = new Image();
-
-            img.onload = function() {
-                const canvas = document.createElement('canvas');
-                const maxW = 750;
-                const maxH = 750;
-                let w = img.width || 600;
-                let h = img.height || 600;
-                if (w > maxW || h > maxH) {
-                    if (w > h) { h = Math.round(h * (maxW / w)); w = maxW; }
-                    else { w = Math.round(w * (maxH / h)); h = maxH; }
-                }
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                const finalDataUrl = canvas.toDataURL('image/jpeg', 0.65);
-
-                const now = new Date();
-                const timeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-                const payloadObj = {
-                    sender: currentUser,
-                    color: userColor,
-                    target: target,
-                    time: timeStr,
-                    image: finalDataUrl
-                };
-
-                fetch('/upload-map', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payloadObj)
-                })
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    fileInput.value = '';
-                    if (data && Array.isArray(data.maps)) {
-                        allMaps = data.maps;
-                        renderMapsGrid();
-                    } else {
-                        fetchMapsFromServer();
-                    }
-                })
-                .catch(function() {
-                    alert('Ошибка при отправке фото на сервер!');
-                });
-            };
-
-            img.src = rawDataUrl;
-        };
-
-        reader.readAsDataURL(file);
-    }
-    const MONTH_NAMES = Array.of(
-        "ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ",
-        "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ"
-    );
-
-    function formatIsoDate(y, m, d) {
-        const mm = String(m + 1).padStart(2, '0');
-        const dd = String(d).padStart(2, '0');
-        return y + '-' + mm + '-' + dd;
-    }
-
-    function formatRuDateFromIso(iso) {
-        if (!iso) return '';
-        const parts = iso.split('-');
-        if (parts.length !== 3) return iso;
-        return parts.at(2) + '.' + parts.at(1) + '.' + parts.at(0);
-    }
-
-    function fetchArchiveFromServer(cb) {
-        fetch('/archive-data?t=' + Date.now())
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data && typeof data === 'object') {
-                    archiveData = data;
-                    renderArchiveCalendar();
-                    if (selectedArchiveDate) selectArchiveDate(selectedArchiveDate);
-                    if (cb) cb();
-                }
-            })
-            .catch(function() {});
-    }
-
-    function openArchivePage() {
-        const page = document.getElementById('archive-page');
-        if (!page) return;
-        const now = new Date();
-        calYear = now.getFullYear();
-        calMonth = now.getMonth();
-        const todayKey = formatIsoDate(calYear, calMonth, now.getDate());
-        if (!selectedArchiveDate) selectedArchiveDate = todayKey;
-
-        page.style.display = 'flex';
-        renderArchiveCalendar();
-        selectArchiveDate(selectedArchiveDate);
-        fetchArchiveFromServer();
-    }
-
-    function closeArchivePage() {
-        const page = document.getElementById('archive-page');
-        if (page) page.style.display = 'none';
-    }
-
-    function changeArchiveMonth(delta) {
-        calMonth += delta;
-        if (calMonth < 0) { calMonth = 11; calYear--; }
-        if (calMonth > 11) { calMonth = 0; calYear++; }
-        renderArchiveCalendar();
-    }
-
-    function renderArchiveCalendar() {
-        const titleEl = document.getElementById('cal-month-label');
-        const gridEl = document.getElementById('cal-days-grid');
-        if (!titleEl || !gridEl) return;
-
-        titleEl.innerText = MONTH_NAMES.at(calMonth) + ' ' + calYear;
-        gridEl.innerHTML = '';
-
-        const firstDay = new Date(calYear, calMonth, 1).getDay();
-        const startOffset = (firstDay === 0) ? 6 : (firstDay - 1);
-        const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
-
-        for (let i = 0; i < startOffset; i++) {
-            const emptyDiv = document.createElement('div');
-            emptyDiv.className = 'cal-day empty';
-            gridEl.appendChild(emptyDiv);
-        }
-
-        for (let d = 1; d <= daysInMonth; d++) {
-            const dateKey = formatIsoDate(calYear, calMonth, d);
-            const rowsForDay = archiveData[dateKey] || new Array();
-            const count = Array.isArray(rowsForDay) ? rowsForDay.length : 0;
-
-            const cell = document.createElement('div');
-            cell.className = 'cal-day' + (count > 0 ? ' has-data' : '') + (selectedArchiveDate === dateKey ? ' selected' : '');
-            cell.innerHTML =
-                '<span>' + d + '</span>' +
-                (count > 0 ? '<span class="cal-dot">' + count + ' зап.</span>' : '');
-            cell.onclick = function() {
-                selectArchiveDate(dateKey);
-            };
-            gridEl.appendChild(cell);
-        }
-    }
-
-    function selectArchiveDate(dateKey) {
-        selectedArchiveDate = dateKey;
-        renderArchiveCalendar();
-
-        const ruDate = formatRuDateFromIso(dateKey);
-        const lbl = document.getElementById('archive-selected-label');
-        const tTitle = document.getElementById('archive-table-title');
-        const badge = document.getElementById('archive-count-badge');
-        const tbody = document.getElementById('archive-table-body');
-        if (lbl) lbl.innerText = '📅 ' + ruDate;
-        if (tTitle) tTitle.innerText = '📊 Архив журнала за ' + ruDate;
-
-        const rows = Array.isArray(archiveData[dateKey]) ? archiveData[dateKey] : new Array();
-        if (badge) badge.innerText = rows.length + ' записей';
-        if (!tbody) return;
-        tbody.innerHTML = '';
-
-        if (rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="' + (COLUMNS_CONFIG.length + 2) + '" style="color:#64748b; padding:20px;">За ' + ruDate + ' записей в архиве нет</td></tr>';
-            return;
-        }
-
-        rows.forEach(function(row) {
-            const tr = document.createElement('tr');
-            let html = '<td class="time-cell">' + (row.time || '-') + '</td><td class="user-cell" style="color:' + (row.color || '#fff') + '">' + (row.user || '-') + '</td>';
-            for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-                const val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
-                html += '<td>' + (val || '-') + '</td>';
-            }
-            tr.innerHTML = html;
-            tbody.appendChild(tr);
-        });
-    }
-    function isNotificationVisibleForMe(notif) {
-        if (!notif) return false;
-        if (notif.target === "ВСЕМ") return true;
-        if (currentUser === ADMIN_NAME) return true;
-        if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
-        return false;
-    }
-
-    function renderNotificationsWindow() {
-        const list = document.getElementById('notifications-list');
-        if (!list) return;
-        list.innerHTML = '';
-
-        const myNotifs = allNotifications.filter(isNotificationVisibleForMe).slice(-10);
-
-        if (myNotifs.length === 0) {
-            list.innerHTML = '<div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>';
-            return;
-        }
-
-        myNotifs.forEach(function(notif) {
-            const item = document.createElement('div');
-            item.className = 'notif-item' + (notif.read ? ' read' : '');
-            const statusText = notif.read
-                ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : ''))
-                : '⏳ НЕ ПРОЧИТАНО';
-
-            item.innerHTML =
-                '<span class="notif-time">' + notif.time + '</span>' +
-                '<span class="notif-sender" style="color:' + (notif.color || '#ef4444') + '">' + notif.sender + '</span>' +
-                '<span class="notif-target">КОМУ: ' + notif.target + '</span>' +
-                '<span class="notif-text">' + notif.text + '</span>' +
-                '<span class="notif-status">' + statusText + '</span>';
-
-            list.appendChild(item);
-        });
-
-        list.scrollTop = list.scrollHeight;
-    }
-
-    function getAlertsQueue(target) {
-        const raw = pendingAlerts[target];
-        if (!raw) return new Array();
-        if (Array.isArray(raw)) return raw;
-        if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
-        return Array.of(raw);
-    }
-
-    function connectWS() {
-        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-        ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
-
-        ws.onmessage = function(event) {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'init') {
-                document.getElementById('table-body').innerHTML = '';
-                msg.data.forEach(appendRow);
-                allNotifications = msg.notifications || new Array();
-                renderNotificationsWindow();
-                fetchMapsFromServer();
-                fetchArchiveFromServer();
-
-                if (msg.streamState) {
-                    activeStream = msg.streamState;
-                    updateStreamUI();
-                }
-                if (msg.vapidPublicKey) {
-                    publicVapidKey = msg.vapidPublicKey;
-                    subscribeToWebPush();
-                }
-                if (msg.alerts) {
-                    pendingAlerts = msg.alerts;
-                    checkAndShowAlerts(false);
-                }
-            }
-            if (msg.type === 'new_row') {
-                appendRow(msg.row);
-                fetchArchiveFromServer();
-            }
-            if (msg.type === 'daily_archived') {
-                document.getElementById('table-body').innerHTML = '';
-                fetchArchiveFromServer();
-            }
-            if (msg.type === 'new_map') {
-                fetchMapsFromServer();
-                if (!msg.target || msg.target === 'ВСЕМ' || currentUser === ADMIN_NAME || msg.target === currentUser) {
-                    const box = document.getElementById('maps-section-box');
-                    if (box) box.style.display = 'block';
-                }
-            }
-            if (msg.type === 'stream_state') {
-                activeStream = msg.streamState || { active: false, url: '' };
-                updateStreamUI();
-            }
-            if (msg.type === 'history_cleared') {
-                document.getElementById('table-body').innerHTML = '';
-                allNotifications = new Array();
-                allMaps = new Array();
-                pendingAlerts = {};
-                stopAlertVisuals();
-                renderNotificationsWindow();
-                renderMapsGrid();
-            }
-            if (msg.type === 'admin_alert') {
-                if (msg.notif) {
-                    allNotifications.push(msg.notif);
-                    renderNotificationsWindow();
-                }
-                const queue = getAlertsQueue(msg.target);
-                queue.push({
-                    id: msg.notif ? msg.notif.id : Date.now(),
-                    text: msg.text,
-                    sender: msg.sender || ADMIN_NAME,
-                    readList: new Array()
-                });
-                pendingAlerts[msg.target] = queue;
-                checkAndShowAlerts(true);
-            }
-            if (msg.type === 'alert_cleared') {
-                const queue = getAlertsQueue(msg.target);
-                if (msg.target === 'ВСЕМ') {
-                    queue.forEach(function(a) {
-                        if (!msg.notifId || a.id === msg.notifId) {
-                            if (!Array.isArray(a.readList)) a.readList = new Array();
-                            if (msg.who && a.readList.indexOf(msg.who) === -1) {
-                                a.readList.push(msg.who);
-                            }
-                        }
-                    });
-                    pendingAlerts[msg.target] = queue;
-                } else {
-                    if (msg.notifId) {
-                        pendingAlerts[msg.target] = queue.filter(function(a) { return a.id !== msg.notifId; });
-                    } else {
-                        queue.shift();
-                        pendingAlerts[msg.target] = queue;
-                    }
-                    if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) {
-                        delete pendingAlerts[msg.target];
-                    }
-                }
-
-                if (msg.notifId) {
-                    allNotifications.forEach(function(n) {
-                        if (n.id === msg.notifId) {
-                            n.read = true;
-                            n.readBy = msg.readBy || '';
-                        }
-                    });
-                } else {
-                    let marked = false;
-                    allNotifications.forEach(function(n) {
-                        if (!marked && n.target === msg.target) {
-                            n.read = true;
-                            n.readBy = msg.readBy || '';
-                            marked = true;
-                        }
-                    });
-                }
-                renderNotificationsWindow();
-
-                const myName = currentUser || 'Просмотр';
-                if (currentAlertTarget === msg.target && (!msg.notifId || currentAlertId === msg.notifId)) {
-                    if (msg.target !== 'ВСЕМ' || msg.who === myName) {
-                        stopAlertVisuals();
-                    }
-                }
-                checkAndShowAlerts(false);
-            }
-        };
-
-        ws.onclose = function() { setTimeout(connectWS, 1500); };
-    }
-
-    setInterval(function() {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'ping' }));
-        } else {
-            connectWS();
-        }
-    }, 4000);
-
-    function populateTargetSelect() {
-        const adminSelect = document.getElementById('admin-target');
-        const mapSelect = document.getElementById('map-target-select');
-        if (adminSelect) adminSelect.innerHTML = '';
-        if (mapSelect) mapSelect.innerHTML = '';
-
-        let optAll = document.createElement('option');
-        optAll.value = "ВСЕМ";
-        optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ";
-        if (adminSelect) adminSelect.appendChild(optAll);
-
-        let optAllMap = document.createElement('option');
-        optAllMap.value = "ВСЕМ";
-        optAllMap.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ";
-        if (mapSelect) mapSelect.appendChild(optAllMap);
-
-        USERS_CONFIG.forEach(function(u) {
-            if (u.name !== currentUser) {
-                if (adminSelect) {
-                    let opt2 = document.createElement('option');
-                    opt2.value = u.name;
-                    opt2.innerText = u.name;
-                    adminSelect.appendChild(opt2);
-                }
-                if (mapSelect) {
-                    let optMap = document.createElement('option');
-                    optMap.value = u.name;
-                    optMap.innerText = u.name;
-                    mapSelect.appendChild(optMap);
-                }
-            }
-        });
-    }
-
-    function applyUserUI() {
-        document.getElementById('login-overlay').style.display = 'none';
-        document.getElementById('input-panel').style.display = 'block';
-        document.getElementById('my-name').innerText = currentUser;
-        document.getElementById('my-name').style.color = userColor;
-        
-        document.getElementById('admin-zone').style.display = 'block';
-        populateTargetSelect();
-        renderNotificationsWindow();
-        renderMapsGrid();
-        updateStreamUI();
-
-        if (currentUser === ADMIN_NAME) {
-            document.getElementById('clear-history-box').style.display = 'block';
-            document.getElementById('admin-maps-upload').style.display = 'block';
-        } else {
-            document.getElementById('clear-history-box').style.display = 'none';
-            document.getElementById('admin-stream-box').style.display = 'none';
-            document.getElementById('admin-maps-upload').style.display = 'none';
-        }
-    }
-    function initApp() {
-        runSplash();
-        document.getElementById('login-error').style.display = 'none';
-
-        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
-            document.querySelectorAll('.pwa-install-btn').forEach(function(btn) {
-                btn.style.display = 'none';
-            });
-        }
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(function() {});
-        }
-
-        document.body.addEventListener('click', function firstTouch() {
-            unlockMobileFeatures();
-            subscribeToWebPush();
-            document.body.removeEventListener('click', firstTouch);
-        }, { once: true });
-
-        const loginSelect = document.getElementById('login-select');
-        loginSelect.innerHTML = '';
-
-        USERS_CONFIG.forEach(function(u, index) {
-            let opt = document.createElement('option');
-            opt.value = index; opt.innerText = u.name;
-            loginSelect.appendChild(opt);
-        });
-
-        const headerRow = document.getElementById('table-headers');
-        const archHeaderRow = document.getElementById('archive-table-headers');
-        const inputContainer = document.getElementById('dynamic-inputs');
-        
-        headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
-        if (archHeaderRow) archHeaderRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
-        inputContainer.innerHTML = '';
-
-        COLUMNS_CONFIG.forEach(function(col, index) {
-            let th = document.createElement('th'); 
-            th.innerText = col.label; 
-            headerRow.appendChild(th);
-
-            if (archHeaderRow) {
-                let thArch = document.createElement('th');
-                thArch.innerText = col.label;
-                archHeaderRow.appendChild(thArch);
-            }
-            
-            let div = document.createElement('div'); 
-            div.className = 'field-group';
-            let inputHtml = '';
-
-            if (col.options && col.options.length > 0) {
-                let opts = col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('');
-                inputHtml = '<select id="in-' + index + '"><option value="" disabled selected>-</option>' + opts + '</select>';
-            } else if (col.digitsOnly) {
-                inputHtml = '<input type="text" id="in-' + index + '" placeholder="Цифры, дробь, слэш..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">';
-            } else {
-                inputHtml = '<input type="text" id="in-' + index + '" placeholder="...">';
-            }
-            div.innerHTML = '<label>' + col.label + '</label>' + inputHtml;
-            inputContainer.appendChild(div);
-        });
-
-        const savedUser = localStorage.getItem('journal_user');
-        const savedColor = localStorage.getItem('journal_color');
-        if (savedUser) {
-            currentUser = savedUser;
-            userColor = savedColor || '#fff';
-            applyUserUI();
-        }
-        connectWS();
-    }
-    
-    initApp();
-
-    function attemptLogin() {
-        unlockMobileFeatures();
-        const userIndex = Number(document.getElementById('login-select').value);
-        const pass = document.getElementById('login-pass').value.trim();
-        const user = USERS_CONFIG.at(userIndex);
-
-        if (user && pass === user.pass) {
-            document.getElementById('login-error').style.display = 'none';
-            currentUser = user.name;
-            userColor = user.color;
-            localStorage.setItem('journal_user', currentUser);
-            localStorage.setItem('journal_color', userColor);
-
-            applyUserUI();
-            subscribeToWebPush();
-            checkAndShowAlerts(false);
-        } else {
-            document.getElementById('login-error').style.display = 'block';
-        }
-    }
-
-    function logoutUser() {
-        localStorage.removeItem('journal_user');
-        localStorage.removeItem('journal_color');
-        location.reload();
-    }
-
-    function loginAsViewer() {
-        unlockMobileFeatures();
-        document.getElementById('login-overlay').style.display = 'none';
-        renderNotificationsWindow();
-        renderMapsGrid();
-        updateStreamUI();
-        subscribeToWebPush();
-        checkAndShowAlerts(false);
-    }
-    function sendAdminAlert() {
-        if (!currentUser) return;
-        const target = document.getElementById('admin-target').value;
-        const msg = document.getElementById('admin-msg').value.trim();
-        if (!msg) return alert("Напишите текст!");
-
-        const now = new Date();
-        const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
-
-        ws.send(JSON.stringify({ 
-            type: 'admin_alert', 
-            sender: currentUser,
-            color: userColor,
-            time: timeString,
-            target: target, 
-            text: msg 
-        }));
-
-        document.getElementById('admin-msg').value = '';
-    }
-
-    function clearHistoryAdmin() {
-        if (currentUser !== ADMIN_NAME) return;
-        if (confirm("⚠️ Вы уверены, что хотите ПОЛНОСТЬЮ очистить текущий журнал событий у всех участников?")) {
-            ws.send(JSON.stringify({ type: 'clear_history' }));
-        }
-    }
-
-    function isUnreadForMe(a) {
-        const me = currentUser || 'Просмотр';
-        if (currentUser && a.sender === currentUser) return false;
-        if (Array.isArray(a.readList) && a.readList.indexOf(me) !== -1) return false;
-        return true;
-    }
-
-    function checkAndShowAlerts(isNew) {
-        if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
-
-        let targetToShow = null;
-        let alertObj = null;
-
-        if (currentUser) {
-            const myQueue = getAlertsQueue(currentUser).filter(isUnreadForMe);
-            if (myQueue.length > 0) {
-                targetToShow = currentUser;
-                alertObj = myQueue.at(0);
-            }
-        }
-
-        if (!targetToShow) {
-            const allQueue = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
-            if (allQueue.length > 0) {
-                targetToShow = "ВСЕМ";
-                alertObj = allQueue.at(0);
-            }
-        }
-
-        if (targetToShow && alertObj) {
-            showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
-        }
-    }
-
-    function showAlert(target, text, sender, notifId, isNew) {
-        currentAlertId = notifId || null;
-        currentAlertTarget = target;
-        currentAlertText = text;
-        currentAlertSender = sender || ADMIN_NAME;
-
-        const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-        const countBadge = queueLen > 1 ? ' (1 из ' + queueLen + ')' : '';
-
-        document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + countBadge + ':';
-        document.getElementById('alert-text').innerText = text;
-        document.getElementById('alert-modal').style.display = 'flex';
-
-        updateLockScreenAlert(target, text, currentAlertSender);
-        if (isNew || document.visibilityState === 'hidden') {
-            sendLocalNotification(target, text, currentAlertSender);
-        }
-
-        if (!titleInterval) {
-            let flag = false;
-            titleInterval = setInterval(function() {
-                document.title = flag ? "🛑 ТРЕВОГА! СООБЩЕНИЕ!" : "⚠️ ПРОЧИТАЙТЕ СООБЩЕНИЕ!";
-                flag = !flag;
-            }, 600);
-        }
-        playBeep();
-        if (!soundInterval) {
-            soundInterval = setInterval(playBeep, 2000);
-        }
-    }
-
-    function stopAlertVisuals() {
-        document.getElementById('alert-modal').style.display = 'none';
-        currentAlertId = null;
-        currentAlertTarget = "";
-        if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
-        if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
-        if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
-        if (navigator.vibrate) navigator.vibrate(0);
-        document.title = "МСБ55115";
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: '🟢 Дежурный режим активен',
-                artist: 'Журнал Работ (Ожидание команд)'
-            });
-        }
-    }
-
-    function confirmAlert() {
-        unlockMobileFeatures();
-        const whoConfirmed = currentUser || 'Просмотр';
-        const now = new Date();
-        const readTime = now.toLocaleTimeString().slice(0, 5);
-        const targetToClear = currentAlertTarget;
-        const idToClear = currentAlertId;
-
-        stopAlertVisuals();
-
-        if (targetToClear) {
-            const queue = getAlertsQueue(targetToClear);
-            if (targetToClear === 'ВСЕМ') {
-                queue.forEach(function(a) {
-                    if (!idToClear || a.id === idToClear) {
-                        if (!Array.isArray(a.readList)) a.readList = new Array();
-                        if (a.readList.indexOf(whoConfirmed) === -1) a.readList.push(whoConfirmed);
-                    }
-                });
-                pendingAlerts[targetToClear] = queue;
-            } else {
-                if (idToClear) {
-                    pendingAlerts[targetToClear] = queue.filter(function(a) { return a.id !== idToClear; });
-                } else {
-                    queue.shift();
-                    pendingAlerts[targetToClear] = queue;
-                }
-                if (pendingAlerts[targetToClear] && pendingAlerts[targetToClear].length === 0) {
-                    delete pendingAlerts[targetToClear];
-                }
-            }
-
-            ws.send(JSON.stringify({
-                type: 'clear_alert',
-                target: targetToClear,
-                notifId: idToClear,
-                readBy: whoConfirmed,
-                readTime: readTime
-            }));
-        }
-
-        checkAndShowAlerts(false);
-    }
-
-    function submitRow() {
-        if (!currentUser) return;
-        let values = new Array();
-        let isEmpty = true;
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            let val = document.getElementById('in-' + i).value;
-            if (COLUMNS_CONFIG.at(i).digitsOnly && val) {
-                val = val.replace(/[^0-9.,\/\\]/g, '');
-            }
-            values.push(val);
-            if(val) isEmpty = false;
-        }
-        if (isEmpty) { alert("Пустая строка!"); return; }
-
-        const now = new Date();
-        ws.send(JSON.stringify({
-            type: 'add_row',
-            user: currentUser,
-            color: userColor,
-            time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5),
-            values: values
-        }));
-
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
-    }
-
-    function appendRow(row) {
-        if (row.values && row.values.at(0)) {
-            const firstCol = String(row.values.at(0));
-            if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕНИЕ") !== -1) {
-                return;
-            }
-        }
-        const tbody = document.getElementById('table-body');
-        const tr = document.createElement('tr');
-        tr.className = 'new-row';
-        let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
-        
-        for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-            const val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
-            html += '<td>' + (val || '-') + '</td>';
-        }
-        
-        tr.innerHTML = html;
-        tbody.appendChild(tr);
-        requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
-    }
-</script>
+    <div id="forward-modal" class="modal-overlay" onclick="closeForwardModal()">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <h3>Переслать сообщение <button class="modal-close" onclick="closeForwardModal()">&times;</button></h3>
+            <div id="modal-contacts-list" class="modal-list"></div>
+        </div>
+    </div>
+
+    <div id="group-modal" class="modal-overlay" onclick="closeGroupModal()">
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <h3>Создать группу <button class="modal-close" onclick="closeGroupModal()">&times;</button></h3>
+            <input type="text" id="group-name-input" class="auth-input" placeholder="Название конференции" style="margin-top:10px;">
+            <p style="font-size:12px; color:#64748b; margin-bottom:8px;">Введите позывные участников через запятую:</p>
+            <input type="text" id="group-members-input" class="auth-input" placeholder="позывной1, позывной2">
+            <button onclick="submitCreateGroup()" class="auth-btn" style="background:#0284c7;">Создать</button>
+        </div>
+    </div>
+
+    <script src="/journal.js"></script>
+    <script src="/messenger.js"></script>
 </body>
 </html>
