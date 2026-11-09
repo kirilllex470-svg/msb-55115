@@ -2,14 +2,14 @@ let chatUser = null;
 let currentPartner = null;
 let currentRoomId = null;
 let isCurrentGroup = false;
-let friendsList = [];
-let friendRequests = [];
+let friendsList = new Array();
+let friendRequests = new Array();
 let updateInterval = null;
-let lastMessagesCount = 0;
+let lastMessagesCount = -1;
 let audioRecorder = null;
 let videoRecorder = null;
-let audioChunks = [];
-let videoChunks = [];
+let audioChunks = new Array();
+let videoChunks = new Array();
 let videoStreamRef = null;
 
 let activeMessageId = null;
@@ -21,10 +21,18 @@ let quotedMessageId = null;
 let quotedMessageText = null;
 let quotedMessageSender = null;
 
-const messagesDiv = document.getElementById('messages');
+function getMessagesDiv() {
+    return document.getElementById('messages');
+}
 
 function getActiveChatIdentity() {
-    return currentCallsign || currentUser || localStorage.getItem('chat_username') || null;
+    return currentCallsign || currentUser || localStorage.getItem('journal_callsign') || localStorage.getItem('chat_username') || localStorage.getItem('journal_user') || null;
+}
+
+function makeDirectRoomId(u1, u2) {
+    const sorted = Array.of(String(u1 || '').toLowerCase(), String(u2 || '').toLowerCase()).sort();
+    const pair = sorted.join(',');
+    return pair + '_' + pair;
 }
 
 function syncMessengerAuth() {
@@ -34,11 +42,12 @@ function syncMessengerAuth() {
     const avEl = document.getElementById('my-avatar');
     const hdrEl = document.getElementById('msg-header-identity');
     if (nameEl) nameEl.textContent = chatUser + (currentUser && currentUser !== chatUser ? ' (' + currentUser + ')' : '');
-    if (avEl) avEl.textContent = chatUser.substring(0, 2).toUpperCase();
+    if (avEl && !avEl.querySelector('img')) avEl.textContent = chatUser.substring(0, 2).toUpperCase();
     if (hdrEl) hdrEl.textContent = '👤 ' + chatUser;
     if (!updateInterval) {
         updateInterval = setInterval(function() {
-            if (document.getElementById('messenger-modal').style.display === 'flex') {
+            const modal = document.getElementById('messenger-modal');
+            if (modal && modal.style.display === 'flex') {
                 fetchMessages();
             }
             loadFriendsAndRequests();
@@ -108,10 +117,8 @@ function uploadMyAvatar(inputEl) {
 document.addEventListener('DOMContentLoaded', function() {
     const tInput = document.getElementById('text-input');
     const fInput = document.getElementById('new-friend-name');
-    const miniInput = document.getElementById('mini-notif-input');
     if (tInput) tInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMessage(); });
     if (fInput) fInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendFriendRequest(); });
-    if (miniInput) miniInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMiniNotification(); });
     syncMessengerAuth();
 });
 function loadFriendsAndRequests() {
@@ -170,15 +177,14 @@ function renderFriends() {
         return;
     }
     friendsList.forEach(function(friend) {
-        const sorted = [chatUser.toLowerCase(), friend.name.toLowerCase()].sort();
-        let activeId = friend.isGroup ? friend.id : (sorted + '_' + sorted);
+        let activeId = friend.isGroup ? friend.id : makeDirectRoomId(chatUser, friend.name);
         const isActive = currentRoomId && currentRoomId === activeId;
         const item = document.createElement('div');
         item.className = 'friend-item ' + (isActive ? 'active' : '');
         item.onclick = function() { selectChat(friend); };
         const badgeHTML = (friend.unread > 0 && !isActive) ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
         const timeHTML = friend.time ? ('<div class="friend-time-label">' + friend.time + '</div>') : '';
-        const unitTag = (!friend.isGroup && friend.unit) ? (' <span style="color:#38bdf8;font-size:12px;">[' + friend.unit + ']</span>') : '';
+        const unitTag = (!friend.isGroup && friend.unit) ? (' <span style="color:#38bdf8;font-size:12px;">(' + friend.unit + ')</span>') : '';
         const displayName = (friend.isGroup ? ('👥 ' + friend.name) : friend.name) + unitTag;
         const avInner = friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : friend.name.substring(0, 2).toUpperCase();
         const friendDataEscaped = JSON.stringify({ id: friend.id, name: friend.name, isGroup: friend.isGroup }).replace(/"/g, '&quot;');
@@ -242,7 +248,8 @@ function resetChatArea() {
     document.getElementById('chat-status').style.display = "none";
     document.getElementById('text-input').setAttribute('disabled', 'true');
     document.getElementById('text-input').placeholder = "Сообщение...";
-    if (messagesDiv) messagesDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
+    const mDiv = getMessagesDiv();
+    if (mDiv) mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
 }
 
 function selectChat(itemObj) {
@@ -252,18 +259,18 @@ function selectChat(itemObj) {
         document.getElementById('chat-status').textContent = "конференция";
     } else {
         currentPartner = itemObj.name; isCurrentGroup = false;
-        const sorted = [chatUser.toLowerCase(), currentPartner.toLowerCase()].sort();
-        currentRoomId = sorted + '_' + sorted;
+        currentRoomId = makeDirectRoomId(chatUser, currentPartner);
         document.getElementById('chat-status').textContent = "в сети";
     }
     document.getElementById('partner-display-name').textContent = currentPartner;
     renderAvatarElement(document.getElementById('partner-avatar'), currentPartner, itemObj.avatar);
     document.getElementById('chat-status').style.display = "block";
-    lastMessagesCount = 0; cancelReply();
+    lastMessagesCount = -1; cancelReply();
     document.getElementById('text-input').removeAttribute('disabled');
     document.getElementById('text-input').placeholder = "Написать сообщение...";
     if (window.innerWidth < 768) document.getElementById('app-sidebar').classList.add('hidden');
-    if (messagesDiv) messagesDiv.innerHTML = '';
+    const mDiv = getMessagesDiv();
+    if (mDiv) mDiv.innerHTML = '';
     markChatAsRead(currentRoomId); fetchMessages(); renderFriends();
 }
 
@@ -280,41 +287,47 @@ function markChatAsRead(roomId) {
 }
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
+    if (!currentRoomId) return alert("Сначала выберите чат слева!");
     const btn = document.getElementById('voice-btn');
     if (audioRecorder && audioRecorder.state === "recording") {
-        audioRecorder.stop(); btn.classList.remove('recording'); btn.textContent = "🎙️";
+        audioRecorder.stop(); btn.classList.remove('recording'); btn.textContent = "⏳";
     } else {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-            audioChunks = [];
-            let options = { mimeType: 'audio/webm; codecs=opus' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'audio/webm' };
+        navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 24000 } }).then(function(stream) {
+            audioChunks = new Array();
+            let options = { audioBitsPerSecond: 32000 };
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) options.mimeType = 'audio/webm;codecs=opus';
+            else if (MediaRecorder.isTypeSupported('audio/mp4')) options.mimeType = 'audio/mp4';
             audioRecorder = new MediaRecorder(stream, options);
             audioRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
             audioRecorder.onstop = function() {
-                const blob = new Blob(audioChunks, { type: audioRecorder.mimeType });
+                const blob = new Blob(audioChunks, { type: audioRecorder.mimeType || 'audio/webm' });
                 const formData = new FormData();
                 formData.append('sender', chatUser); formData.append('room', currentRoomId); formData.append('type', 'audio'); formData.append('media', blob, 'voice.webm');
                 if (quotedMessageId) { formData.append('quoteId', quotedMessageId); formData.append('quoteText', quotedMessageText); formData.append('quoteSender', quotedMessageSender); cancelReply(); }
-                fetch('/api/send', { method: 'POST', body: formData }).then(function() { fetchMessages(); });
+                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎙️"; lastMessagesCount = -1; fetchMessages(); }).catch(function() { btn.textContent = "🎙️"; });
                 stream.getTracks().forEach(function(track) { track.stop(); });
             };
-            audioRecorder.start(); btn.classList.add('recording'); btn.textContent = "🛑";
+            audioRecorder.start(250); btn.classList.add('recording'); btn.textContent = "🛑";
         }).catch(function() { alert("Нет доступа к микрофону!"); });
     }
 }
 
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
+    if (!currentRoomId) return alert("Сначала выберите чат слева!");
     const btn = document.getElementById('video-btn');
     const preview = document.getElementById('video-preview');
     if (videoRecorder && videoRecorder.state === "recording") {
-        videoRecorder.stop(); btn.classList.remove('recording'); btn.textContent = "🎥"; preview.style.display = 'none';
+        videoRecorder.stop(); btn.classList.remove('recording'); btn.textContent = "⏳"; preview.style.display = 'none';
         if (preview.srcObject) { preview.srcObject.getTracks().forEach(function(t) { t.stop(); }); preview.srcObject = null; }
     } else {
-        navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: { width: 320, height: 320, facingMode: "user" } }).then(function(stream) {
-            videoChunks = []; videoStreamRef = stream; preview.srcObject = stream; preview.style.display = 'block';
-            let options = MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2') ? { mimeType: 'video/mp4;codecs=avc1,mp4a.40.2' } : (MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : { mimeType: 'video/webm;codecs=vp8,opus' });
-            videoRecorder = new MediaRecorder(stream, options);
+        navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true },
+            video: { width: { ideal: 240 }, height: { ideal: 240 }, frameRate: { ideal: 20, max: 24 }, facingMode: "user" }
+        }).then(function(stream) {
+            videoChunks = new Array(); videoStreamRef = stream; preview.srcObject = stream; preview.style.display = 'block';
+            let mime = MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2') ? 'video/mp4;codecs=avc1,mp4a.40.2' : (MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : 'video/webm;codecs=vp8,opus');
+            videoRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 250000, audioBitsPerSecond: 32000 });
             videoRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) videoChunks.push(e.data); };
             videoRecorder.onstop = function() {
                 const blob = new Blob(videoChunks, { type: videoRecorder.mimeType || 'video/mp4' });
@@ -322,10 +335,10 @@ function toggleVideoRecord() {
                 const formData = new FormData();
                 formData.append('sender', chatUser); formData.append('room', currentRoomId); formData.append('type', 'video'); formData.append('media', blob, 'video.' + fileExt);
                 if (quotedMessageId) { formData.append('quoteId', quotedMessageId); formData.append('quoteText', quotedMessageText); formData.append('quoteSender', quotedMessageSender); cancelReply(); }
-                fetch('/api/send', { method: 'POST', body: formData }).then(function() { fetchMessages(); });
+                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎥"; lastMessagesCount = -1; fetchMessages(); }).catch(function() { btn.textContent = "🎥"; });
                 if (videoStreamRef) videoStreamRef.getTracks().forEach(function(t) { t.stop(); });
             };
-            videoRecorder.start(); btn.classList.add('recording'); btn.textContent = "🛑";
+            videoRecorder.start(250); btn.classList.add('recording'); btn.textContent = "🛑";
         }).catch(function() { alert("Нет доступа к камере!"); });
     }
 }
@@ -333,7 +346,7 @@ function toggleVideoRecord() {
 function uploadAnyFile(inputElement) {
     chatUser = getActiveChatIdentity();
     if (!inputElement.files || inputElement.files.length === 0 || !chatUser || !currentRoomId) return;
-    const file = inputElement.files[0];
+    const file = inputElement.files.item(0);
     const formData = new FormData();
     formData.append('sender', chatUser);
     formData.append('room', currentRoomId);
@@ -346,7 +359,7 @@ function uploadAnyFile(inputElement) {
         cancelReply();
     }
     fetch('/api/send', { method: 'POST', body: formData })
-        .then(function() { inputElement.value = ''; fetchMessages(); })
+        .then(function() { inputElement.value = ''; lastMessagesCount = -1; fetchMessages(); })
         .catch(function() { alert("Ошибка отправки файла!"); });
 }
 function sendMessage() {
@@ -367,6 +380,7 @@ function sendMessage() {
     }
     fetch('/api/send', { method: 'POST', body: formData }).then(function() {
         textInput.value = '';
+        lastMessagesCount = -1;
         fetchMessages();
     });
 }
@@ -452,8 +466,7 @@ function closeForwardModal() {
 
 function executeForward(targetObj) {
     chatUser = getActiveChatIdentity();
-    const sorted = [chatUser.toLowerCase(), targetObj.name.toLowerCase()].sort();
-    let targetRoomId = targetObj.isGroup ? targetObj.id : (sorted + '_' + sorted);
+    let targetRoomId = targetObj.isGroup ? targetObj.id : makeDirectRoomId(chatUser, targetObj.name);
     let originalAuthor = activeMessageOriginalSender || chatUser;
     if (activeMessageType === 'audio' || activeMessageType === 'video' || activeMessageType === 'file') {
         let fileUrl = activeMessageType === 'file' ? JSON.parse(activeMessageText).path : activeMessageText;
@@ -483,11 +496,17 @@ function inlineDeleteMessage(msgId) {
 
 function fetchMessages() {
     chatUser = getActiveChatIdentity();
-    if (!chatUser || !currentRoomId) return;
+    const mDiv = getMessagesDiv();
+    if (!chatUser || !currentRoomId || !mDiv) return;
     fetch('/api/messages?room=' + encodeURIComponent(currentRoomId)).then(function(res) { return res.json(); }).then(function(data) {
+        if (!Array.isArray(data)) return;
         if (data.length === lastMessagesCount) return;
-        lastMessagesCount = data.length; messagesDiv.innerHTML = '';
-        if (data.length === 0) { messagesDiv.innerHTML = '<div class="chat-placeholder">История сообщений пуста.</div>'; return; }
+        lastMessagesCount = data.length;
+        mDiv.innerHTML = '';
+        if (data.length === 0) {
+            mDiv.innerHTML = '<div class="chat-placeholder">История сообщений пуста.</div>';
+            return;
+        }
         data.forEach(function(msg) {
             const row = document.createElement('div');
             const isMy = msg.sender.toLowerCase() === chatUser.toLowerCase();
@@ -500,19 +519,19 @@ function fetchMessages() {
             let delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
             let contentHTML = '';
             if (msg.type === 'audio') contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="metadata" style="display:block; max-width:100%;"></audio>';
-            else if (msg.type === 'video') contentHTML = '<video class="video-round" src="' + msg.text + '" playsinline autoplay muted loop style="display:block;" onclick="playVideoWithSound(this)"></video>';
+            else if (msg.type === 'video') contentHTML = '<video class="video-round" src="' + msg.text + '" playsinline autoplay muted loop preload="metadata" style="display:block;" onclick="playVideoWithSound(this)"></video>';
             else if (msg.type === 'file') {
                 try {
                     const fileObj = JSON.parse(msg.text); const ext = fileObj.name.split('.').pop().toLowerCase();
-                    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) contentHTML = '<img class="chat-image" src="' + fileObj.path + '" onclick="window.open(this.src)">';
+                    if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) contentHTML = '<img class="chat-image" src="' + fileObj.path + '" onclick="window.open(this.src)">';
                     else contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
                 } catch(e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
             } else contentHTML = '<div class="msg-text">' + msg.text + '</div>';
             bubble.innerHTML = delBtnHTML + quoteHTML + forwardHTML + authorHTML + contentHTML + '<div class="msg-time">' + msg.time + '</div>';
-            messagesDiv.appendChild(row);
+            mDiv.appendChild(row);
             setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
         });
-        setTimeout(function() { messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 50);
+        setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 50);
         if (data.length > 0 && currentPartner) {
             fetch('/api/messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: chatUser, room: currentRoomId }) });
         }

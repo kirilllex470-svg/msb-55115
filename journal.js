@@ -1,29 +1,29 @@
-const USERS_CONFIG = [
+const USERS_CONFIG = Array.of(
     { name: "ШР", pass: "551151111", color: "#3b82f6" },
     { name: "РОТА-1", pass: "551152222", color: "#a855f7" },
     { name: "РОТА-2", pass: "551153333", color: "#22c55e" },
     { name: "РОТА-3", pass: "551154444", color: "#eab308" },
     { name: "АДМИН", pass: "5555", color: "#ef4444" }
-];
+);
 const ADMIN_NAME = "АДМИН";
 
-const COLUMNS_CONFIG = [
-    { label: "ГРУППА", options: ["1", "2", "3", "4", "5"] },
-    { label: "ИСХОДНИКИ", options: [
+const COLUMNS_CONFIG = Array.of(
+    { label: "ГРУППА", options: Array.of("1", "2", "3", "4", "5") },
+    { label: "ИСХОДНИКИ", options: Array.of(
         "НАЧАЛИ ДВИЖЕНИЕ", "ЖДУТ", "ИДУТ", "ПЕРЕСЕКАЮТ ОТКРЫТКУ",
         "ПРОШЛИ ИСХОДНЫЙ ПУНКТ", "ЗАНЯТИЕ Р-НА ФОР-Я ГРУПП",
         "ЗАНЯТИЕ ПЕРЕФОР-Я Р-НА ГРУПП", "ВЫХОД НА РУБЕЖ АТАКИ",
         "ВЫХОД НА РУБЕЖ ШТУРМА", "ЗАНИМАЮТСЯ МЕДИЦИНОЙ",
         "ЗАНИМАЮТСЯ СВЯЗЬЮ", "ОБОРОНА", "РАБОТАЮТ В ОБОРОНЕ",
         "ШТУРМУЮТ", "РВБС"
-    ]},
-    { label: "ЦВЕТ ТОЧКИ", options: [
+    )},
+    { label: "ЦВЕТ ТОЧКИ", options: Array.of(
         "ФИОЛЕТОВЫЙ", "БИРЮЗОВАЯ", "БИРЮЗОВАЯ-А", "СЕРАЯ", "ЗЕЛЕНАЯ",
         "СИНИЯ", "ЖЕЛТАЯ", "ОРАНЖЕВАЯ", "КРАСНАЯ", "РОЗОВАЯ",
         "РОЗОВАЯ-А", "БЕЖЕВАЯ", "КОРИЧНЕВАЯ", "ЧЕРНАЯ", "БОРДОВАЯ"
-    ]},
+    )},
     { label: "НОМЕР ТОЧКИ", options: new Array(), digitsOnly: true },
-    { label: "ЛЕСОПОЛОСА", options: [
+    { label: "ЛЕСОПОЛОСА", options: Array.of(
         "ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "СМОГ-1", "КИЛТ", "ЗАЯЦ", "ЗАМЕНА", "КРАСКА",
         "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7",
         "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1",
@@ -40,9 +40,9 @@ const COLUMNS_CONFIG = [
         "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1",
         "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН",
         "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"
-    ]},
+    )},
     { label: "ПРИМЕЧАНИЯ", options: new Array() }
-];
+);
 let ws = null;
 let currentUser = null;
 let currentCallsign = "";
@@ -81,12 +81,12 @@ function getStaticDateTime() {
     return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min;
 }
 
-const SPLASH_FILES = [
+const SPLASH_FILES = Array.of(
     "boot/kernel_msb55115.sys", "crypto/cipher_channel_v4.dat", "net/websocket_sync_protocol.dll",
     "maps/tactical_forest_sectors.db", "auth/unit_credentials_guard.bin", "push/vapid_service_worker.js",
     "stream/salutejazz_rtc_bridge.mod", "journal/history_storage_engine.json", "audio/siren_emergency_synth.wav",
     "system/msb55115_ready_state.ok"
-];
+);
 
 function runSplash() {
     const s = document.getElementById('splash-screen');
@@ -102,7 +102,7 @@ function runSplash() {
         if (p) p.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + cur + '%';
         const idx = Math.min(Math.floor((cur / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
         if (f) f.innerText = SPLASH_FILES.at(idx);
-        if (g) g.innerText = (cur < 100) ? '[' + cur + '%]' : '[ГОТОВО]';
+        if (g) g.innerText = (cur < 100) ? (cur + '%') : 'ГОТОВО';
         if (cur >= 100) {
             clearInterval(timer);
             s.style.opacity = '0';
@@ -140,7 +140,7 @@ function urlBase64ToUint8Array(base64String) {
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    for (let i = 0; i < rawData.length; ++i) outputArray.fill(rawData.charCodeAt(i), i, i + 1);
     return outputArray;
 }
 
@@ -175,7 +175,7 @@ async function subscribeToWebPush() {
 
 function sendLocalNotification(target, text, sender) {
     const fromWho = sender || 'АДМИН';
-    const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
+    const title = '🛑 ТРЕВОГА ДЛЯ (' + target + ')!';
     const body = fromWho + ': ' + text;
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then(function(reg) {
@@ -209,7 +209,7 @@ function createWavUrl(freq, durationSec, volume) {
         }
         view.setInt16(44 + i * 2, sample, true);
     }
-    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+    return URL.createObjectURL(new Blob(Array.of(buf), { type: 'audio/wav' }));
 }
 
 function unlockMobileFeatures() {
@@ -239,13 +239,13 @@ function unlockMobileFeatures() {
 function updateLockScreenAlert(target, text, sender) {
     if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
-            title: '🛑 ТРЕВОГА ДЛЯ [' + target + '] ОТ [' + (sender || 'АДМИН') + ']!',
+            title: '🛑 ТРЕВОГА ДЛЯ (' + target + ') ОТ (' + (sender || 'АДМИН') + ')!',
             artist: text,
             album: 'СРОЧНО ОТКРОЙТЕ БРАУЗЕР!'
         });
     }
 }
-const SOUND_PRESETS = [
+const SOUND_PRESETS = Array.of(
     { id: 'alarm1', name: '🚨 Тревога 1 (Сирена МСБ — стандарт)', type: 'alarm' },
     { id: 'alarm2', name: '🚨 Тревога 2 (Двойной радарный импульс)', type: 'alarm' },
     { id: 'nice1',  name: '🎵 Красивый 1 (Хрустальный аккорд)', type: 'nice' },
@@ -253,7 +253,7 @@ const SOUND_PRESETS = [
     { id: 'nice3',  name: '🎵 Красивый 3 (Тёплая маримба)', type: 'nice' },
     { id: 'bank1',  name: '🏦 Банк 1 (Сбер / Перевод зачислен)', type: 'bank' },
     { id: 'bank2',  name: '🏦 Банк 2 (Премиум Банк / Push)', type: 'bank' }
-];
+);
 
 function playToneNotes(notes, waveType) {
     try {
@@ -285,55 +285,55 @@ function playSoundById(soundId, isPreview) {
         }
         if (id === 'alarm1') {
             if (!isPreview && sirenAudio) sirenAudio.play().catch(function() {});
-            playToneNotes([
+            playToneNotes(Array.of(
                 { f: 880, fEnd: 1140, t: 0, d: 0.25, v: 0.4, type: 'sawtooth' },
                 { f: 1140, fEnd: 880, t: 0.25, d: 0.25, v: 0.4, type: 'sawtooth' }
-            ]);
+            ));
         } else if (id === 'alarm2') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes([
+            playToneNotes(Array.of(
                 { f: 960, t: 0, d: 0.14, v: 0.45, type: 'square' },
                 { f: 960, t: 0.18, d: 0.14, v: 0.45, type: 'square' },
                 { f: 1280, t: 0.38, d: 0.28, v: 0.45, type: 'square' }
-            ]);
+            ));
         } else if (id === 'nice1') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes([
+            playToneNotes(Array.of(
                 { f: 523.25, t: 0, d: 0.45, v: 0.3, type: 'sine' },
                 { f: 659.25, t: 0.10, d: 0.45, v: 0.3, type: 'sine' },
                 { f: 783.99, t: 0.20, d: 0.55, v: 0.3, type: 'sine' },
                 { f: 1046.50, t: 0.30, d: 0.70, v: 0.35, type: 'sine' }
-            ]);
+            ));
         } else if (id === 'nice2') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes([
+            playToneNotes(Array.of(
                 { f: 440, t: 0, d: 0.35, v: 0.3, type: 'triangle' },
                 { f: 554.37, t: 0.18, d: 0.35, v: 0.3, type: 'triangle' },
                 { f: 659.25, t: 0.36, d: 0.65, v: 0.35, type: 'triangle' }
-            ]);
+            ));
         } else if (id === 'nice3') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes([
+            playToneNotes(Array.of(
                 { f: 587.33, t: 0, d: 0.22, v: 0.35, type: 'sine' },
                 { f: 880, t: 0.14, d: 0.22, v: 0.35, type: 'sine' },
                 { f: 739.99, t: 0.28, d: 0.22, v: 0.35, type: 'sine' },
                 { f: 1174.66, t: 0.42, d: 0.55, v: 0.4, type: 'sine' }
-            ]);
+            ));
         } else if (id === 'bank1') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes([
+            playToneNotes(Array.of(
                 { f: 783.99, t: 0, d: 0.16, v: 0.4, type: 'sine' },
                 { f: 1567.98, t: 0, d: 0.12, v: 0.15, type: 'triangle' },
                 { f: 1174.66, t: 0.14, d: 0.48, v: 0.45, type: 'sine' },
                 { f: 2349.32, t: 0.14, d: 0.35, v: 0.18, type: 'triangle' }
-            ]);
+            ));
         } else if (id === 'bank2') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes([
+            playToneNotes(Array.of(
                 { f: 1046.50, t: 0, d: 0.11, v: 0.38, type: 'sine' },
                 { f: 1318.51, t: 0.09, d: 0.11, v: 0.38, type: 'sine' },
                 { f: 1567.98, t: 0.18, d: 0.45, v: 0.45, type: 'sine' }
-            ]);
+            ));
         }
     } catch (e) {}
 }
@@ -404,6 +404,7 @@ function openActiveStreamWindow() {
         window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
     }
 }
+
 function startVideoStream() {
     if (currentUser !== ADMIN_NAME) return;
     const url = document.getElementById('stream-url-input').value.trim();
@@ -448,7 +449,6 @@ function updateStreamUI() {
         if (viewerPanel) viewerPanel.style.display = 'none';
     }
 }
-
 function toggleMapsSection() {
     const box = document.getElementById('maps-section-box');
     if (!box) return;
@@ -463,6 +463,7 @@ function isMapVisibleForMe(m) {
     if (currentUser && (m.target === currentUser || m.sender === currentUser)) return true;
     return false;
 }
+
 let photoZoom = 1, photoPanX = 0, photoPanY = 0, isDraggingPhoto = false, dragStartX = 0, dragStartY = 0, zoomEventsBound = false;
 
 function applyPhotoTransform() {
@@ -741,162 +742,44 @@ function getAlertsQueue(target) {
     const raw = pendingAlerts[target];
     if (!raw) return new Array();
     if (Array.isArray(raw)) return raw;
-    if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
     return Array.of(raw);
-}
-function connectWS() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-    ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
-
-    ws.onmessage = function(event) {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'init') {
-            document.getElementById('table-body').innerHTML = '';
-            msg.data.forEach(appendRow);
-            allNotifications = msg.notifications || new Array();
-            renderNotificationsWindow();
-            fetchMapsFromServer();
-            fetchArchiveFromServer();
-            if (msg.streamState) { activeStream = msg.streamState; updateStreamUI(); }
-            if (msg.vapidPublicKey) { publicVapidKey = msg.vapidPublicKey; subscribeToWebPush(); }
-            if (msg.alerts) { pendingAlerts = msg.alerts; checkAndShowAlerts(false); }
-            if (currentUser === ADMIN_NAME) fetchAdminUsersList();
-            refreshMyPermissionsFromServer();
-        }
-        if (msg.type === 'new_row') {
-            appendRow(msg.row);
-            fetchArchiveFromServer();
-        }
-        if (msg.type === 'daily_archived') {
-            document.getElementById('table-body').innerHTML = '';
-            fetchArchiveFromServer();
-        }
-        if (msg.type === 'new_map') {
-            fetchMapsFromServer();
-            if (!msg.target || msg.target === 'ВСЕМ' || currentUser === ADMIN_NAME || msg.target === currentUser) {
-                const box = document.getElementById('maps-section-box');
-                if (box && (currentUser === ADMIN_NAME || myPermissions.maps)) box.style.display = 'block';
-            }
-        }
-        if (msg.type === 'stream_state') {
-            activeStream = msg.streamState || { active: false, url: '' };
-            updateStreamUI();
-        }
-        if (msg.type === 'users_updated') {
-            if (currentUser === ADMIN_NAME) fetchAdminUsersList();
-            refreshMyPermissionsFromServer();
-            if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests();
-        }
-        if (msg.type === 'history_cleared') {
-            document.getElementById('table-body').innerHTML = '';
-            allNotifications = new Array();
-            allMaps = new Array();
-            pendingAlerts = {};
-            stopAlertVisuals();
-            renderNotificationsWindow();
-            renderMapsGrid();
-        }
-        if (msg.type === 'admin_alert') {
-            if (msg.notif) {
-                allNotifications.push(msg.notif);
-                renderNotificationsWindow();
-            }
-            const queue = getAlertsQueue(msg.target);
-            queue.push({
-                id: msg.notif ? msg.notif.id : Date.now(),
-                text: msg.text,
-                sender: msg.sender || ADMIN_NAME,
-                readList: new Array()
-            });
-            pendingAlerts[msg.target] = queue;
-            checkAndShowAlerts(true);
-        }
-        if (msg.type === 'alert_cleared') {
-            handleAlertClearedMsg(msg);
-        }
-    };
-
-    ws.onclose = function() { setTimeout(connectWS, 1500); };
-}
-
-setInterval(function() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ping' }));
-    } else {
-        connectWS();
-    }
-}, 4000);
-function handleAlertClearedMsg(msg) {
-    const queue = getAlertsQueue(msg.target);
-    if (msg.target === 'ВСЕМ') {
-        queue.forEach(function(a) {
-            if (!msg.notifId || a.id === msg.notifId) {
-                if (!Array.isArray(a.readList)) a.readList = new Array();
-                if (msg.who && a.readList.indexOf(msg.who) === -1) a.readList.push(msg.who);
-            }
-        });
-        pendingAlerts[msg.target] = queue;
-    } else {
-        if (msg.notifId) {
-            pendingAlerts[msg.target] = queue.filter(function(a) { return a.id !== msg.notifId; });
-        } else {
-            queue.shift();
-            pendingAlerts[msg.target] = queue;
-        }
-        if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) delete pendingAlerts[msg.target];
-    }
-
-    if (msg.notifId) {
-        allNotifications.forEach(function(n) {
-            if (n.id === msg.notifId) { n.read = true; n.readBy = msg.readBy || ''; }
-        });
-    } else {
-        let marked = false;
-        allNotifications.forEach(function(n) {
-            if (!marked && n.target === msg.target) { n.read = true; n.readBy = msg.readBy || ''; marked = true; }
-        });
-    }
-    renderNotificationsWindow();
-
-    const myName = currentCallsign || currentUser || 'Просмотр';
-    if (currentAlertTarget === msg.target && (!msg.notifId || currentAlertId === msg.notifId)) {
-        if (msg.target !== 'ВСЕМ' || msg.who === myName || msg.who === currentUser) stopAlertVisuals();
-    }
-    checkAndShowAlerts(false);
 }
 
 function populateTargetSelect() {
     const adminSelect = document.getElementById('admin-target');
-    const miniSelect = document.getElementById('mini-notif-target');
     const mapSelect = document.getElementById('map-target-select');
 
-    [adminSelect, miniSelect].forEach(function(sel) {
-        if (!sel) return;
-        sel.innerHTML = '';
+    if (adminSelect) {
+        const prevVal = adminSelect.value;
+        adminSelect.innerHTML = '';
         if (currentUser === ADMIN_NAME) {
             let optAll = document.createElement('option');
             optAll.value = "ВСЕМ";
-            optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ (В БЕГУЩУЮ СТРОКУ)";
-            sel.appendChild(optAll);
+            optAll.innerText = "📢 ВСЕМ";
+            adminSelect.appendChild(optAll);
         }
         const onlyFriends = myMessengerFriends.filter(function(f) { return !f.isGroup; });
         if (onlyFriends.length === 0 && currentUser !== ADMIN_NAME) {
             let optEmpty = document.createElement('option');
             optEmpty.value = "";
-            optEmpty.innerText = "👥 Добавьте друзей в Мессенджере для связи";
-            sel.appendChild(optEmpty);
+            optEmpty.innerText = "👥 Добавьте друзей в Мессенджере";
+            adminSelect.appendChild(optEmpty);
         } else {
             onlyFriends.forEach(function(f) {
                 let opt = document.createElement('option');
                 opt.value = f.name;
-                opt.innerText = "👤 Друг: " + f.name + (f.unit ? " [" + f.unit + "]" : "");
-                sel.appendChild(opt);
+                opt.innerText = "👤 " + f.name + (f.unit ? " [" + f.unit + "]" : "");
+                adminSelect.appendChild(opt);
             });
         }
-    });
+        if (prevVal && Array.from(adminSelect.options).some(function(o) { return o.value === prevVal; })) {
+            adminSelect.value = prevVal;
+        }
+    }
 
     if (mapSelect) {
-        mapSelect.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ</option>';
+        const prevMapVal = mapSelect.value;
+        mapSelect.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ</option>';
         USERS_CONFIG.forEach(function(u) {
             if (u.name !== currentUser) {
                 let opt = document.createElement('option');
@@ -904,6 +787,9 @@ function populateTargetSelect() {
                 mapSelect.appendChild(opt);
             }
         });
+        if (prevMapVal && Array.from(mapSelect.options).some(function(o) { return o.value === prevMapVal; })) {
+            mapSelect.value = prevMapVal;
+        }
     }
 }
 function applyPermissionsUI() {
@@ -940,8 +826,6 @@ function applyUserUI() {
     if (badge) badge.innerText = currentCallsign ? ('[' + currentCallsign + ']') : '';
 
     document.getElementById('admin-zone').style.display = 'block';
-    const miniBar = document.getElementById('mini-notif-reply-bar');
-    if (miniBar) miniBar.style.display = 'flex';
 
     applyPermissionsUI();
     populateTargetSelect();
@@ -1010,7 +894,7 @@ function initApp() {
             let opts = col.options.map(function(o) { return '<option>' + o + '</option>'; }).join('');
             inputHtml = '<select id="in-' + index + '"><option value="" disabled selected>-</option>' + opts + '</select>';
         } else if (col.digitsOnly) {
-            inputHtml = '<input type="text" id="in-' + index + '" placeholder="Цифры, дробь, слэш..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">';
+            inputHtml = '<input type="text" id="in-' + index + '" placeholder="Цифры, дробь..." oninput="this.value = this.value.replace(/[^0-9.,\\/\\\\]/g, \'\')">';
         } else {
             inputHtml = '<input type="text" id="in-' + index + '" placeholder="...">';
         }
@@ -1030,6 +914,7 @@ function initApp() {
     connectWS();
 }
 initApp();
+
 function hideAuthMessages() {
     const err = document.getElementById('login-error');
     if (err) err.style.display = 'none';
@@ -1074,7 +959,6 @@ function submitRegistration() {
         }
     });
 }
-
 function refreshMyPermissionsFromServer() {
     if (!currentCallsign) return;
     if (currentUser === ADMIN_NAME) {
@@ -1138,7 +1022,6 @@ function attemptLogin() {
         errEl.style.display = 'block';
     });
 }
-
 function completeLoginSuccess(unitName, callsign, color) {
     hideAuthMessages();
     currentUser = unitName;
@@ -1153,6 +1036,7 @@ function completeLoginSuccess(unitName, callsign, color) {
     subscribeToWebPush();
     checkAndShowAlerts(false);
 }
+
 function openAdminUsersModal() {
     if (currentUser !== ADMIN_NAME) return;
     document.getElementById('admin-users-modal').style.display = 'flex';
@@ -1174,7 +1058,6 @@ function renderPermCheckboxes(u) {
         '<label class="perm-chip"><input type="checkbox" ' + (p.archive ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'archive\', this.checked)"> 🗂️ Архив</label>' +
     '</div>';
 }
-
 function fetchAdminUsersList() {
     if (currentUser !== ADMIN_NAME) return;
     fetch('/api/admin/users?t=' + Date.now())
@@ -1230,7 +1113,6 @@ function logoutUser() {
     localStorage.removeItem('chat_username');
     location.reload();
 }
-
 function loginAsViewer() {
     unlockMobileFeatures();
     document.getElementById('login-overlay').style.display = 'none';
@@ -1240,6 +1122,7 @@ function loginAsViewer() {
     subscribeToWebPush();
     checkAndShowAlerts(false);
 }
+
 function sendAdminAlert() {
     if (!currentUser) return;
     const target = document.getElementById('admin-target').value;
@@ -1256,25 +1139,6 @@ function sendAdminAlert() {
         text: msg
     }));
     document.getElementById('admin-msg').value = '';
-}
-
-function sendMiniNotification() {
-    if (!currentUser) return alert("Войдите в систему, чтобы отправлять сообщения!");
-    const target = document.getElementById('mini-notif-target').value;
-    if (!target) return alert("Сначала добавьте друга в Мессенджере!");
-    const input = document.getElementById('mini-notif-input');
-    const msg = input.value.trim();
-    if (!msg) return;
-    const senderLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
-    ws.send(JSON.stringify({
-        type: 'admin_alert',
-        sender: senderLabel,
-        color: userColor,
-        time: getStaticDateTime(),
-        target: target,
-        text: msg
-    }));
-    input.value = '';
 }
 
 function clearHistoryAdmin() {

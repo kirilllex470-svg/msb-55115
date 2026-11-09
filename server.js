@@ -69,7 +69,9 @@ let tableHistory = readJSON(DB_FILE, new Array());
 if (!Array.isArray(tableHistory)) tableHistory = new Array();
 let archiveHistory = readJSON(ARCHIVE_FILE, {});
 let notificationsHistory = readJSON(NOTIFS_FILE, new Array());
+if (!Array.isArray(notificationsHistory)) notificationsHistory = new Array();
 let mapsHistory = readJSON(MAPS_FILE, new Array());
+if (!Array.isArray(mapsHistory)) mapsHistory = new Array();
 let activeAlerts = {};
 let streamState = { active: false, url: '' };
 
@@ -149,7 +151,7 @@ const MANIFEST_JSON = JSON.stringify({
     )
 });
 
-const SW_CODE = [
+const SW_CODE = Array.of(
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
     "self.addEventListener('push', function(event) {",
@@ -174,7 +176,7 @@ const SW_CODE = [
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
-].join('\n');
+).join('\n');
 
 function readBodyJSON(req, cb) {
     let body = '';
@@ -232,7 +234,7 @@ const server = http.createServer(function(req, res) {
             };
             writeJSON(USERS_FILE, usersDB);
             broadcastWS({ type: 'users_updated' });
-            broadcastAlert(data.unit, '#38bdf8', getServerDateTime(), 'АДМИН', '📝 НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ: Позывной [' + data.username.trim() + '] (' + data.unit + '). Откройте "Пользователи и заявки"!');
+            broadcastAlert(data.unit, '#38bdf8', getServerDateTime(), 'АДМИН', '📝 НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ: Позывной (' + data.username.trim() + ') (' + data.unit + '). Откройте "Пользователи и заявки"!');
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true }));
         });
@@ -350,18 +352,19 @@ const server = http.createServer(function(req, res) {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
-        if (!user) return res.end(JSON.stringify([]));
+        if (!user) return res.end(JSON.stringify(new Array()));
         const myLowerName = user.toLowerCase();
-        const myFriends = friendsDB[myLowerName] || [];
+        const myFriends = Array.isArray(friendsDB[myLowerName]) ? friendsDB[myLowerName] : new Array();
         const myReads = db.lastRead[myLowerName] || {};
         const listData = myFriends.map(function(friendName) {
-            const sortedRoom = [myLowerName, friendName.toLowerCase()].sort();
-            const roomId = sortedRoom + '_' + sortedRoom;
+            const sortedRoom = Array.of(myLowerName, friendName.toLowerCase()).sort();
+            const pair = sortedRoom.join(',');
+            const roomId = pair + '_' + pair;
             return buildChatPreviewItem(friendName, roomId, myLowerName, myReads[roomId] || 0, false);
         });
         Object.keys(groupsDB).forEach(function(groupId) {
             const group = groupsDB[groupId];
-            if (group.members.some(function(m) { return m.toLowerCase() === myLowerName; })) {
+            if (group && Array.isArray(group.members) && group.members.some(function(m) { return m.toLowerCase() === myLowerName; })) {
                 listData.push(buildChatPreviewItem(group.name, groupId, myLowerName, myReads[groupId] || 0, true));
             }
         });
@@ -375,12 +378,12 @@ const server = http.createServer(function(req, res) {
                 return res.end(JSON.stringify({ success: false, message: 'Неполные данные' }));
             }
             const targetKey = data.to.trim().toLowerCase();
-            const stdUnits = ['шр', 'рота-1', 'рота-2', 'рота-3', 'админ'];
+            const stdUnits = Array.of('шр', 'рота-1', 'рота-2', 'рота-3', 'админ');
             if (!usersDB[targetKey] && !stdUnits.includes(targetKey)) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({ success: false, message: 'Позывной или Подразделение не найдены в системе!' }));
             }
-            if (!requestsDB[targetKey]) requestsDB[targetKey] = [];
+            if (!Array.isArray(requestsDB[targetKey])) requestsDB[targetKey] = new Array();
             const alreadyRequested = requestsDB[targetKey].some(function(n) { return n.toLowerCase() === data.from.trim().toLowerCase(); });
             if (!alreadyRequested) {
                 requestsDB[targetKey].push(data.from.trim());
@@ -395,23 +398,24 @@ const server = http.createServer(function(req, res) {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        return res.end(JSON.stringify(user ? (requestsDB[user.toLowerCase()] || []) : []));
+        const list = (user && Array.isArray(requestsDB[user.toLowerCase()])) ? requestsDB[user.toLowerCase()] : new Array();
+        return res.end(JSON.stringify(list));
     }
 
     if (urlPath === '/api/friends/request/respond' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.user || !data.from || !data.action) { res.writeHead(400); return res.end('Bad'); }
             const myL = data.user.toLowerCase(), fromL = data.from.toLowerCase();
-            if (requestsDB[myL]) {
+            if (Array.isArray(requestsDB[myL])) {
                 requestsDB[myL] = requestsDB[myL].filter(function(n) { return n.toLowerCase() !== fromL; });
                 writeJSON(REQUESTS_FILE, requestsDB);
             }
             if (data.action === 'accept') {
                 const tMy = usersDB[myL] ? usersDB[myL].username : data.user;
                 const tFr = usersDB[fromL] ? usersDB[fromL].username : data.from;
-                if (!friendsDB[myL]) friendsDB[myL] = [];
+                if (!Array.isArray(friendsDB[myL])) friendsDB[myL] = new Array();
                 if (!friendsDB[myL].some(function(n) { return n.toLowerCase() === fromL; })) friendsDB[myL].push(tFr);
-                if (!friendsDB[fromL]) friendsDB[fromL] = [];
+                if (!Array.isArray(friendsDB[fromL])) friendsDB[fromL] = new Array();
                 if (!friendsDB[fromL].some(function(n) { return n.toLowerCase() === myL; })) friendsDB[fromL].push(tMy);
                 writeJSON(FRIENDS_FILE, friendsDB);
             }
@@ -456,7 +460,7 @@ const server = http.createServer(function(req, res) {
     }
     if (urlPath === '/api/messages/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
-            if (!err && data && data.room && data.messageId && roomsDB[data.room]) {
+            if (!err && data && data.room && data.messageId && Array.isArray(roomsDB[data.room])) {
                 roomsDB[data.room] = roomsDB[data.room].filter(function(m) { return m.id !== data.messageId; });
                 writeJSON(CHAT_ROOMS_FILE, roomsDB);
             }
@@ -468,7 +472,8 @@ const server = http.createServer(function(req, res) {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const room = myUrl.searchParams.get('room');
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
-        return res.end(JSON.stringify(room ? (roomsDB[room] || []) : []));
+        const list = (room && Array.isArray(roomsDB[room])) ? roomsDB[room] : new Array();
+        return res.end(JSON.stringify(list));
     }
 
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
@@ -489,18 +494,43 @@ const server = http.createServer(function(req, res) {
     if (urlPath.startsWith('/uploads/')) {
         const fileName = path.basename(urlPath);
         const filePath = path.join(UPLOADS_DIR, fileName);
-        fs.readFile(filePath, function(err, data) {
-            if (err) { res.writeHead(404); return res.end('File Not Found'); }
+        fs.stat(filePath, function(err, stat) {
+            if (err || !stat.isFile()) { res.writeHead(404); return res.end('File Not Found'); }
             let contentType = 'application/octet-stream';
             const ext = path.extname(urlPath).toLowerCase();
             if (ext === '.mp4') contentType = 'video/mp4';
-            else if (ext === '.webm') contentType = urlPath.includes('audio') ? 'audio/webm;codecs=opus' : 'video/webm;codecs=vp8,opus';
+            else if (ext === '.webm') contentType = fileName.startsWith('audio_') ? 'audio/webm' : 'video/webm';
             else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
             else if (ext === '.png') contentType = 'image/png';
             else if (ext === '.gif') contentType = 'image/gif';
             else if (ext === '.pdf') contentType = 'application/pdf';
-            res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'max-age=86400', 'Accept-Ranges': 'bytes' });
-            res.end(data);
+
+            const range = req.headers.range;
+            if (range) {
+                const parts = range.replace(/bytes=/, "").split("-");
+                const start = parseInt(parts.at(0), 10);
+                const end = parts.at(1) ? parseInt(parts.at(1), 10) : stat.size - 1;
+                if (start >= stat.size) {
+                    res.writeHead(416, { 'Content-Range': 'bytes */' + stat.size });
+                    return res.end();
+                }
+                res.writeHead(206, {
+                    'Content-Range': 'bytes ' + start + '-' + end + '/' + stat.size,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': (end - start) + 1,
+                    'Content-Type': contentType,
+                    'Cache-Control': 'public, max-age=86400'
+                });
+                fs.createReadStream(filePath, { start: start, end: end }).pipe(res);
+            } else {
+                res.writeHead(200, {
+                    'Content-Length': stat.size,
+                    'Content-Type': contentType,
+                    'Accept-Ranges': 'bytes',
+                    'Cache-Control': 'public, max-age=86400'
+                });
+                fs.createReadStream(filePath).pipe(res);
+            }
         });
         return;
     }
@@ -518,9 +548,8 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
-
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup) {
-    const roomMessages = roomsDB[roomId] || [];
+    const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
     let lastMsgText = "Нет сообщений", lastMsgTime = "", unreadCount = 0;
     if (roomMessages.length > 0) {
         const lastMsg = roomMessages.at(-1);
@@ -546,6 +575,7 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         isGroup: isGroup
     };
 }
+
 function handleMultipartSend(req, res) {
     const contentType = req.headers['content-type'] || '';
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
@@ -588,7 +618,6 @@ function handleMultipartSend(req, res) {
         saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res);
     });
 }
-
 function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res) {
     const sender = fields.sender, room = fields.room, type = fields.type || 'text';
     if (!sender || !room) { res.writeHead(400); return res.end('Incomplete'); }
@@ -599,7 +628,7 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
         finalContent = (type === 'file') ? JSON.stringify({ path: '/uploads/' + fileName, name: originalFileName }) : ('/uploads/' + fileName);
     }
     const timeStr = getServerDateTime();
-    if (!roomsDB[room]) roomsDB[room] = new Array();
+    if (!Array.isArray(roomsDB[room])) roomsDB[room] = new Array();
     roomsDB[room].push({
         id: crypto.randomBytes(8).toString('hex'),
         sender: sender,
@@ -637,6 +666,7 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
+
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
@@ -677,7 +707,6 @@ notificationsHistory.forEach(function(n) {
         activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender, readList: new Array() });
     }
 });
-
 function saveAndBroadcastMap(msg) {
     const timeStr = msg.time || getServerDateTime();
     const mapItem = { id: Date.now(), sender: msg.sender || 'АДМИН', target: msg.target || 'ВСЕМ', time: timeStr, image: msg.image };
@@ -699,7 +728,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     activeAlerts[target].push({ id: notifId, text: text, sender: sender, readList: new Array() });
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
-    const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ [' + target + ']!', body: sender + ': ' + text });
+    const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!', body: sender + ': ' + text });
     const pushOptions = { TTL: 3600, headers: { 'Urgency': 'high' } };
     const tLow = String(target).toLowerCase();
     pushSubscriptions.forEach(function(item, index) {
