@@ -19,6 +19,7 @@ const CHAT_ROOMS_FILE = path.join(storagePath, 'chat_rooms.json');
 const FRIENDS_FILE = path.join(storagePath, 'friends.json');
 const GROUPS_FILE = path.join(storagePath, 'groups.json');
 const REQUESTS_FILE = path.join(storagePath, 'requests.json');
+const READS_FILE = path.join(storagePath, 'last_read.json');
 const UPLOADS_DIR = path.join(storagePath, 'uploads');
 
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -64,20 +65,21 @@ let roomsDB = readJSON(CHAT_ROOMS_FILE, {});
 let friendsDB = readJSON(FRIENDS_FILE, {});
 let groupsDB = readJSON(GROUPS_FILE, {});
 let requestsDB = readJSON(REQUESTS_FILE, {});
-const db = { lastRead: {} };
+const db = { lastRead: readJSON(READS_FILE, {}) };
 const lastSeenDB = {};
 
-function markUserOnline(name, unitName) {
-    const now = Date.now();
-    if (name) lastSeenDB[String(name).trim().toLowerCase()] = now;
-    if (unitName) lastSeenDB[String(unitName).trim().toLowerCase()] = now;
+function markUserOnline(name) {
+    if (!name) return;
+    const key = String(name).trim().toLowerCase();
+    if (!key || key === 'гость' || key === 'просмотр') return;
+    lastSeenDB[key] = Date.now();
 }
 
 function isUserOnlineNow(name) {
     if (!name) return false;
     const key = String(name).trim().toLowerCase();
     const t = lastSeenDB[key] || 0;
-    return (Date.now() - t) < 15000;
+    return (Date.now() - t) < 12000;
 }
 
 let tableHistory = readJSON(DB_FILE, new Array());
@@ -250,7 +252,7 @@ const server = http.createServer(function(req, res) {
             };
             writeJSON(USERS_FILE, usersDB);
             broadcastWS({ type: 'users_updated' });
-            broadcastAlert(data.unit, '#38bdf8', getServerDateTime(), 'АДМИН', '📝 НОВАЯ ЗАЯВКА НА РЕГИСТРАЮ: Позывной (' + data.username.trim() + ') (' + data.unit + '). Откройте "Пользователи и заявки"!');
+            broadcastAlert(data.unit, '#38bdf8', getServerDateTime(), 'АДМИН', '📝 НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ: Позывной (' + data.username.trim() + ') (' + data.unit + '). Откройте "Пользователи и заявки"!');
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true }));
         });
@@ -274,7 +276,7 @@ const server = http.createServer(function(req, res) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({ success: false, message: '⏳ Заявка еще не одобрена АДМИНОМ!' }));
             }
-            markUserOnline(u.username, u.unit);
+            markUserOnline(u.username);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
@@ -286,9 +288,9 @@ const server = http.createServer(function(req, res) {
     }
     if (req.method === 'GET' && urlPath === '/api/user/me') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
-        const user = (myUrl.searchParams.get('user') || '').toLowerCase();
+        const user = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
         const u = usersDB[user] || {};
-        if (user) markUserOnline(user, u.unit);
+        if (user) markUserOnline(user);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
         return res.end(JSON.stringify({
             avatar: u.avatar || '',
@@ -367,20 +369,19 @@ const server = http.createServer(function(req, res) {
         const user = myUrl.searchParams.get('user');
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
         if (!user) return res.end(JSON.stringify(new Array()));
-        const myLowerName = user.toLowerCase();
-        const myUObj = usersDB[myLowerName] || {};
-        markUserOnline(myLowerName, myUObj.unit);
+        const myLowerName = String(user).trim().toLowerCase();
+        markUserOnline(myLowerName);
         const myFriends = Array.isArray(friendsDB[myLowerName]) ? friendsDB[myLowerName] : new Array();
         const myReads = db.lastRead[myLowerName] || {};
         const listData = myFriends.map(function(friendName) {
-            const sortedRoom = Array.of(myLowerName, friendName.toLowerCase()).sort();
+            const sortedRoom = Array.of(myLowerName, String(friendName).trim().toLowerCase()).sort();
             const pair = sortedRoom.join(',');
             const roomId = pair + '_' + pair;
             return buildChatPreviewItem(friendName, roomId, myLowerName, myReads[roomId] || 0, false);
         });
         Object.keys(groupsDB).forEach(function(groupId) {
             const group = groupsDB[groupId];
-            if (group && Array.isArray(group.members) && group.members.some(function(m) { return m.toLowerCase() === myLowerName; })) {
+            if (group && Array.isArray(group.members) && group.members.some(function(m) { return String(m).trim().toLowerCase() === myLowerName; })) {
                 listData.push(buildChatPreviewItem(group.name, groupId, myLowerName, myReads[groupId] || 0, true));
             }
         });
@@ -484,13 +485,18 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200); res.end('OK');
         });
     }
+
     if (urlPath === '/api/messages' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const room = myUrl.searchParams.get('room');
-        const reqUser = (myUrl.searchParams.get('user') || '').toLowerCase();
+        const reqUser = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
         if (reqUser) {
-            const uO = usersDB[reqUser] || {};
-            markUserOnline(reqUser, uO.unit);
+            markUserOnline(reqUser);
+            if (room) {
+                if (!db.lastRead[reqUser]) db.lastRead[reqUser] = {};
+                db.lastRead[reqUser][room] = Date.now();
+                writeJSON(READS_FILE, db.lastRead);
+            }
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
         const rawList = (room && Array.isArray(roomsDB[room])) ? roomsDB[room] : new Array();
@@ -498,26 +504,28 @@ const server = http.createServer(function(req, res) {
         let otherParticipants = new Array();
         if (room) {
             if (groupsDB[room] && Array.isArray(groupsDB[room].members)) {
-                otherParticipants = groupsDB[room].members.map(function(m) { return m.toLowerCase(); }).filter(function(m) { return m !== reqUser; });
-                partnerOnline = true;
+                otherParticipants = groupsDB[room].members
+                    .map(function(m) { return String(m).trim().toLowerCase(); })
+                    .filter(function(m) { return m !== reqUser; });
+                partnerOnline = otherParticipants.some(function(m) { return isUserOnlineNow(m); });
             } else {
                 const pairParts = room.split('_').at(0).split(',');
-                otherParticipants = pairParts.map(function(p) { return p.toLowerCase(); }).filter(function(p) { return p !== reqUser; });
+                otherParticipants = pairParts
+                    .map(function(p) { return String(p).trim().toLowerCase(); })
+                    .filter(function(p) { return p !== reqUser; });
                 if (otherParticipants.length > 0) {
-                    const pKey = otherParticipants.at(0);
-                    const pUnit = (usersDB[pKey] && usersDB[pKey].unit) ? usersDB[pKey].unit : '';
-                    partnerOnline = isUserOnlineNow(pKey) || (pUnit ? isUserOnlineNow(pUnit) : false);
+                    partnerOnline = isUserOnlineNow(otherParticipants.at(0));
                 }
             }
         }
         const enriched = rawList.map(function(msg) {
-            const senderLow = String(msg.sender || '').toLowerCase();
-            const msgTs = msg.timestamp || 0;
+            const senderLow = String(msg.sender || '').trim().toLowerCase();
+            const msgTs = Number(msg.timestamp || 0);
             let isRead = false;
             if (otherParticipants.length > 0) {
                 isRead = otherParticipants.some(function(part) {
                     if (part === senderLow) return false;
-                    const pRead = (db.lastRead[part] && db.lastRead[part][room]) ? db.lastRead[part][room] : 0;
+                    const pRead = (db.lastRead[part] && db.lastRead[part][room]) ? Number(db.lastRead[part][room]) : 0;
                     return pRead >= msgTs && msgTs > 0;
                 });
             }
@@ -529,10 +537,11 @@ const server = http.createServer(function(req, res) {
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && data.room) {
-                const myL = data.user.toLowerCase();
+                const myL = String(data.user).trim().toLowerCase();
                 markUserOnline(myL);
                 if (!db.lastRead[myL]) db.lastRead[myL] = {};
-                db.lastRead[myL][data.room] = Date.now();
+                db.lastRead[myL][data.room] = Date.now() + 500;
+                writeJSON(READS_FILE, db.lastRead);
             }
             res.writeHead(200); res.end('OK');
         });
@@ -610,11 +619,12 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         else lastMsgText = prefix + (lastMsg.text || "");
         lastMsgTime = lastMsg.time || "";
         roomMessages.forEach(function(msg) {
-            if (msg.sender.toLowerCase() !== myLowerName && (msg.timestamp || 0) > myLastReadTime) unreadCount++;
+            if (String(msg.sender || '').trim().toLowerCase() !== myLowerName && (msg.timestamp || 0) > myLastReadTime) unreadCount++;
         });
     }
-    const uInfo = !isGroup ? (usersDB[name.toLowerCase()] || {}) : {};
-    const isOnline = isGroup ? true : (isUserOnlineNow(name) || (uInfo.unit ? isUserOnlineNow(uInfo.unit) : false));
+    const cleanKey = String(name || '').trim().toLowerCase();
+    const uInfo = !isGroup ? (usersDB[cleanKey] || {}) : {};
+    const isOnline = isGroup ? true : isUserOnlineNow(cleanKey);
     return {
         id: isGroup ? roomId : undefined,
         name: name,
@@ -719,6 +729,7 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
+
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
@@ -811,12 +822,13 @@ wss.on('connection', function(ws) {
         try {
             const msg = JSON.parse(message.toString());
             if (msg.type === 'ping') {
-                if (msg.user || msg.callsign) markUserOnline(msg.callsign || msg.user, msg.user);
+                if (msg.callsign) markUserOnline(msg.callsign);
+                else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
                 ws.send(JSON.stringify({ type: 'pong' }));
                 return;
             }
             if (msg.type === 'save_sub' && msg.sub) {
-                markUserOnline(msg.callsign || msg.user, msg.user);
+                if (msg.callsign) markUserOnline(msg.callsign);
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; });
                 if (idx !== -1) { pushSubscriptions.at(idx).user = msg.user; pushSubscriptions.at(idx).callsign = msg.callsign || ''; }
                 else { pushSubscriptions.push({ user: msg.user, callsign: msg.callsign || '', sub: msg.sub }); }
