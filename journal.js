@@ -872,31 +872,44 @@ function populateTargetSelect() {
 
     [adminSelect, miniSelect].forEach(function(sel) {
         if (!sel) return;
+        // Запоминаем текущий выбор, чтобы он НЕ сбрасывался каждые 2 секунды
+        const prevVal = sel.value;
         sel.innerHTML = '';
-        if (currentUser === ADMIN_NAME) {
-            let optAll = document.createElement('option');
-            optAll.value = "ВСЕМ";
-            optAll.innerText = "📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ (В БЕГУЩУЮ СТРОКУ)";
-            sel.appendChild(optAll);
-        }
+
+        // 1. Опция "ВСЕМ" теперь доступна ВСЕМ подразделениям и позывным
+        let optAll = document.createElement('option');
+        optAll.value = "ВСЕМ";
+        optAll.innerText = "📢 ВСЕМ";
+        sel.appendChild(optAll);
+
+        // 2. Все подразделения (чтобы все могли писать друг другу напрямую)
+        USERS_CONFIG.forEach(function(u) {
+            if (u.name !== currentUser) {
+                let optU = document.createElement('option');
+                optU.value = u.name;
+                optU.innerText = "🛡️ " + u.name;
+                sel.appendChild(optU);
+            }
+        });
+
+        // 3. Друзья из Мессенджера
         const onlyFriends = myMessengerFriends.filter(function(f) { return !f.isGroup; });
-        if (onlyFriends.length === 0 && currentUser !== ADMIN_NAME) {
-            let optEmpty = document.createElement('option');
-            optEmpty.value = "";
-            optEmpty.innerText = "👥 Добавьте друзей в Мессенджере для связи";
-            sel.appendChild(optEmpty);
-        } else {
-            onlyFriends.forEach(function(f) {
-                let opt = document.createElement('option');
-                opt.value = f.name;
-                opt.innerText = "👤 Друг: " + f.name + (f.unit ? " [" + f.unit + "]" : "");
-                sel.appendChild(opt);
-            });
+        onlyFriends.forEach(function(f) {
+            let opt = document.createElement('option');
+            opt.value = f.name;
+            opt.innerText = "👤 Друг: " + f.name + (f.unit ? " [" + f.unit + "]" : "");
+            sel.appendChild(opt);
+        });
+
+        // Восстанавливаем выбранное значение, если оно есть в списке
+        if (prevVal && Array.from(sel.options).some(function(o) { return o.value === prevVal; })) {
+            sel.value = prevVal;
         }
     });
 
     if (mapSelect) {
-        mapSelect.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ ПОДРАЗДЕЛЕНИЯМ</option>';
+        const prevMapVal = mapSelect.value;
+        mapSelect.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ</option>';
         USERS_CONFIG.forEach(function(u) {
             if (u.name !== currentUser) {
                 let opt = document.createElement('option');
@@ -904,8 +917,12 @@ function populateTargetSelect() {
                 mapSelect.appendChild(opt);
             }
         });
+        if (prevMapVal && Array.from(mapSelect.options).some(function(o) { return o.value === prevMapVal; })) {
+            mapSelect.value = prevMapVal;
+        }
     }
 }
+
 function applyPermissionsUI() {
     const isAdmin = (currentUser === ADMIN_NAME);
     const canRow = isAdmin || (myPermissions && myPermissions.row);
@@ -1340,11 +1357,35 @@ function confirmAlert() {
     unlockMobileFeatures();
     const whoConfirmed = currentCallsign || currentUser || 'Просмотр';
     const readTime = new Date().toLocaleTimeString().slice(0, 5);
-    const targetToClear = currentAlertTarget, idToClear = currentAlertId;
+    const targetToClear = currentAlertTarget;
+    const idToClear = currentAlertId;
+    const alertTextCopy = String(currentAlertText || '');
+    const alertSenderCopy = String(currentAlertSender || '');
+
     stopAlertVisuals();
+
     if (targetToClear) {
-        ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
+        ws.send(JSON.stringify({
+            type: 'clear_alert',
+            target: targetToClear,
+            notifId: idToClear,
+            readBy: whoConfirmed,
+            readTime: readTime
+        }));
     }
+
+    // Если уведомление пришло из Мессенджера — сразу открываем Мессенджер и чат с отправителем
+    const isFromMessenger =
+        alertTextCopy.indexOf('💬 Мессенджер:') === 0 ||
+        alertTextCopy.indexOf('🎙️ Голосовое сообщение в Мессенджере') === 0 ||
+        alertTextCopy.indexOf('🎥 Видео-кружок в Мессенджере') === 0 ||
+        alertTextCopy.indexOf('📎 Файл в Мессенджере') === 0;
+
+    if (isFromMessenger && typeof openMessengerWindow === 'function') {
+        openMessengerWindow(alertSenderCopy);
+        return;
+    }
+
     checkAndShowAlerts(false);
 }
 

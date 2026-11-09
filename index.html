@@ -24,7 +24,7 @@
             <div class="splash-percent" id="splash-percent">ЗАГРУЗКА СИСТЕМЫ: 0%</div>
             <div class="splash-file-box">
                 <span class="splash-file-name" id="splash-file">boot/kernel_msb55115.sys</span>
-                <span class="splash-file-tag" id="splash-tag">0%</span>
+                <span class="splash-file-tag" id="splash-tag">[0%]</span>
             </div>
         </div>
     </div>
@@ -219,6 +219,11 @@
         </div>
         <div class="notifications-list" id="notifications-list">
             <div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>
+        </div>
+        <div id="mini-notif-reply-bar" style="display:none; margin-top:10px; padding-top:10px; border-top:1px solid #334155; gap:8px; flex-wrap:wrap; align-items:center;">
+            <select id="mini-notif-target" class="friends-nice-select"></select>
+            <input type="text" id="mini-notif-input" placeholder="Быстрое сообщение другу из списка..." style="flex:1; min-width:180px; padding:10px; background:#0f172a; color:white; border:1px solid #334155; border-radius:6px; font-size:14px; outline:none;">
+            <button type="button" onclick="sendMiniNotification()" style="padding:10px 16px; background:#ef4444; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">📢 ОТПРАВИТЬ</button>
         </div>
     </div>
 
