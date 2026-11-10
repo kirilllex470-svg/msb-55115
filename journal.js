@@ -177,6 +177,9 @@ async function subscribeToWebPush() {
 }
 
 function sendLocalNotification(target, text, sender) {
+    // Отправляем локальное уведомление ТОЛЬКО если нет активной Push-подписки,
+    // чтобы не дублировать Web Push от сервера
+    if (publicVapidKey) return; 
     const fromWho = sender || 'АДМИН';
     const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
     const body = fromWho + ': ' + text;
@@ -184,15 +187,45 @@ function sendLocalNotification(target, text, sender) {
         navigator.serviceWorker.ready.then(function(reg) {
             reg.showNotification(title, {
                 body: body,
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
                 vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
                 silent: false,
                 requireInteraction: true,
                 renotify: true,
-                tag: 'admin-alert-' + Date.now()
+                tag: 'msb-alert-single'
             }).catch(function() {});
         });
     }
 }
+
+function showAlert(target, text, sender, notifId, isNew) {
+    currentAlertId = notifId || null;
+    currentAlertTarget = target;
+    currentAlertText = text;
+    currentAlertSender = sender || ADMIN_NAME;
+    const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
+    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
+    document.getElementById('alert-text').innerText = text;
+    document.getElementById('alert-modal').style.display = 'flex';
+    updateLockScreenAlert(target, text, currentAlertSender);
+    
+    // Вызываем резервное уведомление только если вкладка скрыта и нет Web Push
+    if (isNew && document.visibilityState === 'hidden') {
+        sendLocalNotification(target, text, currentAlertSender);
+    }
+    
+    if (!titleInterval) {
+        let flag = false;
+        titleInterval = setInterval(function() {
+            document.title = flag ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!";
+            flag = !flag;
+        }, 600);
+    }
+    playBeep();
+    if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
+}
+
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
