@@ -169,32 +169,35 @@ const MANIFEST_JSON = JSON.stringify({
     )
 });
 
-const SW_CODE = Array.of(
+const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
     "self.addEventListener('push', function(event) {",
-    "    var data = { title: '🛑 СООБЩЕНИЕ В МСБ-55115!', body: 'Срочно откройте приложение!' };",
+    "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
     "    event.waitUntil(self.registration.showNotification(data.title, {",
     "        body: data.body,",
-    "        vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),",
+    "        icon: '/icon-192.png',", // Логотип как большая иконка уведомления
+    "        badge: '/icon-192.png',", // Силуэт логотипа в строке состояния Android
+    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
     "        silent: false,",
-    "        requireInteraction: true,",
-    "        renotify: true,",
-    "        tag: 'admin-alert-' + Date.now()",
+    "        requireInteraction: true,", // Не исчезнет, пока боец не нажмет кнопку
+    "        renotify: true,", // Заставит вибрировать даже при повторных пушах
+    "        tag: 'msb-alert-' + Date.now(),", // Убирает группировку и исключает задержки ОС
+    "        data: { url: '/' }",
     "    }));",
     "});",
     "self.addEventListener('notificationclick', function(event) {",
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
-    "            var cl = clientList.at(i);",
+    "            var cl = clientList[i];",
     "            if (cl && 'focus' in cl) return cl.focus();",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
-).join('\n');
+].join('\n');
 
 function readBodyJSON(req, cb) {
     let body = '';
@@ -793,7 +796,14 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
     const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!', body: sender + ': ' + text });
-    const pushOptions = { TTL: 3600, headers: { 'Urgency': 'high' } };
+    // Параметры для форсирования доставки без задержек операторов связи
+    const pushOptions = { 
+        TTL: 0, // Доставить немедленно или отбросить, не копить задержки
+        headers: { 
+            'Urgency': 'high', // Принудительно будит спящий Android/iOS
+            'Topic': 'admin-alert'
+        } 
+    };
     const tLow = String(target).toLowerCase();
     pushSubscriptions.forEach(function(item, index) {
         const uLow = String(item.user || '').toLowerCase();
