@@ -1282,7 +1282,7 @@ function triggerCallInDev(callType, targetName) {
         title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
     }
     if (text) {
-        text.innerHTML = 'Модуль <b>«' + callType + '»</b> в разработке системы <b>МСБ-55115</b>!';
+        text.innerHTML = 'Модуль <b>«' + callType + '»</b> находится в разработке системы <b>МСБ-55115</b>!';
     }
     if (modal) modal.style.display = 'flex';
 }
@@ -1315,6 +1315,7 @@ const GIF_TITLES = {
         "🌌 Галактика", "👨‍🚀 Невесомость", "🌟 Пульсар", "🌌 Космос МСБ"
     ]
 };
+
 function makeAnimatedSvgGif(cat, idx, title) {
     const palettes = {
         military: ['#051b0e', '#14532d', '#22c55e', '#facc15'],
@@ -1322,33 +1323,32 @@ function makeAnimatedSvgGif(cat, idx, title) {
         cosmic: ['#08041d', '#311068', '#38bdf8', '#c084fc']
     };
     const pal = palettes[cat] || palettes.military;
-    const parts = title.split(' ');
-    const icon = parts.at(0);
-    const label = parts.slice(1).join(' ');
-    const dur1 = (1.8 + (idx % 5) * 0.3).toFixed(1) + 's';
-    const dur2 = (3.5 + (idx % 4) * 0.7).toFixed(1) + 's';
+    const parts = String(title || '').split(' ');
+    const icon = parts.at(0) || '🚀';
+    const label = parts.slice(1).join(' ') || 'МСБ-55115';
+    const dur1 = (1.6 + (idx % 5) * 0.3).toFixed(1) + 's';
+    const dur2 = (3.2 + (idx % 4) * 0.6).toFixed(1) + 's';
 
     const svg = '<svg xmlns="http://w3.org" viewBox="0 0 300 190" width="300" height="190">' +
-        '<defs><linearGradient id="bg' + idx + '" x1="0" y1="0" x2="1" y2="1">' +
+        '<defs><linearGradient id="g' + idx + '" x1="0" y1="0" x2="1" y2="1">' +
         '<stop offset="0%" stop-color="' + pal.at(0) + '"/>' +
         '<stop offset="100%" stop-color="' + pal.at(1) + '"/></linearGradient></defs>' +
-        '<rect width="300" height="190" rx="14" fill="url(#bg' + idx + ')"/>' +
-        '<circle cx="150" cy="80" r="20" fill="none" stroke="' + pal.at(2) + '" stroke-width="2">' +
-        '<animate attributeName="r" values="15;78;15" dur="' + dur1 + '" repeatCount="indefinite"/>' +
-        '<animate attributeName="opacity" values="0.9;0.05;0.9" dur="' + dur1 + '" repeatCount="indefinite"/></circle>' +
-        '<circle cx="150" cy="80" r="46" fill="none" stroke="' + pal.at(3) + '" stroke-dasharray="10 6" stroke-width="2">' +
-        '<animateTransform attributeName="transform" type="rotate" from="0 150 80" to="360 150 80" dur="' + dur2 + '" repeatCount="indefinite"/></circle>' +
-        '<line x1="80" y1="80" x2="220" y2="80" stroke="' + pal.at(2) + '" stroke-opacity="0.35" stroke-width="1"/>' +
-        '<line x1="150" y1="15" x2="150" y2="140" stroke="' + pal.at(2) + '" stroke-opacity="0.35" stroke-width="1"/>' +
-        '<text x="150" y="95" font-size="40" text-anchor="middle">' + icon +
-        '<animateTransform attributeName="transform" type="translate" values="0,-6; 0,6; 0,-6" dur="1.3s" repeatCount="indefinite"/></text>' +
-        '<rect x="12" y="142" width="276" height="36" rx="8" fill="rgba(0,0,0,0.72)" stroke="' + pal.at(2) + '" stroke-width="1.2"/>' +
-        '<text x="150" y="165" font-family="monospace, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">' +
-        label + ' [' + (idx + 1) + ']</text></svg>';
+        '<rect width="300" height="190" rx="14" fill="url(#g' + idx + ')"/>' +
+        '<circle cx="150" cy="78" r="18" fill="none" stroke="' + pal.at(2) + '" stroke-width="2.5">' +
+        '<animate attributeName="r" values="14;76;14" dur="' + dur1 + '" repeatCount="indefinite"/>' +
+        '<animate attributeName="opacity" values="0.95;0.08;0.95" dur="' + dur1 + '" repeatCount="indefinite"/></circle>' +
+        '<circle cx="150" cy="78" r="45" fill="none" stroke="' + pal.at(3) + '" stroke-dasharray="10 6" stroke-width="2">' +
+        '<animateTransform attributeName="transform" type="rotate" from="0 150 78" to="360 150 78" dur="' + dur2 + '" repeatCount="indefinite"/></circle>' +
+        '<line x1="75" y1="78" x2="225" y2="78" stroke="' + pal.at(2) + '" stroke-opacity="0.4" stroke-width="1"/>' +
+        '<line x1="150" y1="14" x2="150" y2="138" stroke="' + pal.at(2) + '" stroke-opacity="0.4" stroke-width="1"/>' +
+        '<text x="150" y="92" font-size="38" text-anchor="middle">' + icon +
+        '<animateTransform attributeName="transform" type="translate" values="0,-6; 0,6; 0,-6" dur="1.2s" repeatCount="indefinite"/></text>' +
+        '<rect x="12" y="142" width="276" height="36" rx="8" fill="rgba(0,0,0,0.75)" stroke="' + pal.at(2) + '" stroke-width="1.2"/>' +
+        '<text x="150" y="165" font-family="Segoe UI, monospace, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">' +
+        label + ' #' + (idx + 1) + '</text></svg>';
 
-    return 'data:image/svg+xml;base64,' + window.btoa(unescape(encodeURIComponent(svg)));
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
-
 function setAppTheme(themeName) {
     const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
     document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
@@ -1362,7 +1362,10 @@ function setAppTheme(themeName) {
 
 function toggleChatGifDrawer() {
     const drawer = document.getElementById('chat-gif-drawer');
-    if (!drawer) return;
+    if (!drawer) {
+        openThemeAndGifHub();
+        return;
+    }
     if (drawer.style.display === 'none' || !drawer.style.display) {
         drawer.style.display = 'flex';
         switchGifCategory(currentGifCategory || 'military');
@@ -1370,13 +1373,14 @@ function toggleChatGifDrawer() {
         drawer.style.display = 'none';
     }
 }
+
 function switchGifCategory(cat) {
     currentGifCategory = (cat === 'rocket' || cat === 'cosmic') ? cat : 'military';
     Array.of('military', 'rocket', 'cosmic').forEach(function(t) {
         const tab = document.getElementById('gif-tab-' + t);
         if (tab) tab.classList.toggle('active', t === currentGifCategory);
     });
-    const grid = document.getElementById('chat-gifs-grid');
+    const grid = document.getElementById('chat-gifs-grid') || document.getElementById('viewer-gifs-grid');
     if (!grid) return;
     grid.innerHTML = '';
     const titles = GIF_TITLES[currentGifCategory] || GIF_TITLES.military;
@@ -1384,7 +1388,14 @@ function switchGifCategory(cat) {
         const src = makeAnimatedSvgGif(currentGifCategory, idx, title);
         const card = document.createElement('div');
         card.className = 'gif-card-item';
-        card.innerHTML = '<img src="' + src + '" alt="GIF"><div class="gif-card-title">' + title + '</div>';
+        const imgEl = document.createElement('img');
+        imgEl.src = src;
+        imgEl.alt = title;
+        const capEl = document.createElement('div');
+        capEl.className = 'gif-card-title';
+        capEl.innerText = title;
+        card.appendChild(imgEl);
+        card.appendChild(capEl);
         card.onclick = function() {
             sendGifToCurrentChat(src, title);
         };
@@ -1407,6 +1418,7 @@ function sendGifToCurrentChat(gifSrc, title) {
     fetch('/api/send', { method: 'POST', body: formData }).then(function() {
         const drawer = document.getElementById('chat-gif-drawer');
         if (drawer) drawer.style.display = 'none';
+        closeMsgPhotoViewer();
         if (typeof fetchMessages === 'function') {
             lastMessagesCount = -1;
             fetchMessages();
@@ -1437,9 +1449,10 @@ function openAvatarInViewer(el, titleName) {
 }
 
 function openThemeSettingsModal() {
-    const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема оформления МСБ');
+    const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема МСБ-55115');
     openMsgPhotoViewer(preview, '🎨 Выбор темы оформления (Военный / Ракетный / Космос)');
 }
+window.openThemeAndGifHub = openThemeSettingsModal;
 
 function closeMsgPhotoViewer() {
     const m = document.getElementById('msg-photo-viewer-modal');
