@@ -43,6 +43,7 @@ const COLUMNS_CONFIG = [
     ]},
     { label: "ПРИМЕЧАНИЯ", options: new Array() }
 ];
+
 let ws = null;
 let currentUser = null;
 let currentCallsign = "";
@@ -71,37 +72,6 @@ let keepAliveAudio = null;
 let sirenAudio = null;
 let publicVapidKey = null;
 let deferredPrompt = null;
-let currentServerBootId = null;
-
-function showDevAlert(featureName) {
-    alert("📞 " + (featureName || "Функция") + " находится в разработке МСБ-55115");
-}
-window.showDevAlert = showDevAlert;
-
-function triggerSystemUpdateNotice(restartTimestamp) {
-    const modal = document.getElementById('system-update-modal');
-    const timeEl = document.getElementById('update-server-time');
-    if (timeEl && restartTimestamp) {
-        timeEl.innerText = restartTimestamp;
-    }
-    if (modal) {
-        modal.style.display = 'flex';
-    }
-}
-window.triggerSystemUpdateNotice = triggerSystemUpdateNotice;
-
-function forceSystemReload() {
-    try {
-        if ('caches' in window) {
-            caches.keys().then(function(names) {
-                for (let name of names) caches.delete(name);
-            });
-        }
-    } catch(e) {}
-    const cleanUrl = window.location.origin + window.location.pathname + '?reload=' + Date.now();
-    window.location.replace(cleanUrl);
-}
-window.forceSystemReload = forceSystemReload;
 function getStaticDateTime() {
     const d = new Date();
     const dd = String(d.getDate()).padStart(2, '0');
@@ -156,6 +126,7 @@ window.addEventListener('appinstalled', function() {
         btn.style.display = 'none';
     });
 });
+
 async function installPWA() {
     if (deferredPrompt) {
         deferredPrompt.prompt();
@@ -203,7 +174,6 @@ async function subscribeToWebPush() {
         }
     } catch (e) { console.error('Push error:', e); }
 }
-
 function sendLocalNotification(target, text, sender) {
     const fromWho = sender || 'АДМИН';
     const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -221,6 +191,7 @@ function sendLocalNotification(target, text, sender) {
         });
     }
 }
+
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
@@ -276,6 +247,7 @@ function updateLockScreenAlert(target, text, sender) {
         });
     }
 }
+
 const SOUND_PRESETS = [
     { id: 'alarm1', name: '🚨 Тревога 1 (Сирена МСБ — стандарт)', type: 'alarm' },
     { id: 'alarm2', name: '🚨 Тревога 2 (Двойной радарный импульс)', type: 'alarm' },
@@ -307,7 +279,6 @@ function playToneNotes(notes, waveType) {
         });
     } catch (e) {}
 }
-
 function playSoundById(soundId, isPreview) {
     const id = soundId || selectedSoundId || 'alarm1';
     try {
@@ -354,7 +325,7 @@ function playSoundById(soundId, isPreview) {
             if (sirenAudio) sirenAudio.pause();
             playToneNotes([
                 { f: 783.99, t: 0, d: 0.16, v: 0.4, type: 'sine' },
-                { f: 1567.98, t: 0.12, d: 0.15, v: 0.15, type: 'triangle' },
+                { f: 1567.98, t: 0, d: 0.12, v: 0.15, type: 'triangle' },
                 { f: 1174.66, t: 0.14, d: 0.48, v: 0.45, type: 'sine' },
                 { f: 2349.32, t: 0.14, d: 0.35, v: 0.18, type: 'triangle' }
             ]);
@@ -372,6 +343,7 @@ function playSoundById(soundId, isPreview) {
 function playBeep() {
     playSoundById(selectedSoundId, false);
 }
+
 function openSoundModal() {
     const modal = document.getElementById('sound-modal');
     const list = document.getElementById('sound-options-list');
@@ -435,7 +407,6 @@ function openActiveStreamWindow() {
         window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
     }
 }
-
 function startVideoStream() {
     if (currentUser !== ADMIN_NAME) return;
     const url = document.getElementById('stream-url-input').value.trim();
@@ -457,6 +428,7 @@ function stopVideoStream() {
     ws.send(JSON.stringify({ type: 'stream_stop' }));
     closeStreamPage();
 }
+
 function updateStreamUI() {
     const mainBtn = document.getElementById('stream-main-btn');
     const userBox = document.getElementById('user-stream-box');
@@ -551,6 +523,7 @@ function closePhotoLightbox() {
     const lb = document.getElementById('photo-lightbox');
     if (lb) lb.style.display = 'none';
 }
+
 function renderMapsGrid() {
     const grid = document.getElementById('maps-tiles-grid');
     if (!grid) return;
@@ -576,7 +549,6 @@ function fetchMapsFromServer() {
         .then(function(list) { if (Array.isArray(list)) { allMaps = list; renderMapsGrid(); } })
         .catch(function() {});
 }
-
 function uploadMapPhoto() {
     if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
     const fileInput = document.getElementById('map-file-input');
@@ -642,6 +614,7 @@ function fetchArchiveFromServer(cb) {
             }
         }).catch(function() {});
 }
+
 function openArchivePage() {
     const page = document.getElementById('archive-page');
     if (!page) return;
@@ -690,7 +663,6 @@ function renderArchiveCalendar() {
         gridEl.appendChild(cell);
     }
 }
-
 function selectArchiveDate(dateKey) {
     selectedArchiveDate = dateKey;
     renderArchiveCalendar();
@@ -729,6 +701,7 @@ function isNotificationVisibleForMe(notif) {
     if (currentCallsign && (notif.target === currentCallsign || notif.sender === currentCallsign)) return true;
     return false;
 }
+
 function renderNotificationsWindow() {
     const list = document.getElementById('notifications-list');
     if (!list) return;
@@ -784,12 +757,6 @@ function connectWS() {
     ws.onmessage = function(event) {
         const msg = JSON.parse(event.data);
         if (msg.type === 'init') {
-            if (msg.serverBootId) {
-                if (currentServerBootId && currentServerBootId !== msg.serverBootId) {
-                    triggerSystemUpdateNotice(msg.serverBootTime || msg.serverTime || getStaticDateTime());
-                }
-                currentServerBootId = msg.serverBootId;
-            }
             document.getElementById('table-body').innerHTML = '';
             msg.data.forEach(appendRow);
             allNotifications = msg.notifications || new Array();
@@ -801,12 +768,6 @@ function connectWS() {
             if (msg.alerts) { pendingAlerts = msg.alerts; checkAndShowAlerts(false); }
             if (currentUser === ADMIN_NAME) fetchAdminUsersList();
             refreshMyPermissionsFromServer();
-        }
-        if (msg.type === 'server_restarted') {
-            if (msg.serverBootId && (!currentServerBootId || currentServerBootId !== msg.serverBootId)) {
-                currentServerBootId = msg.serverBootId;
-                triggerSystemUpdateNotice(msg.serverBootTime || getStaticDateTime());
-            }
         }
         if (msg.type === 'new_row') {
             appendRow(msg.row);
@@ -871,7 +832,6 @@ setInterval(function() {
         connectWS();
     }
 }, 4000);
-
 function handleAlertClearedMsg(msg) {
     const queue = getAlertsQueue(msg.target);
     if (msg.target === 'ВСЕМ') {
@@ -891,6 +851,7 @@ function handleAlertClearedMsg(msg) {
         }
         if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) delete pendingAlerts[msg.target];
     }
+
     if (msg.notifId) {
         allNotifications.forEach(function(n) {
             if (n.id === msg.notifId) { n.read = true; n.readBy = msg.readBy || ''; }
@@ -984,6 +945,7 @@ function applyPermissionsUI() {
     if (notifArchBtn) notifArchBtn.style.display = canArchive ? 'inline-block' : 'none';
     if (tableSection) tableSection.style.display = canTable ? 'block' : 'none';
 }
+
 function applyUserUI() {
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('input-panel').style.display = 'block';
@@ -1268,6 +1230,7 @@ function toggleUserPerm(userKey, permName, val) {
         body: JSON.stringify({ key: userKey, action: 'set_perm', permName: permName, permVal: val })
     });
 }
+
 function adminUserAction(userKey, action) {
     fetch('/api/admin/users/action', {
         method: 'POST',
@@ -1293,7 +1256,6 @@ function loginAsViewer() {
     subscribeToWebPush();
     checkAndShowAlerts(false);
 }
-
 function sendAdminAlert() {
     if (!currentUser) return;
     const target = document.getElementById('admin-target').value;
@@ -1344,6 +1306,7 @@ function isUnreadForMe(a) {
     if (Array.isArray(a.readList) && (a.readList.indexOf(me) !== -1 || a.readList.indexOf(currentUser) !== -1)) return false;
     return true;
 }
+
 function checkAndShowAlerts(isNew) {
     if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
     let targetToShow = null, alertObj = null;
