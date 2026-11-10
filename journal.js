@@ -1278,8 +1278,12 @@ function triggerCallInDev(callType, targetName) {
     const title = document.getElementById('call-dev-title');
     const text = document.getElementById('call-dev-text');
     if (icon) icon.innerText = (callType === 'Видеозвонок') ? '🎥' : '📞';
-    if (title) title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
-    if (text) text.innerHTML = 'Защищенный модуль <b>«' + callType + '»</b> находится в разработке системы <b>МСБ-55115</b> и скоро будет активирован!';
+    if (title) {
+        title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
+    }
+    if (text) {
+        text.innerHTML = 'Модуль <b>«' + callType + '»</b> в разработке системы <b>МСБ-55115</b>!';
+    }
     if (modal) modal.style.display = 'flex';
 }
 
@@ -1290,55 +1294,62 @@ function closeCallDevModal() {
 
 const GIF_TITLES = {
     military: [
-        "🪖 Спецназ в деле", "🛡️ Броня крепка", "🚁 Вертушка прикрытия", "📡 Радар ПВО",
-        "🎯 Снайперский выстрел", "🟩 Ночное видение ПНВ", "🚜 Танковый прорыв", "⚡ Штурмовая группа",
-        "🎖️ Честь и Отвага", "📻 Связь без помех", "🔥 Артиллерия работает", "🛩️ Истребитель Су-57",
-        "🧭 Тактический маршрут", "💣 Разминирование", "🐕 Военная разведка", "🚢 Флот на рубеже",
-        "🚁 Десант с воздуха", "🛡️ Оборона рубежа", "🎆 Салют Победы", "🏆 МСБ-55115 Сила"
+        "🪖 Спецназ МСБ", "🛡️ Броня крепка", "🚁 Вертушка", "📡 Радар ПВО",
+        "🎯 Снайпер", "🟩 ПНВ Разведка", "🚜 Танковый прорыв", "⚡ Штурм",
+        "🎖️ Отвага", "📻 Радиосвязь", "🔥 Артиллерия", "🛩️ Су-57 в небе",
+        "🧭 Маршрут", "💣 Саперы", "🐕 Дозор", "🚢 Флот",
+        "🚁 Десант", "🛡️ Оборона", "🎆 Салют Победы", "🏆 МСБ-55115"
     ],
     rocket: [
-        "🚀 Пуск из шахты", "🔥 Гиперзвук Мах-10", "⚡ Тополь-М на старте", "💥 Перехват цели",
-        "🛰️ Баллистическая дуга", "🚀 РВСН на дежурстве", "🌋 Огненный старт", "🎯 Точно в яблочко",
-        "🚀 Ярс выходит на позицию", "🧭 Телеметрия пуска", "🔥 Форсаж первой ступени", "🛡️ Купол ПВО С-400",
-        "⚡ Сверхзвуковой удар", "🚀 Залп РСЗО", "🛰️ Разделение блоков", "🔥 Плазменный след",
-        "🚀 Калибр в полете", "⏱️ Обратный отсчет 3..2..1", "💥 Ударная волна", "🚀 Ракетный щит МСБ"
+        "🚀 Пуск из шахты", "🔥 Гиперзвук", "⚡ Тополь-М", "💥 Перехват ПВО",
+        "🛰️ Баллистика", "🚀 РВСН Дежурство", "🌋 Огненный старт", "🎯 Точно в цель",
+        "🚀 Комплекс Ярс", "🧭 Телеметрия", "🔥 Форсаж", "🛡️ Купол С-400",
+        "⚡ Удар с неба", "🚀 Залп РСЗО", "🛰️ Орбитальный блок", "🔥 Плазма",
+        "🚀 Калибр", "⏱️ Пуск 3..2..1", "💥 Ударная волна", "🚀 Щит МСБ"
     ],
     cosmic: [
-        "🌌 Глубокий космос", "🛰️ Орбитальная станция", "👨‍🚀 Выход в открытый космос", "🌟 Взрыв сверхновой",
-        "🛸 Варп-прыжок", "🪐 Кольца Сатурна", "☄️ Метеоритный поток", "🌌 Туманность Андромеды",
-        "🛰️ Спутник связи ВКС", "🌑 Лунная база", "⚡ Солнечный шторм", "🕳️ Черная дыра",
-        "🚀 Стыковка на орбите", "🌠 Звездный патруль", "🪐 Марсианский рассвет", "🛰️ Лазерная связь",
-        "🌌 Галактический вихрь", "👨‍🚀 Невесомость", "🌟 Пульсар в ночи", "🌌 Космический флот МСБ"
+        "🌌 Глубокий космос", "🛰️ Станция МКС", "👨‍🚀 Космонавт", "🌟 Сверхновая",
+        "🛸 Варп-прыжок", "🪐 Сатурн", "☄️ Метеориты", "🌌 Андромеда",
+        "🛰️ Спутник ВКС", "🌑 Лунная база", "⚡ Солнечный шторм", "🕳️ Черная дыра",
+        "🚀 Стыковка", "🌠 Звездный флот", "🪐 Марс", "🛰️ Лазерная орбита",
+        "🌌 Галактика", "👨‍🚀 Невесомость", "🌟 Пульсар", "🌌 Космос МСБ"
     ]
 };
-
 function makeAnimatedSvgGif(cat, idx, title) {
     const palettes = {
-        military: ['#062011', '#14532d', '#22c55e', '#facc15'],
-        rocket: ['#270905', '#7c2d12', '#f97316', '#fde047'],
-        cosmic: ['#090420', '#311068', '#38bdf8', '#c084fc']
+        military: ['#051b0e', '#14532d', '#22c55e', '#facc15'],
+        rocket: ['#220804', '#7c2d12', '#f97316', '#fde047'],
+        cosmic: ['#08041d', '#311068', '#38bdf8', '#c084fc']
     };
     const pal = palettes[cat] || palettes.military;
-    const icon = title.split(' ').at(0);
-    const label = title.replace(icon, '').trim();
-    const svg = '<svg xmlns="http://w3.org" viewBox="0 0 320 200" width="320" height="200">' +
-        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
-        '<stop offset="0%" stop-color="' + pal.at(0) + '"/><stop offset="100%" stop-color="' + pal.at(1) + '"/>' +
-        '</linearGradient></defs>' +
-        '<rect width="320" height="200" rx="14" fill="url(#g)"/>' +
-        '<circle cx="160" cy="85" r="30" fill="none" stroke="' + pal.at(2) + '" stroke-width="2" opacity="0.5">' +
-        '<animate attributeName="r" values="18;75;18" dur="2.6s" repeatCount="indefinite"/>' +
-        '<animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.6s" repeatCount="indefinite"/></circle>' +
-        '<circle cx="160" cy="85" r="48" fill="none" stroke="' + pal.at(3) + '" stroke-dasharray="8 6" stroke-width="2">' +
-        '<animateTransform attributeName="transform" type="rotate" from="0 160 85" to="360 160 85" dur="6s" repeatCount="indefinite"/></circle>' +
-        '<text x="160" y="98" font-size="42" text-anchor="middle">' + icon +
-        '<animateTransform attributeName="transform" type="translate" values="0,-5; 0,5; 0,-5" dur="1.4s" repeatCount="indefinite"/></text>' +
-        '<rect x="12" y="148" width="296" height="38" rx="8" fill="rgba(0,0,0,0.65)" stroke="' + pal.at(2) + '" stroke-width="1"/>' +
-        '<text x="160" y="172" font-family="monospace, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">' +
-        label + ' #' + (idx + 1) + '</text></svg>';
-    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+    const parts = title.split(' ');
+    const icon = parts.at(0);
+    const label = parts.slice(1).join(' ');
+    const dur1 = (1.8 + (idx % 5) * 0.3).toFixed(1) + 's';
+    const dur2 = (3.5 + (idx % 4) * 0.7).toFixed(1) + 's';
+
+    const svg = '<svg xmlns="http://w3.org" viewBox="0 0 300 190" width="300" height="190">' +
+        '<defs><linearGradient id="bg' + idx + '" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0%" stop-color="' + pal.at(0) + '"/>' +
+        '<stop offset="100%" stop-color="' + pal.at(1) + '"/></linearGradient></defs>' +
+        '<rect width="300" height="190" rx="14" fill="url(#bg' + idx + ')"/>' +
+        '<circle cx="150" cy="80" r="20" fill="none" stroke="' + pal.at(2) + '" stroke-width="2">' +
+        '<animate attributeName="r" values="15;78;15" dur="' + dur1 + '" repeatCount="indefinite"/>' +
+        '<animate attributeName="opacity" values="0.9;0.05;0.9" dur="' + dur1 + '" repeatCount="indefinite"/></circle>' +
+        '<circle cx="150" cy="80" r="46" fill="none" stroke="' + pal.at(3) + '" stroke-dasharray="10 6" stroke-width="2">' +
+        '<animateTransform attributeName="transform" type="rotate" from="0 150 80" to="360 150 80" dur="' + dur2 + '" repeatCount="indefinite"/></circle>' +
+        '<line x1="80" y1="80" x2="220" y2="80" stroke="' + pal.at(2) + '" stroke-opacity="0.35" stroke-width="1"/>' +
+        '<line x1="150" y1="15" x2="150" y2="140" stroke="' + pal.at(2) + '" stroke-opacity="0.35" stroke-width="1"/>' +
+        '<text x="150" y="95" font-size="40" text-anchor="middle">' + icon +
+        '<animateTransform attributeName="transform" type="translate" values="0,-6; 0,6; 0,-6" dur="1.3s" repeatCount="indefinite"/></text>' +
+        '<rect x="12" y="142" width="276" height="36" rx="8" fill="rgba(0,0,0,0.72)" stroke="' + pal.at(2) + '" stroke-width="1.2"/>' +
+        '<text x="150" y="165" font-family="monospace, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">' +
+        label + ' [' + (idx + 1) + ']</text></svg>';
+
+    return 'data:image/svg+xml;base64,' + window.btoa(unescape(encodeURIComponent(svg)));
 }
-function setAppTheme(themeName, silent) {
+
+function setAppTheme(themeName) {
     const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
     document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
     document.body.classList.add('theme-' + clean);
@@ -1347,16 +1358,25 @@ function setAppTheme(themeName, silent) {
         const b = document.getElementById('theme-btn-' + t);
         if (b) b.classList.toggle('active', t === clean);
     });
-    if (!silent) switchGifCategory(clean);
 }
 
+function toggleChatGifDrawer() {
+    const drawer = document.getElementById('chat-gif-drawer');
+    if (!drawer) return;
+    if (drawer.style.display === 'none' || !drawer.style.display) {
+        drawer.style.display = 'flex';
+        switchGifCategory(currentGifCategory || 'military');
+    } else {
+        drawer.style.display = 'none';
+    }
+}
 function switchGifCategory(cat) {
     currentGifCategory = (cat === 'rocket' || cat === 'cosmic') ? cat : 'military';
     Array.of('military', 'rocket', 'cosmic').forEach(function(t) {
         const tab = document.getElementById('gif-tab-' + t);
         if (tab) tab.classList.toggle('active', t === currentGifCategory);
     });
-    const grid = document.getElementById('viewer-gifs-grid');
+    const grid = document.getElementById('chat-gifs-grid');
     if (!grid) return;
     grid.innerHTML = '';
     const titles = GIF_TITLES[currentGifCategory] || GIF_TITLES.military;
@@ -1366,8 +1386,6 @@ function switchGifCategory(cat) {
         card.className = 'gif-card-item';
         card.innerHTML = '<img src="' + src + '" alt="GIF"><div class="gif-card-title">' + title + '</div>';
         card.onclick = function() {
-            const img = document.getElementById('msg-viewer-img');
-            if (img) img.src = src;
             sendGifToCurrentChat(src, title);
         };
         grid.appendChild(card);
@@ -1375,22 +1393,25 @@ function switchGifCategory(cat) {
 }
 
 function sendGifToCurrentChat(gifSrc, title) {
-    if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof getActiveChatIdentity === 'function') {
-        const sender = getActiveChatIdentity();
-        if (!sender) return;
-        const formData = new FormData();
-        formData.append('sender', sender);
-        formData.append('room', currentRoomId);
-        formData.append('text', gifSrc);
-        formData.append('type', 'gif');
-        fetch('/api/send', { method: 'POST', body: formData }).then(function() {
-            closeMsgPhotoViewer();
-            if (typeof fetchMessages === 'function') {
-                lastMessagesCount = -1;
-                fetchMessages();
-            }
-        });
+    if (typeof currentRoomId === 'undefined' || !currentRoomId) {
+        alert('Сначала выберите друга или конференцию слева, чтобы отправить гифку!');
+        return;
     }
+    const sender = (typeof getActiveChatIdentity === 'function') ? getActiveChatIdentity() : currentCallsign;
+    if (!sender) return;
+    const formData = new FormData();
+    formData.append('sender', sender);
+    formData.append('room', currentRoomId);
+    formData.append('text', gifSrc);
+    formData.append('type', 'gif');
+    fetch('/api/send', { method: 'POST', body: formData }).then(function() {
+        const drawer = document.getElementById('chat-gif-drawer');
+        if (drawer) drawer.style.display = 'none';
+        if (typeof fetchMessages === 'function') {
+            lastMessagesCount = -1;
+            fetchMessages();
+        }
+    });
 }
 
 function openMsgPhotoViewer(src, title) {
@@ -1399,26 +1420,25 @@ function openMsgPhotoViewer(src, title) {
     const ttl = document.getElementById('msg-viewer-title');
     msgImageZoom = 1;
     if (img) {
-        img.src = src || makeAnimatedSvgGif(currentGifCategory || 'military', 0, '🪖 МСБ-55115');
+        img.src = src || makeAnimatedSvgGif('military', 0, '🪖 МСБ-55115');
         img.style.transform = 'scale(1)';
     }
-    if (ttl) ttl.innerText = title || '🖼️ Просмотр фото, темы и GIF';
+    if (ttl) ttl.innerText = title || '🖼️ Просмотр и настройки темы';
     const zLbl = document.getElementById('msg-zoom-label');
     if (zLbl) zLbl.innerText = '100%';
-    switchGifCategory(localStorage.getItem('msb_app_theme') || 'military');
+    setAppTheme(localStorage.getItem('msb_app_theme') || 'military');
     if (modal) modal.style.display = 'flex';
 }
 
 function openAvatarInViewer(el, titleName) {
     const imgEl = el ? el.querySelector('img') : null;
-    const defaultGif = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ Профиль ' + (titleName || currentCallsign || 'МСБ'));
-    const src = imgEl ? imgEl.src : defaultGif;
-    openMsgPhotoViewer(src, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
+    const fallback = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ ' + (titleName || currentCallsign || 'МСБ'));
+    openMsgPhotoViewer(imgEl ? imgEl.src : fallback, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
 }
 
-function openThemeAndGifHub() {
-    const previewGif = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎨 Темы и GIF МСБ-55115');
-    openMsgPhotoViewer(previewGif, '🎨 Настройки темы и коллекция GIF (60 шт.)');
+function openThemeSettingsModal() {
+    const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема оформления МСБ');
+    openMsgPhotoViewer(preview, '🎨 Выбор темы оформления (Военный / Ракетный / Космос)');
 }
 
 function closeMsgPhotoViewer() {
@@ -1432,11 +1452,6 @@ function changeMsgImageZoom(delta) {
     const lbl = document.getElementById('msg-zoom-label');
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
-}
-
-function toggleViewerSettingsPanel() {
-    const p = document.getElementById('msg-viewer-settings');
-    if (p) p.style.display = (p.style.display === 'none') ? 'flex' : 'none';
 }
 
 initApp();
