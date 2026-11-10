@@ -700,9 +700,30 @@ function isNotificationVisibleForMe(notif) {
     if (!notif) return false;
     if (notif.target === "ВСЕМ") return true;
     if (currentUser === ADMIN_NAME) return true;
-    if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
-    if (currentCallsign && (notif.target === currentCallsign || notif.sender === currentCallsign)) return true;
+    const tLow = String(notif.target || '').trim().toLowerCase();
+    const sLow = String(notif.sender || '').trim().toLowerCase();
+    const uLow = String(currentUser || '').trim().toLowerCase();
+    const cLow = String(currentCallsign || '').trim().toLowerCase();
+    if (uLow && (tLow === uLow || sLow === uLow || sLow.indexOf('(' + uLow + ')') !== -1)) return true;
+    if (cLow && (tLow === cLow || sLow === cLow || sLow.indexOf('(' + cLow + ')') !== -1)) return true;
     return false;
+}
+
+function markNotificationReadOnServer(notif) {
+    if (!notif || notif.read) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const me = currentCallsign || currentUser || 'Просмотр';
+    const myLow = String(me).trim().toLowerCase();
+    const sLow = String(notif.sender || '').trim().toLowerCase();
+    if (sLow === myLow || sLow.indexOf('(' + myLow + ')') !== -1) return;
+    const readTime = new Date().toLocaleTimeString().slice(0, 5);
+    ws.send(JSON.stringify({
+        type: 'clear_alert',
+        target: notif.target,
+        notifId: notif.id,
+        readBy: me,
+        readTime: readTime
+    }));
 }
 
 function renderNotificationsWindow() {
@@ -716,14 +737,19 @@ function renderNotificationsWindow() {
         myNotifs.forEach(function(notif) {
             const item = document.createElement('div');
             item.className = 'notif-item' + (notif.read ? ' read' : '');
-            const statusText = notif.read ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : '')) : '⏳ НЕ ПРОЧИТАНО';
+            const statusText = notif.read
+                ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : ''))
+                : '⏳ НЕ ПРОЧИТАНО';
             item.innerHTML =
                 '<span class="notif-time">' + notif.time + '</span>' +
                 '<span class="notif-sender" style="color:' + (notif.color || '#ef4444') + '">' + notif.sender + '</span>' +
                 '<span class="notif-target">КОМУ: ' + notif.target + '</span>' +
                 '<span class="notif-text">' + notif.text + '</span>' +
                 '<span class="notif-status">' + statusText + '</span>';
-            item.onclick = function() { openMessengerWindow(notif.sender); };
+            item.onclick = function() {
+                markNotificationReadOnServer(notif);
+                openMessengerWindow(notif.sender);
+            };
             list.appendChild(item);
         });
         list.scrollTop = list.scrollHeight;
@@ -731,27 +757,21 @@ function renderNotificationsWindow() {
     updateBroadcastTicker();
 }
 
-function updateBroadcastTicker() {
-    const ticker = document.getElementById('msg-broadcast-ticker');
-    if (!ticker) return;
-    const allBroadcasts = allNotifications.filter(function(n) { return n && n.target === 'ВСЕМ'; }).slice(-8).reverse();
-    if (allBroadcasts.length === 0) {
-        ticker.innerText = '📢 СВОДКА «ВСЕМ»: Пока нет общих оповещений...';
-        return;
-    }
-    const parts = allBroadcasts.map(function(n) {
-        return '⚡ [' + (n.time || '') + '] ' + (n.sender || 'АДМИН') + ' ➔ ВСЕМ: ' + n.text;
-    });
-    ticker.innerText = parts.join('   |   ');
-}
-
 function getAlertsQueue(target) {
-    const raw = pendingAlerts[target];
+    if (!target) return new Array();
+    let raw = pendingAlerts[target];
+    if (!raw) {
+        const tLow = String(target).trim().toLowerCase();
+        Object.keys(pendingAlerts).forEach(function(k) {
+            if (String(k).trim().toLowerCase() === tLow) raw = pendingAlerts[k];
+        });
+    }
     if (!raw) return new Array();
     if (Array.isArray(raw)) return raw;
     if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
     return Array.of(raw);
 }
+
 
 function checkServerVersionChange(bootId, bootTime) {
     if (!bootId) return;
@@ -1183,6 +1203,26 @@ function isUnreadForMe(a) {
     return true;
 }
 
+function checkAndShowAlerts(isNew) {
+    if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
+    let targetToShow = null, alertObj = null;
+    if (currentCallsign) {
+        const q = getAlertsQueue(currentCallsign).filter(isUnreadForMe);
+        if (q.length > 0) { targetToShow = currentCallsign; alertObj = q.at(0); }
+    }
+    if (!targetToShow && currentUser) {
+        const q = getAlertsQueue(currentUser).filter(isUnreadForMe);
+        if (q.length > 0) { targetToShow = currentUser; alertObj = q.at(0); }
+    }
+    if (!targetToShow) {
+        const q = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
+        if (q.length > 0) { targetToShow = "ВСЕМ"; alertObj = q.at(0); }
+    }
+    if (targetToShow && alertObj) {
+        showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
+    }
+}
+
 function showAlert(target, text, sender, notifId, isNew) {
     const msgModal = document.getElementById('messenger-modal');
     const isMessengerOpen = msgModal && msgModal.style.display === 'flex';
@@ -1192,16 +1232,18 @@ function showAlert(target, text, sender, notifId, isNew) {
                         String(text || '').indexOf('📎') === 0 ||
                         String(text || '').indexOf('🎬') === 0;
 
-    if (isMessengerOpen && isChatNotif && typeof isCurrentGroup !== 'undefined' && isCurrentGroup) {
+    if (isMessengerOpen && isChatNotif) {
         const whoConfirmed = currentCallsign || currentUser || 'Просмотр';
         const readTime = new Date().toLocaleTimeString().slice(0, 5);
-        ws.send(JSON.stringify({
-            type: 'clear_alert',
-            target: target,
-            notifId: notifId || null,
-            readBy: whoConfirmed,
-            readTime: readTime
-        }));
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'clear_alert',
+                target: target,
+                notifId: notifId || null,
+                readBy: whoConfirmed,
+                readTime: readTime
+            }));
+        }
         return;
     }
 
