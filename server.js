@@ -172,7 +172,7 @@ const MANIFEST_JSON = JSON.stringify({
     )
 });
 
-const SW_CODE = [
+const SW_CODE = Array.of(
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
     "self.addEventListener('push', function(event) {",
@@ -182,7 +182,7 @@ const SW_CODE = [
     "        body: data.body,",
     "        icon: '/icon-192.png',",
     "        badge: '/icon-192.png',",
-    "        vibrate: [800, 200, 800, 200, 800, 200, 1000],",
+    "        vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),",
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
@@ -194,13 +194,14 @@ const SW_CODE = [
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
-    "            var cl = clientList[i];",
+    "            var cl = clientList.at(i);",
     "            if (cl && 'focus' in cl) return cl.focus();",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
-].join('\n');
+).join('\n');
+
 
 function readBodyJSON(req, cb) {
     let body = '';
