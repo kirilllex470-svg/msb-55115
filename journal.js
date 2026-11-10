@@ -177,26 +177,22 @@ async function subscribeToWebPush() {
 }
 
 function sendLocalNotification(target, text, sender) {
-    if ('PushManager' in window && publicVapidKey) return;
     const fromWho = sender || 'АДМИН';
-    const title = '🛑 СООБЩЕНИЕ ДЛЯ [' + target + ']!';
+    const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
     const body = fromWho + ': ' + text;
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then(function(reg) {
             reg.showNotification(title, {
                 body: body,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
-                vibrate: Array.of(500, 150, 500),
+                vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
                 silent: false,
                 requireInteraction: true,
                 renotify: true,
-                tag: 'msb-single-alert'
+                tag: 'admin-alert-' + Date.now()
             }).catch(function() {});
         });
     }
 }
-
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
@@ -700,30 +696,9 @@ function isNotificationVisibleForMe(notif) {
     if (!notif) return false;
     if (notif.target === "ВСЕМ") return true;
     if (currentUser === ADMIN_NAME) return true;
-    const tLow = String(notif.target || '').trim().toLowerCase();
-    const sLow = String(notif.sender || '').trim().toLowerCase();
-    const uLow = String(currentUser || '').trim().toLowerCase();
-    const cLow = String(currentCallsign || '').trim().toLowerCase();
-    if (uLow && (tLow === uLow || sLow === uLow || sLow.indexOf('(' + uLow + ')') !== -1)) return true;
-    if (cLow && (tLow === cLow || sLow === cLow || sLow.indexOf('(' + cLow + ')') !== -1)) return true;
+    if (currentUser && (notif.target === currentUser || notif.sender === currentUser)) return true;
+    if (currentCallsign && (notif.target === currentCallsign || notif.sender === currentCallsign)) return true;
     return false;
-}
-
-function markNotificationReadOnServer(notif) {
-    if (!notif || notif.read) return;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const me = currentCallsign || currentUser || 'Просмотр';
-    const myLow = String(me).trim().toLowerCase();
-    const sLow = String(notif.sender || '').trim().toLowerCase();
-    if (sLow === myLow || sLow.indexOf('(' + myLow + ')') !== -1) return;
-    const readTime = new Date().toLocaleTimeString().slice(0, 5);
-    ws.send(JSON.stringify({
-        type: 'clear_alert',
-        target: notif.target,
-        notifId: notif.id,
-        readBy: me,
-        readTime: readTime
-    }));
 }
 
 function renderNotificationsWindow() {
@@ -737,19 +712,14 @@ function renderNotificationsWindow() {
         myNotifs.forEach(function(notif) {
             const item = document.createElement('div');
             item.className = 'notif-item' + (notif.read ? ' read' : '');
-            const statusText = notif.read
-                ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : ''))
-                : '⏳ НЕ ПРОЧИТАНО';
+            const statusText = notif.read ? ('✅ ПРОЧИТАНО' + (notif.readBy ? ' (' + notif.readBy + ')' : '')) : '⏳ НЕ ПРОЧИТАНО';
             item.innerHTML =
                 '<span class="notif-time">' + notif.time + '</span>' +
                 '<span class="notif-sender" style="color:' + (notif.color || '#ef4444') + '">' + notif.sender + '</span>' +
                 '<span class="notif-target">КОМУ: ' + notif.target + '</span>' +
                 '<span class="notif-text">' + notif.text + '</span>' +
                 '<span class="notif-status">' + statusText + '</span>';
-            item.onclick = function() {
-                markNotificationReadOnServer(notif);
-                openMessengerWindow(notif.sender);
-            };
+            item.onclick = function() { openMessengerWindow(notif.sender); };
             list.appendChild(item);
         });
         list.scrollTop = list.scrollHeight;
@@ -757,21 +727,27 @@ function renderNotificationsWindow() {
     updateBroadcastTicker();
 }
 
-function getAlertsQueue(target) {
-    if (!target) return new Array();
-    let raw = pendingAlerts[target];
-    if (!raw) {
-        const tLow = String(target).trim().toLowerCase();
-        Object.keys(pendingAlerts).forEach(function(k) {
-            if (String(k).trim().toLowerCase() === tLow) raw = pendingAlerts[k];
-        });
+function updateBroadcastTicker() {
+    const ticker = document.getElementById('msg-broadcast-ticker');
+    if (!ticker) return;
+    const allBroadcasts = allNotifications.filter(function(n) { return n && n.target === 'ВСЕМ'; }).slice(-8).reverse();
+    if (allBroadcasts.length === 0) {
+        ticker.innerText = '📢 СВОДКА «ВСЕМ»: Пока нет общих оповещений...';
+        return;
     }
+    const parts = allBroadcasts.map(function(n) {
+        return '⚡ [' + (n.time || '') + '] ' + (n.sender || 'АДМИН') + ' ➔ ВСЕМ: ' + n.text;
+    });
+    ticker.innerText = parts.join('   |   ');
+}
+
+function getAlertsQueue(target) {
+    const raw = pendingAlerts[target];
     if (!raw) return new Array();
     if (Array.isArray(raw)) return raw;
     if (typeof raw === 'string') return Array.of({ id: null, text: raw, sender: ADMIN_NAME, readList: new Array() });
     return Array.of(raw);
 }
-
 
 function checkServerVersionChange(bootId, bootTime) {
     if (!bootId) return;
@@ -897,62 +873,43 @@ setInterval(function() {
     }
 }, 4000);
 function handleAlertClearedMsg(msg) {
-    const targetLow = String(msg.target || '').trim().toLowerCase();
-
-    Object.keys(pendingAlerts).forEach(function(k) {
-        if (String(k).trim().toLowerCase() === targetLow) {
-            const queue = getAlertsQueue(k);
-            if (targetLow === 'всем') {
-                queue.forEach(function(a) {
-                    if (!msg.notifId || a.id === msg.notifId) {
-                        if (!Array.isArray(a.readList)) a.readList = new Array();
-                        if (msg.who && a.readList.indexOf(msg.who) === -1) a.readList.push(msg.who);
-                    }
-                });
-                pendingAlerts[k] = queue;
-            } else {
-                if (msg.notifId) {
-                    pendingAlerts[k] = queue.filter(function(a) { return a.id !== msg.notifId; });
-                } else {
-                    queue.shift();
-                    pendingAlerts[k] = queue;
-                }
-                if (pendingAlerts[k] && pendingAlerts[k].length === 0) delete pendingAlerts[k];
+    const queue = getAlertsQueue(msg.target);
+    if (msg.target === 'ВСЕМ') {
+        queue.forEach(function(a) {
+            if (!msg.notifId || a.id === msg.notifId) {
+                if (!Array.isArray(a.readList)) a.readList = new Array();
+                if (msg.who && a.readList.indexOf(msg.who) === -1) a.readList.push(msg.who);
             }
+        });
+        pendingAlerts[msg.target] = queue;
+    } else {
+        if (msg.notifId) {
+            pendingAlerts[msg.target] = queue.filter(function(a) { return a.id !== msg.notifId; });
+        } else {
+            queue.shift();
+            pendingAlerts[msg.target] = queue;
         }
-    });
+        if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) delete pendingAlerts[msg.target];
+    }
 
     if (msg.notifId) {
         allNotifications.forEach(function(n) {
-            if (n.id === msg.notifId) {
-                n.read = true;
-                n.readBy = msg.readBy || msg.who || '';
-            }
+            if (n.id === msg.notifId) { n.read = true; n.readBy = msg.readBy || ''; }
         });
     } else {
         let marked = false;
         allNotifications.forEach(function(n) {
-            if (!marked && String(n.target || '').trim().toLowerCase() === targetLow && !n.read) {
-                n.read = true;
-                n.readBy = msg.readBy || msg.who || '';
-                marked = true;
-            }
+            if (!marked && n.target === msg.target) { n.read = true; n.readBy = msg.readBy || ''; marked = true; }
         });
     }
     renderNotificationsWindow();
 
-    const myName = String(currentCallsign || currentUser || 'Просмотр').trim().toLowerCase();
-    const myUnit = String(currentUser || '').trim().toLowerCase();
-    const whoLow = String(msg.who || '').trim().toLowerCase();
-
-    if (String(currentAlertTarget || '').trim().toLowerCase() === targetLow && (!msg.notifId || currentAlertId === msg.notifId)) {
-        if (targetLow !== 'всем' || whoLow === myName || whoLow === myUnit) {
-            stopAlertVisuals();
-        }
+    const myName = currentCallsign || currentUser || 'Просмотр';
+    if (currentAlertTarget === msg.target && (!msg.notifId || currentAlertId === msg.notifId)) {
+        if (msg.target !== 'ВСЕМ' || msg.who === myName || msg.who === currentUser) stopAlertVisuals();
     }
     checkAndShowAlerts(false);
 }
-
 
 function populateTargetSelect() {
     const adminSelect = document.getElementById('admin-target');
@@ -1207,18 +1164,9 @@ function clearHistoryAdmin() {
 }
 
 function isUnreadForMe(a) {
-    const me = String(currentCallsign || currentUser || 'Просмотр').toLowerCase();
-    const myUnit = String(currentUser || '').toLowerCase();
-    const snd = String(a.sender || '').toLowerCase();
-    if (me && (snd === me || snd.indexOf('(' + me + ')') !== -1)) return false;
-    if (myUnit && snd === myUnit) return false;
-    if (Array.isArray(a.readList)) {
-        const found = a.readList.some(function(r) {
-            const rl = String(r || '').toLowerCase();
-            return rl === me || rl === myUnit;
-        });
-        if (found) return false;
-    }
+    const me = currentCallsign || currentUser || 'Просмотр';
+    if (currentUser && (a.sender === currentUser || a.sender === currentCallsign)) return false;
+    if (Array.isArray(a.readList) && (a.readList.indexOf(me) !== -1 || a.readList.indexOf(currentUser) !== -1)) return false;
     return true;
 }
 
@@ -1237,46 +1185,19 @@ function checkAndShowAlerts(isNew) {
         const q = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
         if (q.length > 0) { targetToShow = "ВСЕМ"; alertObj = q.at(0); }
     }
-    if (targetToShow && alertObj) {
-        showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
-    }
+    if (targetToShow && alertObj) showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
 }
-
 function showAlert(target, text, sender, notifId, isNew) {
-    const msgModal = document.getElementById('messenger-modal');
-    const isMessengerOpen = msgModal && msgModal.style.display === 'flex';
-    const isChatNotif = String(text || '').indexOf('💬') === 0 ||
-                        String(text || '').indexOf('🎙️') === 0 ||
-                        String(text || '').indexOf('🎥') === 0 ||
-                        String(text || '').indexOf('📎') === 0 ||
-                        String(text || '').indexOf('🎬') === 0;
-
-    if (isMessengerOpen && isChatNotif) {
-        const whoConfirmed = currentCallsign || currentUser || 'Просмотр';
-        const readTime = new Date().toLocaleTimeString().slice(0, 5);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'clear_alert',
-                target: target,
-                notifId: notifId || null,
-                readBy: whoConfirmed,
-                readTime: readTime
-            }));
-        }
-        return;
-    }
-
     currentAlertId = notifId || null;
     currentAlertTarget = target;
     currentAlertText = text;
     currentAlertSender = sender || ADMIN_NAME;
     const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-    document.getElementById('alert-target-label').innerText =
-        'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
+    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
     document.getElementById('alert-text').innerText = text;
     document.getElementById('alert-modal').style.display = 'flex';
     updateLockScreenAlert(target, text, currentAlertSender);
-    if (isNew) sendLocalNotification(target, text, currentAlertSender);
+    if (isNew || document.visibilityState === 'hidden') sendLocalNotification(target, text, currentAlertSender);
     if (!titleInterval) {
         let flag = false;
         titleInterval = setInterval(function() {
@@ -1286,6 +1207,17 @@ function showAlert(target, text, sender, notifId, isNew) {
     }
     playBeep();
     if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
+}
+
+function stopAlertVisuals() {
+    document.getElementById('alert-modal').style.display = 'none';
+    currentAlertId = null;
+    currentAlertTarget = "";
+    if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
+    if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
+    if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
+    if (navigator.vibrate) navigator.vibrate(0);
+    document.title = "МСБ55115";
 }
 
 function confirmAlert() {
@@ -1298,36 +1230,15 @@ function confirmAlert() {
     const alertSenderCopy = String(currentAlertSender || '');
     stopAlertVisuals();
     if (targetToClear) {
-        ws.send(JSON.stringify({
-            type: 'clear_alert',
-            target: targetToClear,
-            notifId: idToClear,
-            readBy: whoConfirmed,
-            readTime: readTime
-        }));
+        ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
     }
-    const msgModal = document.getElementById('messenger-modal');
-    const isMessengerOpen = msgModal && msgModal.style.display === 'flex';
-    if (isMessengerOpen && typeof currentRoomId !== 'undefined' && currentRoomId) {
-        checkAndShowAlerts(false);
-        return;
-    }
-    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 ||
-                            alertTextCopy.indexOf('🎙️') === 0 ||
-                            alertTextCopy.indexOf('🎥') === 0 ||
-                            alertTextCopy.indexOf('📎') === 0 ||
-                            alertTextCopy.indexOf('🎬') === 0;
+    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
     if (isFromMessenger && typeof openMessengerWindow === 'function') {
-        if (alertSenderCopy.indexOf('👥') === 0) {
-            openMessengerWindow();
-        } else {
-            openMessengerWindow(alertSenderCopy);
-        }
+        openMessengerWindow(alertSenderCopy);
         return;
     }
     checkAndShowAlerts(false);
 }
-
 
 function submitRow() {
     if (!currentUser) return;
@@ -1367,12 +1278,8 @@ function triggerCallInDev(callType, targetName) {
     const title = document.getElementById('call-dev-title');
     const text = document.getElementById('call-dev-text');
     if (icon) icon.innerText = (callType === 'Видеозвонок') ? '🎥' : '📞';
-    if (title) {
-        title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
-    }
-    if (text) {
-        text.innerHTML = 'Модуль <b>«' + callType + '»</b> в разработке системы <b>МСБ-55115</b>!';
-    }
+    if (title) title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
+    if (text) text.innerHTML = 'Защищенный модуль <b>«' + callType + '»</b> находится в разработке системы <b>МСБ-55115</b> и скоро будет активирован!';
     if (modal) modal.style.display = 'flex';
 }
 
@@ -1383,98 +1290,55 @@ function closeCallDevModal() {
 
 const GIF_TITLES = {
     military: [
-        "🪖 Спецназ МСБ", "🛡️ Броня крепка", "🚁 Вертушка", "📡 Радар ПВО",
-        "🎯 Снайпер", "🟩 ПНВ Разведка", "🚜 Танковый прорыв", "⚡ Штурм",
-        "🎖️ Отвага", "📻 Радиосвязь", "🔥 Артиллерия", "🛩️ Су-57 в небе",
-        "🧭 Маршрут", "💣 Саперы", "🐕 Дозор", "🚢 Флот",
-        "🚁 Десант", "🛡️ Оборона", "🎆 Салют Победы", "🏆 МСБ-55115"
+        "🪖 Спецназ в деле", "🛡️ Броня крепка", "🚁 Вертушка прикрытия", "📡 Радар ПВО",
+        "🎯 Снайперский выстрел", "🟩 Ночное видение ПНВ", "🚜 Танковый прорыв", "⚡ Штурмовая группа",
+        "🎖️ Честь и Отвага", "📻 Связь без помех", "🔥 Артиллерия работает", "🛩️ Истребитель Су-57",
+        "🧭 Тактический маршрут", "💣 Разминирование", "🐕 Военная разведка", "🚢 Флот на рубеже",
+        "🚁 Десант с воздуха", "🛡️ Оборона рубежа", "🎆 Салют Победы", "🏆 МСБ-55115 Сила"
     ],
     rocket: [
-        "🚀 Пуск из шахты", "🔥 Гиперзвук", "⚡ Тополь-М", "💥 Перехват ПВО",
-        "🛰️ Баллистика", "🚀 РВСН Дежурство", "🌋 Огненный старт", "🎯 Точно в цель",
-        "🚀 Комплекс Ярс", "🧭 Телеметрия", "🔥 Форсаж", "🛡️ Купол С-400",
-        "⚡ Удар с неба", "🚀 Залп РСЗО", "🛰️ Орбитальный блок", "🔥 Плазма",
-        "🚀 Калибр", "⏱️ Пуск 3..2..1", "💥 Ударная волна", "🚀 Щит МСБ"
+        "🚀 Пуск из шахты", "🔥 Гиперзвук Мах-10", "⚡ Тополь-М на старте", "💥 Перехват цели",
+        "🛰️ Баллистическая дуга", "🚀 РВСН на дежурстве", "🌋 Огненный старт", "🎯 Точно в яблочко",
+        "🚀 Ярс выходит на позицию", "🧭 Телеметрия пуска", "🔥 Форсаж первой ступени", "🛡️ Купол ПВО С-400",
+        "⚡ Сверхзвуковой удар", "🚀 Залп РСЗО", "🛰️ Разделение блоков", "🔥 Плазменный след",
+        "🚀 Калибр в полете", "⏱️ Обратный отсчет 3..2..1", "💥 Ударная волна", "🚀 Ракетный щит МСБ"
     ],
     cosmic: [
-        "🌌 Глубокий космос", "🛰️ Станция МКС", "👨‍🚀 Космонавт", "🌟 Сверхновая",
-        "🛸 Варп-прыжок", "🪐 Сатурн", "☄️ Метеориты", "🌌 Андромеда",
-        "🛰️ Спутник ВКС", "🌑 Лунная база", "⚡ Солнечный шторм", "🕳️ Черная дыра",
-        "🚀 Стыковка", "🌠 Звездный флот", "🪐 Марс", "🛰️ Лазерная орбита",
-        "🌌 Галактика", "👨‍🚀 Невесомость", "🌟 Пульсар", "🌌 Космос МСБ"
+        "🌌 Глубокий космос", "🛰️ Орбитальная станция", "👨‍🚀 Выход в открытый космос", "🌟 Взрыв сверхновой",
+        "🛸 Варп-прыжок", "🪐 Кольца Сатурна", "☄️ Метеоритный поток", "🌌 Туманность Андромеды",
+        "🛰️ Спутник связи ВКС", "🌑 Лунная база", "⚡ Солнечный шторм", "🕳️ Черная дыра",
+        "🚀 Стыковка на орбите", "🌠 Звездный патруль", "🪐 Марсианский рассвет", "🛰️ Лазерная связь",
+        "🌌 Галактический вихрь", "👨‍🚀 Невесомость", "🌟 Пульсар в ночи", "🌌 Космический флот МСБ"
     ]
 };
 
-var gifCacheStore = {};
-
 function makeAnimatedSvgGif(cat, idx, title) {
-    const cacheKey = cat + '_' + idx;
-    if (gifCacheStore[cacheKey]) return gifCacheStore[cacheKey];
-
     const palettes = {
-        military: ['#051f10', '#14532d', '#22c55e', '#facc15'],
-        rocket: ['#260804', '#7c2d12', '#f97316', '#fde047'],
-        cosmic: ['#090422', '#3b0764', '#38bdf8', '#c084fc']
+        military: ['#062011', '#14532d', '#22c55e', '#facc15'],
+        rocket: ['#270905', '#7c2d12', '#f97316', '#fde047'],
+        cosmic: ['#090420', '#311068', '#38bdf8', '#c084fc']
     };
     const pal = palettes[cat] || palettes.military;
-    const parts = String(title || '').split(' ');
-    const icon = parts.at(0) || '🚀';
-    const label = parts.slice(1).join(' ') || 'МСБ-55115';
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 200;
-    const ctx = canvas.getContext('2d');
-
-    const grad = ctx.createLinearGradient(0, 0, 320, 200);
-    grad.addColorStop(0, pal.at(0));
-    grad.addColorStop(1, pal.at(1));
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 320, 200);
-
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 1;
-    for (let x = 20; x < 320; x += 28) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 200); ctx.stroke();
-    }
-    for (let y = 20; y < 200; y += 28) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke();
-    }
-
-    ctx.strokeStyle = pal.at(2);
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(160, 78, 52, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = pal.at(3);
-    ctx.lineWidth = 2;
-    ctx.setLineDash([8, 6]);
-    ctx.beginPath();
-    ctx.arc(160, 78, 36, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.font = '46px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(icon, 160, 78);
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
-    ctx.fillRect(14, 144, 292, 42);
-    ctx.strokeStyle = pal.at(2);
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(14, 144, 292, 42);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 15px "Segoe UI", monospace, sans-serif';
-    ctx.fillText(label + ' #' + (idx + 1), 160, 166);
-
-    const dataUrl = canvas.toDataURL('image/png');
-    gifCacheStore[cacheKey] = dataUrl;
-    return dataUrl;
+    const icon = title.split(' ').at(0);
+    const label = title.replace(icon, '').trim();
+    const svg = '<svg xmlns="http://w3.org" viewBox="0 0 320 200" width="320" height="200">' +
+        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0%" stop-color="' + pal.at(0) + '"/><stop offset="100%" stop-color="' + pal.at(1) + '"/>' +
+        '</linearGradient></defs>' +
+        '<rect width="320" height="200" rx="14" fill="url(#g)"/>' +
+        '<circle cx="160" cy="85" r="30" fill="none" stroke="' + pal.at(2) + '" stroke-width="2" opacity="0.5">' +
+        '<animate attributeName="r" values="18;75;18" dur="2.6s" repeatCount="indefinite"/>' +
+        '<animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.6s" repeatCount="indefinite"/></circle>' +
+        '<circle cx="160" cy="85" r="48" fill="none" stroke="' + pal.at(3) + '" stroke-dasharray="8 6" stroke-width="2">' +
+        '<animateTransform attributeName="transform" type="rotate" from="0 160 85" to="360 160 85" dur="6s" repeatCount="indefinite"/></circle>' +
+        '<text x="160" y="98" font-size="42" text-anchor="middle">' + icon +
+        '<animateTransform attributeName="transform" type="translate" values="0,-5; 0,5; 0,-5" dur="1.4s" repeatCount="indefinite"/></text>' +
+        '<rect x="12" y="148" width="296" height="38" rx="8" fill="rgba(0,0,0,0.65)" stroke="' + pal.at(2) + '" stroke-width="1"/>' +
+        '<text x="160" y="172" font-family="monospace, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">' +
+        label + ' #' + (idx + 1) + '</text></svg>';
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
-function setAppTheme(themeName) {
+function setAppTheme(themeName, silent) {
     const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
     document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
     document.body.classList.add('theme-' + clean);
@@ -1483,20 +1347,7 @@ function setAppTheme(themeName) {
         const b = document.getElementById('theme-btn-' + t);
         if (b) b.classList.toggle('active', t === clean);
     });
-}
-
-function toggleChatGifDrawer() {
-    const drawer = document.getElementById('chat-gif-drawer');
-    if (!drawer) {
-        openThemeSettingsModal();
-        return;
-    }
-    if (drawer.style.display === 'none' || !drawer.style.display) {
-        drawer.style.display = 'flex';
-        switchGifCategory(currentGifCategory || 'military');
-    } else {
-        drawer.style.display = 'none';
-    }
+    if (!silent) switchGifCategory(clean);
 }
 
 function switchGifCategory(cat) {
@@ -1505,7 +1356,7 @@ function switchGifCategory(cat) {
         const tab = document.getElementById('gif-tab-' + t);
         if (tab) tab.classList.toggle('active', t === currentGifCategory);
     });
-    const grid = document.getElementById('chat-gifs-grid') || document.getElementById('viewer-gifs-grid');
+    const grid = document.getElementById('viewer-gifs-grid');
     if (!grid) return;
     grid.innerHTML = '';
     const titles = GIF_TITLES[currentGifCategory] || GIF_TITLES.military;
@@ -1513,15 +1364,10 @@ function switchGifCategory(cat) {
         const src = makeAnimatedSvgGif(currentGifCategory, idx, title);
         const card = document.createElement('div');
         card.className = 'gif-card-item';
-        const imgEl = document.createElement('img');
-        imgEl.src = src;
-        imgEl.alt = title;
-        const capEl = document.createElement('div');
-        capEl.className = 'gif-card-title';
-        capEl.innerText = title;
-        card.appendChild(imgEl);
-        card.appendChild(capEl);
+        card.innerHTML = '<img src="' + src + '" alt="GIF"><div class="gif-card-title">' + title + '</div>';
         card.onclick = function() {
+            const img = document.getElementById('msg-viewer-img');
+            if (img) img.src = src;
             sendGifToCurrentChat(src, title);
         };
         grid.appendChild(card);
@@ -1529,32 +1375,22 @@ function switchGifCategory(cat) {
 }
 
 function sendGifToCurrentChat(gifSrc, title) {
-    if (typeof currentRoomId === 'undefined' || !currentRoomId) {
-        alert('Сначала выберите друга или конференцию слева, чтобы отправить гифку!');
-        return;
-    }
-    const sender = (typeof getActiveChatIdentity === 'function') ? getActiveChatIdentity() : currentCallsign;
-    if (!sender) return;
-
-    fetch(gifSrc)
-        .then(function(r) { return r.blob(); })
-        .then(function(blob) {
-            const formData = new FormData();
-            formData.append('sender', sender);
-            formData.append('room', currentRoomId);
-            formData.append('type', 'file');
-            formData.append('media', blob, 'gif_' + Date.now() + '.png');
-            return fetch('/api/send', { method: 'POST', body: formData });
-        })
-        .then(function() {
-            const drawer = document.getElementById('chat-gif-drawer');
-            if (drawer) drawer.style.display = 'none';
+    if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof getActiveChatIdentity === 'function') {
+        const sender = getActiveChatIdentity();
+        if (!sender) return;
+        const formData = new FormData();
+        formData.append('sender', sender);
+        formData.append('room', currentRoomId);
+        formData.append('text', gifSrc);
+        formData.append('type', 'gif');
+        fetch('/api/send', { method: 'POST', body: formData }).then(function() {
             closeMsgPhotoViewer();
             if (typeof fetchMessages === 'function') {
                 lastMessagesCount = -1;
                 fetchMessages();
             }
         });
+    }
 }
 
 function openMsgPhotoViewer(src, title) {
@@ -1563,27 +1399,27 @@ function openMsgPhotoViewer(src, title) {
     const ttl = document.getElementById('msg-viewer-title');
     msgImageZoom = 1;
     if (img) {
-        img.src = src || makeAnimatedSvgGif('military', 0, '🪖 МСБ-55115');
+        img.src = src || makeAnimatedSvgGif(currentGifCategory || 'military', 0, '🪖 МСБ-55115');
         img.style.transform = 'scale(1)';
     }
-    if (ttl) ttl.innerText = title || '🖼️ Просмотр и настройки темы';
+    if (ttl) ttl.innerText = title || '🖼️ Просмотр фото, темы и GIF';
     const zLbl = document.getElementById('msg-zoom-label');
     if (zLbl) zLbl.innerText = '100%';
-    setAppTheme(localStorage.getItem('msb_app_theme') || 'military');
+    switchGifCategory(localStorage.getItem('msb_app_theme') || 'military');
     if (modal) modal.style.display = 'flex';
 }
 
 function openAvatarInViewer(el, titleName) {
     const imgEl = el ? el.querySelector('img') : null;
-    const fallback = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ ' + (titleName || currentCallsign || 'МСБ'));
-    openMsgPhotoViewer(imgEl ? imgEl.src : fallback, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
+    const defaultGif = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ Профиль ' + (titleName || currentCallsign || 'МСБ'));
+    const src = imgEl ? imgEl.src : defaultGif;
+    openMsgPhotoViewer(src, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
 }
 
-function openThemeSettingsModal() {
-    const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема МСБ-55115');
-    openMsgPhotoViewer(preview, '🎨 Выбор темы оформления (Военный / Ракетный / Космос)');
+function openThemeAndGifHub() {
+    const previewGif = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎨 Темы и GIF МСБ-55115');
+    openMsgPhotoViewer(previewGif, '🎨 Настройки темы и коллекция GIF (60 шт.)');
 }
-window.openThemeAndGifHub = openThemeSettingsModal;
 
 function closeMsgPhotoViewer() {
     const m = document.getElementById('msg-photo-viewer-modal');
@@ -1596,6 +1432,11 @@ function changeMsgImageZoom(delta) {
     const lbl = document.getElementById('msg-zoom-label');
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
+}
+
+function toggleViewerSettingsPanel() {
+    const p = document.getElementById('msg-viewer-settings');
+    if (p) p.style.display = (p.style.display === 'none') ? 'flex' : 'none';
 }
 
 initApp();
