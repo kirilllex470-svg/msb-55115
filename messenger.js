@@ -159,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
+
     fetch('/api/friends/get?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
@@ -166,10 +167,21 @@ function loadFriendsAndRequests() {
                 friendsList = data;
                 if (typeof myMessengerFriends !== 'undefined') myMessengerFriends = data;
                 if (typeof populateTargetSelect === 'function') populateTargetSelect();
+                
+                // Рендерим список контактов без перезаписи активного чата/конференции
                 renderFriends();
                 updateTotalUnreadBadge();
+
+                // Если мы сейчас находимся в конференции, гарантируем, что ввод остаётся активным
+                if (isCurrentGroup && currentRoomId) {
+                    const textInp = document.getElementById('text-input');
+                    if (textInp && textInp.hasAttribute('disabled')) {
+                        textInp.removeAttribute('disabled');
+                    }
+                }
             }
         }).catch(function() {});
+
     fetch('/api/friends/requests?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
@@ -179,12 +191,8 @@ function loadFriendsAndRequests() {
                 updateTotalUnreadBadge();
             }
         }).catch(function() {});
-    fetch('/api/user/me?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d && d.avatar) renderAvatarElement(document.getElementById('my-avatar'), chatUser, d.avatar);
-        }).catch(function() {});
 }
+
 
 function renderRequests() {
     const box = document.getElementById('requests-box');
