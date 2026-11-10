@@ -44,11 +44,6 @@ const COLUMNS_CONFIG = [
     { label: "ПРИМЕЧАНИЯ", options: new Array() }
 ];
 
-const TACTICAL_GIFS = {
-    military: Array.from({length: 22}, function(_, i) { return "https://unsplash.com_" + i; }),
-    rocket: Array.from({length: 21}, function(_, i) { return "https://unsplash.com_" + i; }),
-    space: Array.from({length: 23}, function(_, i) { return "https://unsplash.com_" + i; })
-};
 let ws = null;
 let currentUser = null;
 let currentCallsign = "";
@@ -141,6 +136,7 @@ async function installPWA() {
         alert('Чтобы установить приложение МСБ55115, откройте меню браузера (⋮ или "Поделиться") и нажмите "Установить приложение" / "Добавить на главный экран".');
     }
 }
+
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -178,7 +174,6 @@ async function subscribeToWebPush() {
         }
     } catch (e) { console.error('Push error:', e); }
 }
-
 function sendLocalNotification(target, text, sender) {
     const fromWho = sender || 'АДМИН';
     const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -218,6 +213,7 @@ function createWavUrl(freq, durationSec, volume) {
     }
     return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
+
 function unlockMobileFeatures() {
     try {
         if (!keepAliveAudio) {
@@ -388,6 +384,7 @@ function handleStreamBtnClick() {
         }
     }
 }
+
 function openStreamInAppPage(url) {
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
@@ -410,7 +407,6 @@ function openActiveStreamWindow() {
         window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
     }
 }
-
 function startVideoStream() {
     if (currentUser !== ADMIN_NAME) return;
     const url = document.getElementById('stream-url-input').value.trim();
@@ -510,48 +506,6 @@ function bindPhotoZoomEvents() {
     vp.addEventListener('pointerup', function() { isDraggingPhoto = false; });
     vp.addEventListener('pointercancel', function() { isDraggingPhoto = false; });
 }
-function switchAppTacticalTheme(themeName) {
-    document.body.classList.remove('theme-dark', 'theme-military', 'theme-rocket', 'theme-space');
-    if (themeName === 'military') {
-        document.body.classList.add('theme-military');
-        localStorage.setItem('msb_tactical_theme', 'military');
-    } else if (themeName === 'rocket') {
-        document.body.classList.add('theme-rocket');
-        localStorage.setItem('msb_tactical_theme', 'rocket');
-    } else if (themeName === 'space') {
-        document.body.classList.add('theme-space');
-        localStorage.setItem('msb_tactical_theme', 'space');
-    } else {
-        document.body.classList.add('theme-dark');
-        localStorage.setItem('msb_tactical_theme', 'dark');
-    }
-    renderTacticalGifGridInsideLightbox(themeName);
-}
-window.switchAppTacticalTheme = switchAppTacticalTheme;
-
-function renderTacticalGifGridInsideLightbox(filterTheme) {
-    const gridView = document.getElementById('tactical-gif-grid-view');
-    if (!gridView) return;
-    gridView.innerHTML = '';
-    const activeT = filterTheme || localStorage.getItem('msb_tactical_theme') || 'military';
-    const list = TACTICAL_GIFS[activeT] || [].concat(TACTICAL_GIFS.military, TACTICAL_GIFS.rocket, TACTICAL_GIFS.space);
-    list.forEach(function(url, index) {
-        const img = document.createElement('img');
-        img.className = 'gif-tile-item';
-        img.src = url;
-        img.loading = 'lazy';
-        img.alt = 'Tactical GIF';
-        img.onclick = function(e) {
-            e.stopPropagation();
-            const mainImg = document.getElementById('lightbox-img');
-            if (mainImg) mainImg.src = url;
-            const cap = document.getElementById('lightbox-caption');
-            if (cap) cap.innerText = '📊 Тактическая GIF-заставка #' + (index + 1);
-            resetPhotoZoom();
-        };
-        gridView.appendChild(img);
-    });
-}
 
 function openPhotoLightbox(src, caption) {
     const lb = document.getElementById('photo-lightbox');
@@ -561,11 +515,9 @@ function openPhotoLightbox(src, caption) {
         img.src = src;
         if (cap) cap.innerText = caption || '';
         resetPhotoZoom(); bindPhotoZoomEvents();
-        renderTacticalGifGridInsideLightbox();
         lb.style.display = 'flex';
     }
 }
-window.openPhotoLightbox = openPhotoLightbox;
 
 function closePhotoLightbox() {
     const lb = document.getElementById('photo-lightbox');
@@ -597,7 +549,6 @@ function fetchMapsFromServer() {
         .then(function(list) { if (Array.isArray(list)) { allMaps = list; renderMapsGrid(); } })
         .catch(function() {});
 }
-
 function uploadMapPhoto() {
     if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
     const fileInput = document.getElementById('map-file-input');
@@ -638,6 +589,7 @@ function uploadMapPhoto() {
     };
     reader.readAsDataURL(file);
 }
+
 const MONTH_NAMES = Array.of("ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ", "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ");
 
 function formatIsoDate(y, m, d) {
@@ -711,7 +663,6 @@ function renderArchiveCalendar() {
         gridEl.appendChild(cell);
     }
 }
-
 function selectArchiveDate(dateKey) {
     selectedArchiveDate = dateKey;
     renderArchiveCalendar();
@@ -790,6 +741,7 @@ function updateBroadcastTicker() {
     });
     ticker.innerText = parts.join('   |   ');
 }
+
 function getAlertsQueue(target) {
     const raw = pendingAlerts[target];
     if (!raw) return new Array();
@@ -798,43 +750,12 @@ function getAlertsQueue(target) {
     return Array.of(raw);
 }
 
-function executeForceSystemReload() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            registrations.forEach(function(reg) { reg.unregister(); });
-        });
-    }
-    if ('caches' in window) {
-        caches.keys().then(function(names) {
-            names.forEach(function(name) { caches.delete(name); });
-        });
-    }
-    setTimeout(function() {
-        location.reload(true);
-    }, 150);
-}
-window.executeForceSystemReload = executeForceSystemReload;
-
 function connectWS() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
 
     ws.onmessage = function(event) {
         const msg = JSON.parse(event.data);
-
-        if (msg.type === 'system_force_update') {
-            const currentSavedBuild = localStorage.getItem('msb_system_build_version');
-            if (currentSavedBuild && currentSavedBuild !== msg.buildTime) {
-                const overlay = document.getElementById('update-force-overlay');
-                const lbl = document.getElementById('update-time-label');
-                if (overlay) overlay.style.display = 'flex';
-                if (lbl) lbl.innerText = 'Сборка ядра: ' + msg.buildTime;
-                localStorage.setItem('msb_system_build_version', msg.buildTime);
-                return;
-            }
-            localStorage.setItem('msb_system_build_version', msg.buildTime);
-        }
-
         if (msg.type === 'init') {
             document.getElementById('table-body').innerHTML = '';
             msg.data.forEach(appendRow);
@@ -911,19 +832,6 @@ setInterval(function() {
         connectWS();
     }
 }, 4000);
-function triggerDevCallAlert() {
-    const modal = document.getElementById('dev-alert-modal');
-    if (modal) modal.style.display = 'flex';
-}
-window.triggerDevCallAlert = triggerDevCallAlert;
-
-function closeDevCallAlert(e) {
-    if (e) e.stopPropagation();
-    const modal = document.getElementById('dev-alert-modal');
-    if (modal) modal.style.display = 'none';
-}
-window.closeDevCallAlert = closeDevCallAlert;
-
 function handleAlertClearedMsg(msg) {
     const queue = getAlertsQueue(msg.target);
     if (msg.target === 'ВСЕМ') {
@@ -1037,6 +945,7 @@ function applyPermissionsUI() {
     if (notifArchBtn) notifArchBtn.style.display = canArchive ? 'inline-block' : 'none';
     if (tableSection) tableSection.style.display = canTable ? 'block' : 'none';
 }
+
 function applyUserUI() {
     document.getElementById('login-overlay').style.display = 'none';
     document.getElementById('input-panel').style.display = 'block';
@@ -1059,14 +968,10 @@ function applyUserUI() {
     updateStreamUI();
 
     if (currentUser === ADMIN_NAME) {
-        const chBox = document.getElementById('clear-history-box');
-        if (chBox) chBox.style.display = 'block';
         document.getElementById('admin-maps-upload').style.display = 'block';
         document.getElementById('admin-users-btn').style.display = 'inline-block';
         fetchAdminUsersList();
     } else {
-        const chBox = document.getElementById('clear-history-box');
-        if (chBox) chBox.style.display = 'none';
         document.getElementById('admin-stream-box').style.display = 'none';
         document.getElementById('admin-maps-upload').style.display = 'none';
         document.getElementById('admin-users-btn').style.display = 'none';
@@ -1077,9 +982,6 @@ function applyUserUI() {
 function initApp() {
     runSplash();
     hideAuthMessages();
-    const activeTheme = localStorage.getItem('msb_tactical_theme') || 'dark';
-    switchAppTacticalTheme(activeTheme);
-
     if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
         document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; });
     }
@@ -1252,7 +1154,6 @@ function attemptLogin() {
         errEl.style.display = 'block';
     });
 }
-
 function completeLoginSuccess(unitName, callsign, color) {
     hideAuthMessages();
     currentUser = unitName;
@@ -1337,6 +1238,7 @@ function adminUserAction(userKey, action) {
         body: JSON.stringify({ key: userKey, action: action })
     }).then(function() { fetchAdminUsersList(); });
 }
+
 function logoutUser() {
     localStorage.removeItem('journal_user');
     localStorage.removeItem('journal_callsign');
@@ -1354,7 +1256,6 @@ function loginAsViewer() {
     subscribeToWebPush();
     checkAndShowAlerts(false);
 }
-
 function sendAdminAlert() {
     if (!currentUser) return;
     const target = document.getElementById('admin-target').value;

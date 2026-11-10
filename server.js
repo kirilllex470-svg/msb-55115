@@ -6,13 +6,6 @@ const crypto = require('crypto');
 const WebSocket = require('ws');
 const webpush = require('web-push');
 
-// Đánh dấu thời gian build hệ thống để ép cập nhật khi khởi động lại server
-const SYSTEM_BUILD_TIME = (function() {
-    const d = new Date(Date.now() + 3 * 3600 * 1000);
-    return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
-})();
-
-
 const storagePath = fs.existsSync('/data') ? '/data' : __dirname;
 const DB_FILE = path.join(storagePath, 'history.json');
 const ARCHIVE_FILE = path.join(storagePath, 'archive.json');
@@ -101,7 +94,7 @@ let streamState = { active: false, url: '' };
 
 function getServerDateTime() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
-    return String(d.getOriginalDate ? d.getOriginalDate() : d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+    return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
 }
 function makeTacticalIcon(size) {
     const crcTable = new Uint32Array(256);
@@ -176,7 +169,7 @@ const MANIFEST_JSON = JSON.stringify({
     )
 });
 
-const SW_CODE = Array.of(
+const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
     "self.addEventListener('push', function(event) {",
@@ -184,13 +177,13 @@ const SW_CODE = Array.of(
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
     "    event.waitUntil(self.registration.showNotification(data.title, {",
     "        body: data.body,",
-    "        icon: '/icon-192.png',",
-    "        badge: '/icon-192.png',",
-    "        vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),",
+    "        icon: '/icon-192.png',", // Логотип как большая иконка уведомления
+    "        badge: '/icon-192.png',", // Силуэт логотипа в строке состояния Android
+    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
     "        silent: false,",
-    "        requireInteraction: true,",
-    "        renotify: true,",
-    "        tag: 'msb-alert-' + Date.now(),",
+    "        requireInteraction: true,", // Не исчезнет, пока боец не нажмет кнопку
+    "        renotify: true,", // Заставит вибрировать даже при повторных пушах
+    "        tag: 'msb-alert-' + Date.now(),", // Убирает группировку и исключает задержки ОС
     "        data: { url: '/' }",
     "    }));",
     "});",
@@ -198,14 +191,13 @@ const SW_CODE = Array.of(
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
-    "            var cl = clientList.at(i);",
+    "            var cl = clientList[i];",
     "            if (cl && 'focus' in cl) return cl.focus();",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
-).join('\n');
-
+].join('\n');
 
 function readBodyJSON(req, cb) {
     let body = '';
@@ -496,6 +488,7 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200); res.end('OK');
         });
     }
+
     if (urlPath === '/api/messages' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const room = myUrl.searchParams.get('room');
@@ -690,7 +683,6 @@ function handleMultipartSend(req, res) {
         saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res);
     });
 }
-
 function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res) {
     const sender = fields.sender, room = fields.room, type = fields.type || 'text';
     if (!sender || !room) { res.writeHead(400); return res.end('Incomplete'); }
@@ -740,6 +732,7 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
+
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
@@ -751,7 +744,7 @@ function broadcastWS(obj) {
 
 function getIsoDateNow() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
-    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getOriginalDate ? d.getOriginalDate() : d.getUTCDate()).padStart(2, '0');
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
 
 let currentActiveDay = getIsoDateNow();
@@ -803,7 +796,14 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
     const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!', body: sender + ': ' + text });
-    const pushOptions = { TTL: 0, headers: { 'Urgency': 'high', 'Topic': 'admin-alert' } };
+    // Параметры для форсирования доставки без задержек операторов связи
+    const pushOptions = { 
+        TTL: 0, // Доставить немедленно или отбросить, не копить задержки
+        headers: { 
+            'Urgency': 'high', // Принудительно будит спящий Android/iOS
+            'Topic': 'admin-alert'
+        } 
+    };
     const tLow = String(target).toLowerCase();
     pushSubscriptions.forEach(function(item, index) {
         const uLow = String(item.user || '').toLowerCase();
@@ -818,14 +818,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     });
 }
-
 wss.on('connection', function(ws) {
-    // Ép thiết bị khách tải lại để tránh lỗi đồng bộ mã nguồn cũ
-    ws.send(JSON.stringify({
-        type: 'system_force_update',
-        buildTime: SYSTEM_BUILD_TIME
-    }));
-
     ws.send(JSON.stringify({
         type: 'init',
         data: tableHistory,
