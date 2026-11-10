@@ -743,8 +743,11 @@ function getIsoDateNow() {
     return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
 
-const SERVER_BOOT_ID = 'build_' + Date.now();
-const SERVER_BOOT_TIME = getServerDateTime();
+var SERVER_BOOT_ID = 'build_' + Date.now();
+var SERVER_BOOT_TIME = getServerDateTime();
+
+let currentActiveDay = getIsoDateNow();
+
 
 let currentActiveDay = getIsoDateNow();
 if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
