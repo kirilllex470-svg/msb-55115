@@ -177,22 +177,26 @@ async function subscribeToWebPush() {
 }
 
 function sendLocalNotification(target, text, sender) {
+    if ('PushManager' in window && publicVapidKey) return;
     const fromWho = sender || 'АДМИН';
-    const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
+    const title = '🛑 СООБЩЕНИЕ ДЛЯ [' + target + ']!';
     const body = fromWho + ': ' + text;
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then(function(reg) {
             reg.showNotification(title, {
                 body: body,
-                vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                vibrate: Array.of(500, 150, 500),
                 silent: false,
                 requireInteraction: true,
                 renotify: true,
-                tag: 'admin-alert-' + Date.now()
+                tag: 'msb-single-alert'
             }).catch(function() {});
         });
     }
 }
+
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
@@ -1164,40 +1168,54 @@ function clearHistoryAdmin() {
 }
 
 function isUnreadForMe(a) {
-    const me = currentCallsign || currentUser || 'Просмотр';
-    if (currentUser && (a.sender === currentUser || a.sender === currentCallsign)) return false;
-    if (Array.isArray(a.readList) && (a.readList.indexOf(me) !== -1 || a.readList.indexOf(currentUser) !== -1)) return false;
+    const me = String(currentCallsign || currentUser || 'Просмотр').toLowerCase();
+    const myUnit = String(currentUser || '').toLowerCase();
+    const snd = String(a.sender || '').toLowerCase();
+    if (me && (snd === me || snd.indexOf('(' + me + ')') !== -1)) return false;
+    if (myUnit && snd === myUnit) return false;
+    if (Array.isArray(a.readList)) {
+        const found = a.readList.some(function(r) {
+            const rl = String(r || '').toLowerCase();
+            return rl === me || rl === myUnit;
+        });
+        if (found) return false;
+    }
     return true;
 }
 
-function checkAndShowAlerts(isNew) {
-    if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
-    let targetToShow = null, alertObj = null;
-    if (currentCallsign) {
-        const q = getAlertsQueue(currentCallsign).filter(isUnreadForMe);
-        if (q.length > 0) { targetToShow = currentCallsign; alertObj = q.at(0); }
-    }
-    if (!targetToShow && currentUser) {
-        const q = getAlertsQueue(currentUser).filter(isUnreadForMe);
-        if (q.length > 0) { targetToShow = currentUser; alertObj = q.at(0); }
-    }
-    if (!targetToShow) {
-        const q = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
-        if (q.length > 0) { targetToShow = "ВСЕМ"; alertObj = q.at(0); }
-    }
-    if (targetToShow && alertObj) showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
-}
 function showAlert(target, text, sender, notifId, isNew) {
+    const msgModal = document.getElementById('messenger-modal');
+    const isMessengerOpen = msgModal && msgModal.style.display === 'flex';
+    const isChatNotif = String(text || '').indexOf('💬') === 0 ||
+                        String(text || '').indexOf('🎙️') === 0 ||
+                        String(text || '').indexOf('🎥') === 0 ||
+                        String(text || '').indexOf('📎') === 0 ||
+                        String(text || '').indexOf('🎬') === 0;
+
+    if (isMessengerOpen && isChatNotif && typeof isCurrentGroup !== 'undefined' && isCurrentGroup) {
+        const whoConfirmed = currentCallsign || currentUser || 'Просмотр';
+        const readTime = new Date().toLocaleTimeString().slice(0, 5);
+        ws.send(JSON.stringify({
+            type: 'clear_alert',
+            target: target,
+            notifId: notifId || null,
+            readBy: whoConfirmed,
+            readTime: readTime
+        }));
+        return;
+    }
+
     currentAlertId = notifId || null;
     currentAlertTarget = target;
     currentAlertText = text;
     currentAlertSender = sender || ADMIN_NAME;
     const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
+    document.getElementById('alert-target-label').innerText =
+        'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
     document.getElementById('alert-text').innerText = text;
     document.getElementById('alert-modal').style.display = 'flex';
     updateLockScreenAlert(target, text, currentAlertSender);
-    if (isNew || document.visibilityState === 'hidden') sendLocalNotification(target, text, currentAlertSender);
+    if (isNew) sendLocalNotification(target, text, currentAlertSender);
     if (!titleInterval) {
         let flag = false;
         titleInterval = setInterval(function() {
@@ -1207,17 +1225,6 @@ function showAlert(target, text, sender, notifId, isNew) {
     }
     playBeep();
     if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
-}
-
-function stopAlertVisuals() {
-    document.getElementById('alert-modal').style.display = 'none';
-    currentAlertId = null;
-    currentAlertTarget = "";
-    if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
-    if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
-    if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
-    if (navigator.vibrate) navigator.vibrate(0);
-    document.title = "МСБ55115";
 }
 
 function confirmAlert() {
@@ -1230,15 +1237,36 @@ function confirmAlert() {
     const alertSenderCopy = String(currentAlertSender || '');
     stopAlertVisuals();
     if (targetToClear) {
-        ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
+        ws.send(JSON.stringify({
+            type: 'clear_alert',
+            target: targetToClear,
+            notifId: idToClear,
+            readBy: whoConfirmed,
+            readTime: readTime
+        }));
     }
-    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
+    const msgModal = document.getElementById('messenger-modal');
+    const isMessengerOpen = msgModal && msgModal.style.display === 'flex';
+    if (isMessengerOpen && typeof currentRoomId !== 'undefined' && currentRoomId) {
+        checkAndShowAlerts(false);
+        return;
+    }
+    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 ||
+                            alertTextCopy.indexOf('🎙️') === 0 ||
+                            alertTextCopy.indexOf('🎥') === 0 ||
+                            alertTextCopy.indexOf('📎') === 0 ||
+                            alertTextCopy.indexOf('🎬') === 0;
     if (isFromMessenger && typeof openMessengerWindow === 'function') {
-        openMessengerWindow(alertSenderCopy);
+        if (alertSenderCopy.indexOf('👥') === 0) {
+            openMessengerWindow();
+        } else {
+            openMessengerWindow(alertSenderCopy);
+        }
         return;
     }
     checkAndShowAlerts(false);
 }
+
 
 function submitRow() {
     if (!currentUser) return;
