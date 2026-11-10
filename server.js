@@ -96,9 +96,9 @@ function getServerDateTime() {
     return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
 }
 
-// МЕТКА ВРЕМЕНИ И ID ЗАПУСКА СЕРВЕРА ДЛЯ ОКНА ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ
 const SERVER_BOOT_ID = 'boot_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
 const SERVER_BOOT_TIME = getServerDateTime();
+
 function makeTacticalIcon(size) {
     const crcTable = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -170,7 +170,6 @@ const MANIFEST_JSON = JSON.stringify({
         { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" }
     )
 });
-
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
@@ -185,7 +184,7 @@ const SW_CODE = [
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
-    "        tag: 'msb-alert-single',",
+    "        tag: 'msb-single-alert',",
     "        data: { url: '/' }",
     "    }));",
     "});",
@@ -201,7 +200,6 @@ const SW_CODE = [
     "});"
 ].join('\n');
 
-
 function readBodyJSON(req, cb) {
     let body = '';
     req.on('data', function(chunk) { body += chunk.toString(); });
@@ -209,6 +207,7 @@ function readBodyJSON(req, cb) {
         try { cb(null, JSON.parse(body)); } catch (e) { cb(e, null); }
     });
 }
+
 const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
@@ -626,15 +625,8 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
     const uInfo = !isGroup ? (usersDB[cleanKey] || {}) : {};
     const isOnline = isGroup ? true : isUserOnlineNow(cleanKey);
     return {
-        id: isGroup ? roomId : undefined,
-        name: name,
-        unit: uInfo.unit || '',
-        avatar: uInfo.avatar || '',
-        lastMessage: lastMsgText,
-        time: lastMsgTime,
-        unread: unreadCount,
-        isGroup: isGroup,
-        online: isOnline
+        id: isGroup ? roomId : undefined, name: name, unit: uInfo.unit || '', avatar: uInfo.avatar || '',
+        lastMessage: lastMsgText, time: lastMsgTime, unread: unreadCount, isGroup: isGroup, online: isOnline
     };
 }
 function handleMultipartSend(req, res) {
@@ -667,14 +659,11 @@ function handleMultipartSend(req, res) {
                                 if (originalFileName.includes('.')) fileExt = originalFileName.split('.').pop();
                                 fileBuffer = part.subarray(bodyStart, bodyEnd);
                             }
-                        } else {
-                            fields[fieldName] = part.subarray(bodyStart, bodyEnd).toString('utf-8');
-                        }
+                        } else { fields[fieldName] = part.subarray(bodyStart, bodyEnd).toString('utf-8'); }
                     }
                 }
             }
-            start = end + boundary.length;
-            end = buffer.indexOf(boundary, start);
+            start = end + boundary.length; end = buffer.indexOf(boundary, start);
         }
         saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res);
     });
@@ -693,16 +682,9 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
     const timeStr = getServerDateTime();
     if (!Array.isArray(roomsDB[room])) roomsDB[room] = new Array();
     roomsDB[room].push({
-        id: crypto.randomBytes(8).toString('hex'),
-        sender: sender,
-        text: finalContent,
-        type: type,
-        time: timeStr,
-        timestamp: Date.now(),
-        forwardedFrom: fields.forwardedFrom || null,
-        quoteId: fields.quoteId || null,
-        quoteText: fields.quoteText || null,
-        quoteSender: fields.quoteSender || null
+        id: crypto.randomBytes(8).toString('hex'), sender: sender, text: finalContent, type: type, time: timeStr,
+        timestamp: Date.now(), forwardedFrom: fields.forwardedFrom || null, quoteId: fields.quoteId || null,
+        quoteText: fields.quoteText || null, quoteSender: fields.quoteSender || null
     });
     if (roomsDB[room].length > 150) roomsDB[room].shift();
     writeJSON(CHAT_ROOMS_FILE, roomsDB);
@@ -717,159 +699,56 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     else if (type === 'file') cleanText = '📎 Файл в Мессенджере';
     else if (type === 'gif') cleanText = '🎬 GIF-анимация в Мессенджере';
     else cleanText = '💬 Мессенджер: ' + cleanText;
-    let targets = new Array();
-    if (groupsDB[room]) {
-        targets = groupsDB[room].members.filter(function(m) { return m.toLowerCase() !== sender.toLowerCase(); });
-    } else {
-        const parts = room.split('_').at(0).split(',');
-        targets = parts.filter(function(n) { return n.toLowerCase() !== sender.toLowerCase(); });
-    }
+    let targets = groupsDB[room] ? groupsDB[room].members.filter(function(m) { return m.toLowerCase() !== sender.toLowerCase(); }) : room.split('_').at(0).split(',').filter(function(n) { return n.toLowerCase() !== sender.toLowerCase(); });
     targets.forEach(function(t) {
         const uObj = usersDB[t.toLowerCase()];
-        const realTarget = uObj ? uObj.username : t.toUpperCase();
-        broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
+        broadcastAlert(sender, '#00a884', timeStr, uObj ? uObj.username : t.toUpperCase(), cleanText);
     });
 }
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
-
-function broadcastWS(obj) {
-    const str = JSON.stringify(obj);
-    wss.clients.forEach(function(client) {
-        if (client.readyState === WebSocket.OPEN) client.send(str);
-    });
-}
-
-function getIsoDateNow() {
-    const d = new Date(Date.now() + 3 * 3600 * 1000);
-    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
-}
-
-
-
+function broadcastWS(obj) { const str = JSON.stringify(obj); wss.clients.forEach(function(c) { if (c.readyState === WebSocket.OPEN) c.send(str); }); }
+function getIsoDateNow() { const d = new Date(Date.now() + 3 * 3600 * 1000); return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0'); }
 let currentActiveDay = getIsoDateNow();
-if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
-    archiveHistory[currentActiveDay] = tableHistory.slice();
-    writeJSON(ARCHIVE_FILE, archiveHistory);
-}
-
+if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) { archiveHistory[currentActiveDay] = tableHistory.slice(); writeJSON(ARCHIVE_FILE, archiveHistory); }
 setInterval(function() {
     const todayIso = getIsoDateNow();
     if (todayIso !== currentActiveDay) {
-        if (tableHistory.length > 0) {
-            archiveHistory[currentActiveDay] = tableHistory.slice();
-            writeJSON(ARCHIVE_FILE, archiveHistory);
-        }
-        currentActiveDay = todayIso;
-        tableHistory = new Array();
-        writeJSON(DB_FILE, tableHistory);
-        broadcastWS({ type: 'daily_archived', date: currentActiveDay });
+        if (tableHistory.length > 0) { archiveHistory[currentActiveDay] = tableHistory.slice(); writeJSON(ARCHIVE_FILE, archiveHistory); }
+        currentActiveDay = todayIso; tableHistory = new Array(); writeJSON(DB_FILE, tableHistory); broadcastWS({ type: 'daily_archived', date: currentActiveDay });
     }
 }, 30000);
-
-notificationsHistory.forEach(function(n) {
-    if (!n.read) {
-        if (!Array.isArray(activeAlerts[n.target])) activeAlerts[n.target] = new Array();
-        activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender, readList: new Array() });
-    }
-});
-
+notificationsHistory.forEach(function(n) { if (!n.read) { if (!Array.isArray(activeAlerts[n.target])) activeAlerts[n.target] = new Array(); activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender, readList: new Array() }); } });
 function saveAndBroadcastMap(msg) {
-    const timeStr = msg.time || getServerDateTime();
-    const mapItem = { id: Date.now(), sender: msg.sender || 'АДМИН', target: msg.target || 'ВСЕМ', time: timeStr, image: msg.image };
-    mapsHistory.push(mapItem);
-    if (mapsHistory.length > 18) mapsHistory = mapsHistory.slice(-18);
-    writeJSON(MAPS_FILE, mapsHistory);
+    const timeStr = msg.time || getServerDateTime(), mapItem = { id: Date.now(), sender: msg.sender || 'АДМИН', target: msg.target || 'ВСЕМ', time: timeStr, image: msg.image };
+    mapsHistory.push(mapItem); if (mapsHistory.length > 18) mapsHistory = mapsHistory.slice(-18); writeJSON(MAPS_FILE, mapsHistory);
     broadcastWS({ type: 'new_map', target: mapItem.target });
     broadcastAlert(msg.sender || 'АДМИН', msg.color || '#8b5cf6', timeStr, msg.target || 'ВСЕМ', '🗺️ ЗАГРУЖЕНА НОВАЯ ВВОДНАЯ / КАРТА! Откройте раздел "ВВОДНЫЕ / КАРТА"');
 }
-
 function broadcastAlert(sender, color, timeStr, target, text) {
-    const notifId = Date.now() + Math.floor(Math.random() * 1000);
-    const newNotif = { id: notifId, time: timeStr, sender: sender, color: color, target: target, text: text, read: false, readBy: '' };
-    notificationsHistory.push(newNotif);
-    if (notificationsHistory.length > 200) notificationsHistory = notificationsHistory.slice(-200);
-    writeJSON(NOTIFS_FILE, notificationsHistory);
-
+    const notifId = Date.now() + Math.floor(Math.random() * 1000), newNotif = { id: notifId, time: timeStr, sender: sender, color: color, target: target, text: text, read: false, readBy: '' };
+    notificationsHistory.push(newNotif); if (notificationsHistory.length > 200) notificationsHistory = notificationsHistory.slice(-200); writeJSON(NOTIFS_FILE, notificationsHistory);
     if (!Array.isArray(activeAlerts[target])) activeAlerts[target] = new Array();
     activeAlerts[target].push({ id: notifId, text: text, sender: sender, readList: new Array() });
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
-
-    const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!', body: sender + ': ' + text });
-    const pushOptions = {
-        TTL: 0,
-        headers: {
-            'Urgency': 'high',
-            'Topic': 'admin-alert'
-        }
-    };
-    const tLow = String(target).toLowerCase();
+    const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!', body: sender + ': ' + text }), tLow = String(target).toLowerCase();
     pushSubscriptions.forEach(function(item, index) {
-        const uLow = String(item.user || '').toLowerCase();
-        const cLow = String(item.callsign || '').toLowerCase();
-        if (target === 'ВСЕМ' || uLow === tLow || cLow === tLow) {
-            webpush.sendNotification(item.sub, payload, pushOptions).catch(function(err) {
-                if (err.statusCode === 410 || err.statusCode === 404) {
-                    pushSubscriptions.splice(index, 1);
-                    writeJSON(SUBS_FILE, pushSubscriptions);
-                }
+        if (target === 'ВСЕМ' || String(item.user || '').toLowerCase() === tLow || String(item.callsign || '').toLowerCase() === tLow) {
+            webpush.sendNotification(item.sub, payload, { TTL: 0, headers: { 'Urgency': 'high', 'Topic': 'admin-alert' } }).catch(function(err) {
+                if (err.statusCode === 410 || err.statusCode === 404) { pushSubscriptions.splice(index, 1); writeJSON(SUBS_FILE, pushSubscriptions); }
             });
         }
     });
 }
 wss.on('connection', function(ws) {
-    ws.send(JSON.stringify({
-        type: 'init',
-        serverBootId: SERVER_BOOT_ID,
-        serverBootTime: SERVER_BOOT_TIME,
-        data: tableHistory,
-        notifications: notificationsHistory,
-        alerts: activeAlerts,
-        streamState: streamState,
-        vapidPublicKey: vapidKeys.publicKey
-    }));
-
+    ws.send(JSON.stringify({ type: 'init', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME, data: tableHistory, notifications: notificationsHistory, alerts: activeAlerts, streamState: streamState, vapidPublicKey: vapidKeys.publicKey }));
     ws.on('message', function(message) {
         try {
             const msg = JSON.parse(message.toString());
-            if (msg.type === 'ping') {
-                if (msg.callsign) markUserOnline(msg.callsign);
-                else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
-                ws.send(JSON.stringify({
-                    type: 'pong',
-                    serverBootId: SERVER_BOOT_ID,
-                    serverBootTime: SERVER_BOOT_TIME
-                }));
-                return;
-            }
-        if (msg.type === 'save_sub' && msg.sub) {
-    if (msg.callsign) markUserOnline(msg.callsign);
-    // Удаляем старые дубли подписок для этого же endpoint или позывного
-    pushSubscriptions = pushSubscriptions.filter(function(s) {
-        const sameEndpoint = s.sub && s.sub.endpoint === msg.sub.endpoint;
-        const sameCallsign = msg.callsign && s.callsign && s.callsign.toLowerCase() === msg.callsign.toLowerCase();
-        return !sameEndpoint && !sameCallsign;
-    });
-    pushSubscriptions.push({ user: msg.user, callsign: msg.callsign || '', sub: msg.sub });
-    writeJSON(SUBS_FILE, pushSubscriptions);
-    return;
-}
-
-            if (msg.type === 'add_row') {
-                const newRow = { id: Date.now(), time: getServerDateTime(), user: msg.user, values: msg.values, color: msg.color };
-                tableHistory.push(newRow);
-                writeJSON(DB_FILE, tableHistory);
-                const dayKey = getIsoDateNow();
-                if (!Array.isArray(archiveHistory[dayKey])) archiveHistory[dayKey] = new Array();
-                archiveHistory[dayKey].push(newRow);
-                writeJSON(ARCHIVE_FILE, archiveHistory);
-                broadcastWS({ type: 'new_row', row: newRow });
-            }
+            if (msg.type === 'ping') { if (msg.callsign) markUserOnline(msg.callsign); else if (msg.user === 'АДМИН') markUserOnline('муравей'); ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME })); return; }
+            if (msg.type === 'save_sub' && msg.sub) { if (msg.callsign) markUserOnline(msg.callsign); const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; }); if (idx !== -1) { pushSubscriptions.at(idx).user = msg.user; pushSubscriptions.at(idx).callsign = msg.callsign || ''; } else { pushSubscriptions.push({ user: msg.user, callsign: msg.callsign || '', sub: msg.sub }); } writeJSON(SUBS_FILE, pushSubscriptions); return; }
+            if (msg.type === 'add_row') { const newRow = { id: Date.now(), time: getServerDateTime(), user: msg.user, values: msg.values, color: msg.color }; tableHistory.push(newRow); writeJSON(DB_FILE, tableHistory); const dayKey = getIsoDateNow(); if (!Array.isArray(archiveHistory[dayKey])) archiveHistory[dayKey] = new Array(); archiveHistory[dayKey].push(newRow); writeJSON(ARCHIVE_FILE, archiveHistory); broadcastWS({ type: 'new_row', row: newRow }); }
             if (msg.type === 'upload_map' && msg.image) saveAndBroadcastMap(msg);
-            if (msg.type === 'stream_start') {
-                streamState = { active: true, url: msg.url };
-                broadcastWS({ type: 'stream_state', streamState: streamState });
-                broadcastAlert(msg.sender || 'АДМИН', msg.color || '#ef4444', getServerDateTime(), 'ВСЕМ', '🎥 НАЧАЛСЯ ВИДЕОСТРИМ МСБ-55115! Нажмите кнопку "ПЕРЕЙТИ ПО ССЫЛКЕ"');
-            }
+            if (msg.type === 'stream_start') { streamState = { active: true, url: msg.url }; broadcastWS({ type: 'stream_state', streamState: streamState }); broadcastAlert(msg.sender || 'АДМИН', msg.color || '#ef4444', getServerDateTime(), 'ВСЕМ', '🎥 НАЧАЛСЯ ВИДЕОСТРИМ МСБ-55115! Нажмите кнопку "ПЕРЕЙТИ ПО ССЫЛКЕ"'); }
             if (msg.type === 'stream_stop') {
                 streamState = { active: false, url: '' };
                 broadcastWS({ type: 'stream_state', streamState: streamState });
