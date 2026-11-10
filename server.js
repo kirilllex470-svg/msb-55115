@@ -7,7 +7,11 @@ const WebSocket = require('ws');
 const webpush = require('web-push');
 
 // Đánh dấu thời gian build hệ thống để ép cập nhật khi khởi động lại server
-const SYSTEM_BUILD_TIME = "10.11.2026 11:17";
+const SYSTEM_BUILD_TIME = (function() {
+    const d = new Date(Date.now() + 3 * 3600 * 1000);
+    return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+})();
+
 
 const storagePath = fs.existsSync('/data') ? '/data' : __dirname;
 const DB_FILE = path.join(storagePath, 'history.json');
