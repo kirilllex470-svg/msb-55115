@@ -1508,5 +1508,4 @@ function changeMsgImageZoom(delta) {
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
 }
-
 initApp();
