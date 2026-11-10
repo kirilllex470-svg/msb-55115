@@ -635,7 +635,7 @@ function fetchMessages() {
             } else if (msg.type === 'file') {
                 try {
                     const fileObj = JSON.parse(msg.text); const ext = fileObj.name.split('.').pop().toLowerCase();
-                    if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="window.open(this.src)">';
+                    if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openPhotoLightbox(this.src, \'Фото из Мессенджера\')">';
                     else contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
                 } catch(e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
             } else {
