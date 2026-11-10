@@ -491,6 +491,7 @@ const server = http.createServer(function(req, res) {
                 if (!db.lastRead[reqUser]) db.lastRead[reqUser] = {};
                 db.lastRead[reqUser][room] = Date.now();
                 writeJSON(READS_FILE, db.lastRead);
+                autoClearNotifsForUser(reqUser);
             }
         }
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
@@ -522,6 +523,7 @@ const server = http.createServer(function(req, res) {
         });
         return res.end(JSON.stringify({ messages: enriched, partnerOnline: partnerOnline }));
     }
+
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && data.room) {
@@ -530,10 +532,12 @@ const server = http.createServer(function(req, res) {
                 if (!db.lastRead[myL]) db.lastRead[myL] = {};
                 db.lastRead[myL][data.room] = Date.now() + 500;
                 writeJSON(READS_FILE, db.lastRead);
+                autoClearNotifsForUser(myL);
             }
             res.writeHead(200); res.end('OK');
         });
     }
+
     if (urlPath === '/api/send' && req.method === 'POST') {
         return handleMultipartSend(req, res);
     }
@@ -814,6 +818,43 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     });
 }
 
+function autoClearNotifsForUser(userLower) {
+    if (!userLower) return;
+    const uObj = usersDB[userLower];
+    const displayWho = uObj ? uObj.username : userLower;
+    const tStr = getServerDateTime().split(' ').at(1) || '';
+    const stamp = displayWho + ' ' + tStr;
+    let changed = false;
+
+    notificationsHistory.forEach(function(n) {
+        const nTargetLow = String(n.target || '').trim().toLowerCase();
+        const isMessengerMsg = String(n.text || '').indexOf('💬') === 0 ||
+                               String(n.text || '').indexOf('🎙️') === 0 ||
+                               String(n.text || '').indexOf('🎥') === 0 ||
+                               String(n.text || '').indexOf('📎') === 0 ||
+                               String(n.text || '').indexOf('🎬') === 0;
+        if (!n.read && isMessengerMsg && nTargetLow === userLower) {
+            n.read = true;
+            n.readBy = stamp;
+            changed = true;
+            Object.keys(activeAlerts).forEach(function(k) {
+                if (String(k).trim().toLowerCase() === userLower && Array.isArray(activeAlerts[k])) {
+                    activeAlerts[k] = activeAlerts[k].filter(function(a) { return a.id !== n.id; });
+                    if (activeAlerts[k].length === 0) delete activeAlerts[k];
+                }
+            });
+            broadcastWS({
+                type: 'alert_cleared',
+                target: n.target,
+                notifId: n.id,
+                who: displayWho,
+                readBy: stamp
+            });
+        }
+    });
+    if (changed) writeJSON(NOTIFS_FILE, notificationsHistory);
+}
+
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
         type: 'init',
@@ -876,40 +917,52 @@ wss.on('connection', function(ws) {
                 broadcastAlert(msg.sender || 'АДМИН', msg.color || '#ef4444', getServerDateTime(), msg.target, msg.text);
             }
             if (msg.type === 'clear_alert') {
-                const now = new Date();
-                const tStr = msg.readTime || now.toLocaleTimeString().slice(0, 5);
+                const tStr = msg.readTime || (getServerDateTime().split(' ').at(1) || '');
                 const whoStr = msg.readBy || 'Просмотр';
                 const stamp = whoStr + ' ' + tStr;
-                if (Array.isArray(activeAlerts[msg.target])) {
-                    if (msg.target === 'ВСЕМ') {
-                        activeAlerts[msg.target].forEach(function(a) {
-                            if (!msg.notifId || a.id === msg.notifId) {
-                                if (!Array.isArray(a.readList)) a.readList = new Array();
-                                if (a.readList.indexOf(whoStr) === -1) a.readList.push(whoStr);
-                            }
-                        });
-                    } else {
-                        if (msg.notifId) activeAlerts[msg.target] = activeAlerts[msg.target].filter(function(a) { return a.id !== msg.notifId; });
-                        else activeAlerts[msg.target].shift();
-                        if (activeAlerts[msg.target].length === 0) delete activeAlerts[msg.target];
+                const targetLow = String(msg.target || '').trim().toLowerCase();
+
+                Object.keys(activeAlerts).forEach(function(k) {
+                    if (String(k).trim().toLowerCase() === targetLow && Array.isArray(activeAlerts[k])) {
+                        if (targetLow === 'всем') {
+                            activeAlerts[k].forEach(function(a) {
+                                if (!msg.notifId || a.id === msg.notifId) {
+                                    if (!Array.isArray(a.readList)) a.readList = new Array();
+                                    if (a.readList.indexOf(whoStr) === -1) a.readList.push(whoStr);
+                                }
+                            });
+                        } else {
+                            if (msg.notifId) activeAlerts[k] = activeAlerts[k].filter(function(a) { return a.id !== msg.notifId; });
+                            else activeAlerts[k].shift();
+                            if (activeAlerts[k].length === 0) delete activeAlerts[k];
+                        }
                     }
-                } else { delete activeAlerts[msg.target]; }
+                });
 
                 let updatedReadBy = stamp, marked = false;
                 notificationsHistory.forEach(function(n) {
-                    const match = (msg.notifId && n.id === msg.notifId) || (!msg.notifId && !marked && n.target === msg.target);
+                    const nTargLow = String(n.target || '').trim().toLowerCase();
+                    const match = (msg.notifId && n.id === msg.notifId) || (!msg.notifId && !marked && nTargLow === targetLow && !n.read);
                     if (match) {
                         n.read = true;
-                        if (n.target === 'ВСЕМ') {
+                        if (nTargLow === 'всем') {
                             if (!n.readBy) n.readBy = stamp;
                             else if (n.readBy.indexOf(whoStr) === -1) n.readBy = n.readBy + ', ' + stamp;
-                        } else { n.readBy = stamp; }
+                        } else {
+                            n.readBy = stamp;
+                        }
                         updatedReadBy = n.readBy;
                         marked = true;
                     }
                 });
                 writeJSON(NOTIFS_FILE, notificationsHistory);
-                broadcastWS({ type: 'alert_cleared', target: msg.target, notifId: msg.notifId || null, who: whoStr, readBy: updatedReadBy });
+                broadcastWS({
+                    type: 'alert_cleared',
+                    target: msg.target,
+                    notifId: msg.notifId || null,
+                    who: whoStr,
+                    readBy: updatedReadBy
+                });
             }
         } catch (e) { console.error("WS error:", e); }
     });
