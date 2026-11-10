@@ -185,7 +185,7 @@ const SW_CODE = [
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
-    "        tag: 'msb-alert-' + Date.now(),",
+    "        tag: 'msb-alert-single',",
     "        data: { url: '/' }",
     "    }));",
     "});",
@@ -200,6 +200,7 @@ const SW_CODE = [
     "    }));",
     "});"
 ].join('\n');
+
 
 function readBodyJSON(req, cb) {
     let body = '';
@@ -743,8 +744,7 @@ function getIsoDateNow() {
     return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
 
-const SERVER_BOOT_ID = 'build_' + Date.now();
-const SERVER_BOOT_TIME = getServerDateTime();
+
 
 let currentActiveDay = getIsoDateNow();
 if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
@@ -841,14 +841,19 @@ wss.on('connection', function(ws) {
                 }));
                 return;
             }
-            if (msg.type === 'save_sub' && msg.sub) {
-                if (msg.callsign) markUserOnline(msg.callsign);
-                const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; });
-                if (idx !== -1) { pushSubscriptions.at(idx).user = msg.user; pushSubscriptions.at(idx).callsign = msg.callsign || ''; }
-                else { pushSubscriptions.push({ user: msg.user, callsign: msg.callsign || '', sub: msg.sub }); }
-                writeJSON(SUBS_FILE, pushSubscriptions);
-                return;
-            }
+        if (msg.type === 'save_sub' && msg.sub) {
+    if (msg.callsign) markUserOnline(msg.callsign);
+    // Удаляем старые дубли подписок для этого же endpoint или позывного
+    pushSubscriptions = pushSubscriptions.filter(function(s) {
+        const sameEndpoint = s.sub && s.sub.endpoint === msg.sub.endpoint;
+        const sameCallsign = msg.callsign && s.callsign && s.callsign.toLowerCase() === msg.callsign.toLowerCase();
+        return !sameEndpoint && !sameCallsign;
+    });
+    pushSubscriptions.push({ user: msg.user, callsign: msg.callsign || '', sub: msg.sub });
+    writeJSON(SUBS_FILE, pushSubscriptions);
+    return;
+}
+
             if (msg.type === 'add_row') {
                 const newRow = { id: Date.now(), time: getServerDateTime(), user: msg.user, values: msg.values, color: msg.color };
                 tableHistory.push(newRow);
