@@ -177,9 +177,6 @@ async function subscribeToWebPush() {
 }
 
 function sendLocalNotification(target, text, sender) {
-    // Отправляем локальное уведомление ТОЛЬКО если нет активной Push-подписки,
-    // чтобы не дублировать Web Push от сервера
-    if (publicVapidKey) return; 
     const fromWho = sender || 'АДМИН';
     const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
     const body = fromWho + ': ' + text;
@@ -187,45 +184,15 @@ function sendLocalNotification(target, text, sender) {
         navigator.serviceWorker.ready.then(function(reg) {
             reg.showNotification(title, {
                 body: body,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
                 vibrate: Array.of(800, 200, 800, 200, 800, 200, 1000),
                 silent: false,
                 requireInteraction: true,
                 renotify: true,
-                tag: 'msb-alert-single'
+                tag: 'admin-alert-' + Date.now()
             }).catch(function() {});
         });
     }
 }
-
-function showAlert(target, text, sender, notifId, isNew) {
-    currentAlertId = notifId || null;
-    currentAlertTarget = target;
-    currentAlertText = text;
-    currentAlertSender = sender || ADMIN_NAME;
-    const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
-    document.getElementById('alert-text').innerText = text;
-    document.getElementById('alert-modal').style.display = 'flex';
-    updateLockScreenAlert(target, text, currentAlertSender);
-    
-    // Вызываем резервное уведомление только если вкладка скрыта и нет Web Push
-    if (isNew && document.visibilityState === 'hidden') {
-        sendLocalNotification(target, text, currentAlertSender);
-    }
-    
-    if (!titleInterval) {
-        let flag = false;
-        titleInterval = setInterval(function() {
-            document.title = flag ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!";
-            flag = !flag;
-        }, 600);
-    }
-    playBeep();
-    if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
-}
-
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
@@ -1393,56 +1360,15 @@ function setAppTheme(themeName) {
     });
 }
 
-// 1. ОТДЕЛЬНОЕ ОКНО ТОЛЬКО ДЛЯ ВЫБОРА ТЕМЫ
-function openThemeSettingsModal() {
-    const modal = document.getElementById('msg-photo-viewer-modal');
-    const imgWrap = document.querySelector('.msg-viewer-img-wrap');
-    const settingsBox = document.querySelector('.msg-viewer-settings');
-    const gifSection = document.getElementById('viewer-gif-section');
-    const themeSection = document.getElementById('viewer-theme-section');
-    const zoomControls = document.getElementById('msg-viewer-zoom-controls');
-    const ttl = document.getElementById('msg-viewer-title');
-
-    if (ttl) ttl.innerText = '🎨 Выбор темы оформления';
-    if (imgWrap) imgWrap.style.display = 'none';
-    if (zoomControls) zoomControls.style.display = 'none';
-    if (settingsBox) settingsBox.style.display = 'block';
-    if (themeSection) themeSection.style.display = 'block';
-    if (gifSection) gifSection.style.display = 'none'; // Скрываем гифки в окне тем!
-
-    setAppTheme(localStorage.getItem('msb_app_theme') || 'military');
-    if (modal) modal.style.display = 'flex';
-}
-window.openThemeAndGifHub = openThemeSettingsModal;
-
-// 2. ОТДЕЛЬНАЯ ПАНЕЛЬ ОТПРАВКИ ГИФОК (3 КАТЕГОРИИ ПО 20 ШТ) В МЕССЕНДЖЕРЕ
 function toggleChatGifDrawer() {
-    let drawer = document.getElementById('chat-gif-drawer');
-    
-    // Если панель гифок еще не создана в HTML — создаем её автоматически над полем ввода чата
+    const drawer = document.getElementById('chat-gif-drawer');
     if (!drawer) {
-        const inputContainer = document.querySelector('.input-container');
-        if (!inputContainer) return;
-        drawer = document.createElement('div');
-        drawer.id = 'chat-gif-drawer';
-        drawer.className = 'chat-gif-drawer';
-        drawer.style.display = 'none';
-        drawer.innerHTML = 
-            '<div class="chat-gif-header" style="justify-content:space-between;">' +
-                '<div class="gif-category-tabs" style="flex:1;">' +
-                    '<button type="button" id="gif-tab-military" class="gif-tab-btn active" onclick="switchGifCategory(\'military\')">🪖 Военные (20)</button>' +
-                    '<button type="button" id="gif-tab-rocket" class="gif-tab-btn" onclick="switchGifCategory(\'rocket\')">🚀 Ракетные (20)</button>' +
-                    '<button type="button" id="gif-tab-cosmic" class="gif-tab-btn" onclick="switchGifCategory(\'cosmic\')">🌌 Космос (20)</button>' +
-                '</div>' +
-                '<button type="button" class="reply-preview-close" onclick="toggleChatGifDrawer()">✖</button>' +
-            '</div>' +
-            '<div id="chat-gifs-grid" class="chat-gifs-grid"></div>';
-        inputContainer.parentNode.insertBefore(drawer, inputContainer);
+        openThemeAndGifHub();
+        return;
     }
-
     if (drawer.style.display === 'none' || !drawer.style.display) {
         drawer.style.display = 'flex';
-        switchGifCategory(typeof currentGifCategory !== 'undefined' ? currentGifCategory : 'military');
+        switchGifCategory(currentGifCategory || 'military');
     } else {
         drawer.style.display = 'none';
     }
@@ -1454,10 +1380,10 @@ function switchGifCategory(cat) {
         const tab = document.getElementById('gif-tab-' + t);
         if (tab) tab.classList.toggle('active', t === currentGifCategory);
     });
-    const grid = document.getElementById('chat-gifs-grid');
+    const grid = document.getElementById('chat-gifs-grid') || document.getElementById('viewer-gifs-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    const titles = GIF_TITLES[currentGifCategory] || GIF_TITLES.military; // 20 штук в каждой категории
+    const titles = GIF_TITLES[currentGifCategory] || GIF_TITLES.military;
     titles.forEach(function(title, idx) {
         const src = makeAnimatedSvgGif(currentGifCategory, idx, title);
         const card = document.createElement('div');
@@ -1492,6 +1418,7 @@ function sendGifToCurrentChat(gifSrc, title) {
     fetch('/api/send', { method: 'POST', body: formData }).then(function() {
         const drawer = document.getElementById('chat-gif-drawer');
         if (drawer) drawer.style.display = 'none';
+        closeMsgPhotoViewer();
         if (typeof fetchMessages === 'function') {
             lastMessagesCount = -1;
             fetchMessages();
@@ -1499,28 +1426,37 @@ function sendGifToCurrentChat(gifSrc, title) {
     });
 }
 
-// 3. ПРОСМОТР ФОТО / ГИФОК БЕЗ ПАНЕЛИ ТЕМ И КОЛЛЕКЦИИ ГИФОК
 function openMsgPhotoViewer(src, title) {
     const modal = document.getElementById('msg-photo-viewer-modal');
-    const imgWrap = document.querySelector('.msg-viewer-img-wrap');
-    const settingsBox = document.querySelector('.msg-viewer-settings');
-    const zoomControls = document.getElementById('msg-viewer-zoom-controls');
     const img = document.getElementById('msg-viewer-img');
     const ttl = document.getElementById('msg-viewer-title');
-
     msgImageZoom = 1;
-    if (imgWrap) imgWrap.style.display = 'flex';
-    if (zoomControls) zoomControls.style.display = 'flex';
-    if (settingsBox) settingsBox.style.display = 'none'; // Скрываем настройки тем при просмотре фото
-
     if (img) {
         img.src = src || makeAnimatedSvgGif('military', 0, '🪖 МСБ-55115');
         img.style.transform = 'scale(1)';
     }
-    if (ttl) ttl.innerText = title || '🖼️ Просмотр изображения';
+    if (ttl) ttl.innerText = title || '🖼️ Просмотр и настройки темы';
     const zLbl = document.getElementById('msg-zoom-label');
     if (zLbl) zLbl.innerText = '100%';
+    setAppTheme(localStorage.getItem('msb_app_theme') || 'military');
     if (modal) modal.style.display = 'flex';
+}
+
+function openAvatarInViewer(el, titleName) {
+    const imgEl = el ? el.querySelector('img') : null;
+    const fallback = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ ' + (titleName || currentCallsign || 'МСБ'));
+    openMsgPhotoViewer(imgEl ? imgEl.src : fallback, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
+}
+
+function openThemeSettingsModal() {
+    const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема МСБ-55115');
+    openMsgPhotoViewer(preview, '🎨 Выбор темы оформления (Военный / Ракетный / Космос)');
+}
+window.openThemeAndGifHub = openThemeSettingsModal;
+
+function closeMsgPhotoViewer() {
+    const m = document.getElementById('msg-photo-viewer-modal');
+    if (m) m.style.display = 'none';
 }
 
 function changeMsgImageZoom(delta) {
