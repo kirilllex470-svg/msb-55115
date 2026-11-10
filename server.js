@@ -180,11 +180,11 @@ const SW_CODE = [
     "        body: data.body,",
     "        icon: '/icon-192.png',",
     "        badge: '/icon-192.png',",
-    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
+    "        vibrate: [400, 100, 400, 100, 400],",
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
-    "        tag: 'msb-alert-' + Date.now(),",
+    "        tag: 'msb-single-alert',",
     "        data: { url: '/' }",
     "    }));",
     "});",
@@ -199,6 +199,7 @@ const SW_CODE = [
     "    }));",
     "});"
 ].join('\n');
+
 
 function readBodyJSON(req, cb) {
     let body = '';
@@ -703,19 +704,31 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     else if (type === 'file') cleanText = '📎 Файл в Мессенджере';
     else if (type === 'gif') cleanText = '🎬 GIF-анимация в Мессенджере';
     else cleanText = '💬 Мессенджер: ' + cleanText;
+
+    const senderClean = String(sender || '').trim().toLowerCase();
     let targets = new Array();
+    let senderDisplay = sender;
+
     if (groupsDB[room]) {
-        targets = groupsDB[room].members.filter(function(m) { return m.toLowerCase() !== sender.toLowerCase(); });
+        senderDisplay = '👥 ' + groupsDB[room].name + ' (' + sender + ')';
+        targets = (groupsDB[room].members || []).filter(function(m) {
+            return String(m || '').trim().toLowerCase() !== senderClean;
+        });
     } else {
         const parts = room.split('_').at(0).split(',');
-        targets = parts.filter(function(n) { return n.toLowerCase() !== sender.toLowerCase(); });
+        targets = parts.filter(function(n) {
+            return String(n || '').trim().toLowerCase() !== senderClean;
+        });
     }
     targets.forEach(function(t) {
-        const uObj = usersDB[t.toLowerCase()];
-        const realTarget = uObj ? uObj.username : t.toUpperCase();
-        broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
+        const tLow = String(t || '').trim().toLowerCase();
+        if (!tLow || tLow === senderClean) return;
+        const uObj = usersDB[tLow];
+        const realTarget = uObj ? uObj.username : t.trim();
+        broadcastAlert(senderDisplay, '#00a884', timeStr, realTarget, cleanText);
     });
 }
+
 
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
