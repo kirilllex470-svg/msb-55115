@@ -96,9 +96,8 @@ function getServerDateTime() {
     return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
 }
 
-// МЕТКА ВРЕМЕНИ И ID ЗАПУСКА СЕРВЕРА ДЛЯ ОКНА ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ
-const SERVER_BOOT_ID = 'boot_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
-const SERVER_BOOT_TIME = getServerDateTime();
+var SERVER_BOOT_ID = 'build_' + Date.now();
+var SERVER_BOOT_TIME = getServerDateTime();
 function makeTacticalIcon(size) {
     const crcTable = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -212,7 +211,7 @@ const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
     if (urlPath === '/sw.js') {
-        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-store, no-cache, must-revalidate' });
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-cache' });
         return res.end(SW_CODE);
     }
     if (urlPath === '/manifest.json') {
@@ -227,15 +226,11 @@ const server = http.createServer(function(req, res) {
         res.writeHead(200, { 'Content-Type': 'image/png' });
         return res.end(TACTICAL_ICON_512);
     }
-    if (urlPath === '/api/version') {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-        return res.end(JSON.stringify({ bootId: SERVER_BOOT_ID, bootTime: SERVER_BOOT_TIME }));
-    }
     if (urlPath === '/style.css' || urlPath === '/journal.js' || urlPath === '/messenger.js') {
         const cType = urlPath.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8';
         fs.readFile(path.join(__dirname, urlPath.slice(1)), function(err, data) {
             if (err) { res.writeHead(404); return res.end('Not Found'); }
-            res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' });
+            res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-cache' });
             res.end(data);
         });
         return;
@@ -503,18 +498,12 @@ const server = http.createServer(function(req, res) {
         let otherParticipants = new Array();
         if (room) {
             if (groupsDB[room] && Array.isArray(groupsDB[room].members)) {
-                otherParticipants = groupsDB[room].members
-                    .map(function(m) { return String(m).trim().toLowerCase(); })
-                    .filter(function(m) { return m !== reqUser; });
+                otherParticipants = groupsDB[room].members.map(function(m) { return String(m).trim().toLowerCase(); }).filter(function(m) { return m !== reqUser; });
                 partnerOnline = otherParticipants.some(function(m) { return isUserOnlineNow(m); });
             } else {
                 const pairParts = room.split('_').at(0).split(',');
-                otherParticipants = pairParts
-                    .map(function(p) { return String(p).trim().toLowerCase(); })
-                    .filter(function(p) { return p !== reqUser; });
-                if (otherParticipants.length > 0) {
-                    partnerOnline = isUserOnlineNow(otherParticipants.at(0));
-                }
+                otherParticipants = pairParts.map(function(p) { return String(p).trim().toLowerCase(); }).filter(function(p) { return p !== reqUser; });
+                if (otherParticipants.length > 0) partnerOnline = isUserOnlineNow(otherParticipants.at(0));
             }
         }
         const enriched = rawList.map(function(msg) {
@@ -590,7 +579,6 @@ const server = http.createServer(function(req, res) {
         });
         return;
     }
-
     fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
         if (err) {
             res.writeHead(500);
@@ -604,7 +592,6 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
-
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup) {
     const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
     let lastMsgText = "Нет сообщений", lastMsgTime = "", unreadCount = 0;
@@ -614,7 +601,7 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         if (lastMsg.type === 'audio') lastMsgText = "🎙️ " + prefix + "Голосовое";
         else if (lastMsg.type === 'video') lastMsgText = "🎥 " + prefix + "Кружок";
         else if (lastMsg.type === 'file') lastMsgText = "📎 " + prefix + "Файл";
-        else if (lastMsg.type === 'gif') lastMsgText = "🎬 " + prefix + "GIF-анимация";
+        else if (lastMsg.type === 'gif') lastMsgText = "🎬 " + prefix + "GIF";
         else lastMsgText = prefix + (lastMsg.text || "");
         lastMsgTime = lastMsg.time || "";
         roomMessages.forEach(function(msg) {
@@ -636,6 +623,7 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         online: isOnline
     };
 }
+
 function handleMultipartSend(req, res) {
     const contentType = req.headers['content-type'] || '';
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
@@ -678,7 +666,6 @@ function handleMultipartSend(req, res) {
         saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res);
     });
 }
-
 function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res) {
     const sender = fields.sender, room = fields.room, type = fields.type || 'text';
     if (!sender || !room) { res.writeHead(400); return res.end('Incomplete'); }
@@ -729,6 +716,7 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
+
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
@@ -742,9 +730,6 @@ function getIsoDateNow() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
     return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
-
-const SERVER_BOOT_ID = 'build_' + Date.now();
-const SERVER_BOOT_TIME = getServerDateTime();
 
 let currentActiveDay = getIsoDateNow();
 if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
@@ -782,7 +767,6 @@ function saveAndBroadcastMap(msg) {
     broadcastWS({ type: 'new_map', target: mapItem.target });
     broadcastAlert(msg.sender || 'АДМИН', msg.color || '#8b5cf6', timeStr, msg.target || 'ВСЕМ', '🗺️ ЗАГРУЖЕНА НОВАЯ ВВОДНАЯ / КАРТА! Откройте раздел "ВВОДНЫЕ / КАРТА"');
 }
-
 function broadcastAlert(sender, color, timeStr, target, text) {
     const notifId = Date.now() + Math.floor(Math.random() * 1000);
     const newNotif = { id: notifId, time: timeStr, sender: sender, color: color, target: target, text: text, read: false, readBy: '' };
@@ -816,6 +800,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     });
 }
+
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
         type: 'init',
@@ -919,5 +904,5 @@ wss.on('connection', function(ws) {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', function() {
-    console.log('🚀 ЕДИНЫЙ СЕРВЕР МСБ-55115 (ЖУРНАЛ + МЕССЕНДЖЕР) ЗАПУЩЕН НА ПОРТУ ' + PORT + ' | СБОРКА: ' + SERVER_BOOT_TIME);
+    console.log('🚀 ЕДИНЫЙ СЕРВЕР МСБ-55115 ЗАПУЩЕН НА ПОРТУ ' + PORT + ' | СБОРКА: ' + SERVER_BOOT_TIME);
 });
