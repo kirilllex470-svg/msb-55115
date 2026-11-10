@@ -1282,7 +1282,7 @@ function triggerCallInDev(callType, targetName) {
         title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
     }
     if (text) {
-        text.innerHTML = 'Модуль <b>«' + callType + '»</b> находится в разработке системы <b>МСБ-55115</b>!';
+        text.innerHTML = 'Модуль <b>«' + callType + '»</b> в разработке системы <b>МСБ-55115</b>!';
     }
     if (modal) modal.style.display = 'flex';
 }
@@ -1316,38 +1316,74 @@ const GIF_TITLES = {
     ]
 };
 
+var gifCacheStore = {};
+
 function makeAnimatedSvgGif(cat, idx, title) {
+    const cacheKey = cat + '_' + idx;
+    if (gifCacheStore[cacheKey]) return gifCacheStore[cacheKey];
+
     const palettes = {
-        military: ['#051b0e', '#14532d', '#22c55e', '#facc15'],
-        rocket: ['#220804', '#7c2d12', '#f97316', '#fde047'],
-        cosmic: ['#08041d', '#311068', '#38bdf8', '#c084fc']
+        military: ['#051f10', '#14532d', '#22c55e', '#facc15'],
+        rocket: ['#260804', '#7c2d12', '#f97316', '#fde047'],
+        cosmic: ['#090422', '#3b0764', '#38bdf8', '#c084fc']
     };
     const pal = palettes[cat] || palettes.military;
     const parts = String(title || '').split(' ');
     const icon = parts.at(0) || '🚀';
     const label = parts.slice(1).join(' ') || 'МСБ-55115';
-    const dur1 = (1.6 + (idx % 5) * 0.3).toFixed(1) + 's';
-    const dur2 = (3.2 + (idx % 4) * 0.6).toFixed(1) + 's';
 
-    const svg = '<svg xmlns="http://w3.org" viewBox="0 0 300 190" width="300" height="190">' +
-        '<defs><linearGradient id="g' + idx + '" x1="0" y1="0" x2="1" y2="1">' +
-        '<stop offset="0%" stop-color="' + pal.at(0) + '"/>' +
-        '<stop offset="100%" stop-color="' + pal.at(1) + '"/></linearGradient></defs>' +
-        '<rect width="300" height="190" rx="14" fill="url(#g' + idx + ')"/>' +
-        '<circle cx="150" cy="78" r="18" fill="none" stroke="' + pal.at(2) + '" stroke-width="2.5">' +
-        '<animate attributeName="r" values="14;76;14" dur="' + dur1 + '" repeatCount="indefinite"/>' +
-        '<animate attributeName="opacity" values="0.95;0.08;0.95" dur="' + dur1 + '" repeatCount="indefinite"/></circle>' +
-        '<circle cx="150" cy="78" r="45" fill="none" stroke="' + pal.at(3) + '" stroke-dasharray="10 6" stroke-width="2">' +
-        '<animateTransform attributeName="transform" type="rotate" from="0 150 78" to="360 150 78" dur="' + dur2 + '" repeatCount="indefinite"/></circle>' +
-        '<line x1="75" y1="78" x2="225" y2="78" stroke="' + pal.at(2) + '" stroke-opacity="0.4" stroke-width="1"/>' +
-        '<line x1="150" y1="14" x2="150" y2="138" stroke="' + pal.at(2) + '" stroke-opacity="0.4" stroke-width="1"/>' +
-        '<text x="150" y="92" font-size="38" text-anchor="middle">' + icon +
-        '<animateTransform attributeName="transform" type="translate" values="0,-6; 0,6; 0,-6" dur="1.2s" repeatCount="indefinite"/></text>' +
-        '<rect x="12" y="142" width="276" height="36" rx="8" fill="rgba(0,0,0,0.75)" stroke="' + pal.at(2) + '" stroke-width="1.2"/>' +
-        '<text x="150" y="165" font-family="Segoe UI, monospace, sans-serif" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">' +
-        label + ' #' + (idx + 1) + '</text></svg>';
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 200;
+    const ctx = canvas.getContext('2d');
 
-    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    const grad = ctx.createLinearGradient(0, 0, 320, 200);
+    grad.addColorStop(0, pal.at(0));
+    grad.addColorStop(1, pal.at(1));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 320, 200);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    for (let x = 20; x < 320; x += 28) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 200); ctx.stroke();
+    }
+    for (let y = 20; y < 200; y += 28) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke();
+    }
+
+    ctx.strokeStyle = pal.at(2);
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(160, 78, 52, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = pal.at(3);
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.arc(160, 78, 36, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '46px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icon, 160, 78);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+    ctx.fillRect(14, 144, 292, 42);
+    ctx.strokeStyle = pal.at(2);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(14, 144, 292, 42);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 15px "Segoe UI", monospace, sans-serif';
+    ctx.fillText(label + ' #' + (idx + 1), 160, 166);
+
+    const dataUrl = canvas.toDataURL('image/png');
+    gifCacheStore[cacheKey] = dataUrl;
+    return dataUrl;
 }
 function setAppTheme(themeName) {
     const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
@@ -1363,7 +1399,7 @@ function setAppTheme(themeName) {
 function toggleChatGifDrawer() {
     const drawer = document.getElementById('chat-gif-drawer');
     if (!drawer) {
-        openThemeAndGifHub();
+        openThemeSettingsModal();
         return;
     }
     if (drawer.style.display === 'none' || !drawer.style.display) {
@@ -1410,20 +1446,26 @@ function sendGifToCurrentChat(gifSrc, title) {
     }
     const sender = (typeof getActiveChatIdentity === 'function') ? getActiveChatIdentity() : currentCallsign;
     if (!sender) return;
-    const formData = new FormData();
-    formData.append('sender', sender);
-    formData.append('room', currentRoomId);
-    formData.append('text', gifSrc);
-    formData.append('type', 'gif');
-    fetch('/api/send', { method: 'POST', body: formData }).then(function() {
-        const drawer = document.getElementById('chat-gif-drawer');
-        if (drawer) drawer.style.display = 'none';
-        closeMsgPhotoViewer();
-        if (typeof fetchMessages === 'function') {
-            lastMessagesCount = -1;
-            fetchMessages();
-        }
-    });
+
+    fetch(gifSrc)
+        .then(function(r) { return r.blob(); })
+        .then(function(blob) {
+            const formData = new FormData();
+            formData.append('sender', sender);
+            formData.append('room', currentRoomId);
+            formData.append('type', 'file');
+            formData.append('media', blob, 'gif_' + Date.now() + '.png');
+            return fetch('/api/send', { method: 'POST', body: formData });
+        })
+        .then(function() {
+            const drawer = document.getElementById('chat-gif-drawer');
+            if (drawer) drawer.style.display = 'none';
+            closeMsgPhotoViewer();
+            if (typeof fetchMessages === 'function') {
+                lastMessagesCount = -1;
+                fetchMessages();
+            }
+        });
 }
 
 function openMsgPhotoViewer(src, title) {
