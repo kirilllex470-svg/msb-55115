@@ -2,496 +2,432 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>МСБ55115</title>
-    <link rel="stylesheet" href="/style.css">
-    <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="МСБ55115">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/icon-192.png">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <link rel="stylesheet" href="/style.css">
     <style>
-        /* Стили окна принудительного обновления */
-        #update-force-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(2, 6, 23, 0.96); z-index: 999999;
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-            padding: 24px; text-align: center; font-family: monospace;
-        }
-        .update-card {
-            background: #0f172a; border: 2px solid #ef4444; border-radius: 12px;
-            padding: 30px; max-width: 450px; width: 100%; box-shadow: 0 0 30px rgba(239, 68, 68, 0.25);
-        }
-        .update-btn {
-            background: #ef4444; color: #fff; border: none; padding: 14px 28px;
-            font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer;
-            margin-top: 20px; width: 100%; font-family: monospace; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-        }
-        .update-btn:active { transform: scale(0.98); }
-
-        /* Переключатели тем в лайтбоксе */
-        .theme-select-panel {
-            display: flex; gap: 8px; margin-top: 15px; width: 100%; justify-content: center;
-        }
-        .theme-chip {
-            padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: bold;
-            cursor: pointer; border: 1px solid #334155; color: #f8fafc; font-family: monospace;
-        }
-        .theme-chip.military { background: #374151; border-color: #4b5563; }
-        .theme-chip.rocket { background: #b45309; border-color: #d97706; }
-        .theme-chip.space { background: #6d28d9; border-color: #7c3aed; }
-
-        /* Кнопки звонков */
-        .call-btn-container {
-            display: flex; align-items: center; gap: 14px; margin-left: auto; padding-right: 8px;
-        }
-        .call-icon-btn {
-            background: none; border: none; font-size: 20px; cursor: pointer; 
-            padding: 6px; transition: transform 0.1s; display: flex; align-items: center; justify-content: center;
-        }
-        .call-icon-btn:active { transform: scale(0.88); }
-
-        /* Окно "В разработке" */
-        #dev-alert-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 999999;
-            display: none; align-items: center; justify-content: center; padding: 20px;
-        }
-        .dev-alert-card {
-            background: #1e293b; border: 1px solid #38bdf8; border-radius: 12px;
-            padding: 24px; max-width: 400px; width: 100%; text-align: center; font-family: monospace;
-            box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
-        }
-
-        /* Галерея тактических ГИФОК */
-        .gif-gallery-title {
-            color: #94a3b8; font-size: 13px; font-weight: bold; margin-top: 20px; 
-            text-align: left; width: 100%; font-family: monospace; border-top: 1px solid #334155; padding-top: 12px;
-        }
-        .gif-grid-container {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
-            max-height: 160px; overflow-y: auto; width: 100%; margin-top: 8px; padding-right: 4px;
-        }
-        .gif-tile-item {
-            width: 100%; aspect-ratio: 1; border-radius: 4px; object-fit: cover;
-            cursor: pointer; border: 1px solid #334155; background: #0f172a;
-        }
-        .gif-tile-item:hover { border-color: #38bdf8; }
-
-        /* КЛАССЫ ДЛЯ ТАКТИЧЕСКИХ ТЕМ ОФОРМЛЕНИЯ */
-        body.theme-military { background-color: #1c2416 !important; background-image: radial-gradient(circle, #2e3f23 10%, #1c2416 90%) !important; color: #e2e8f0 !important; }
-        body.theme-military #app-header, body.theme-military .modal-header, body.theme-military .friend-item.active { background: #2d3b24 !important; border-color: #445932 !important; }
-        body.theme-military .bubble.my-msg { background: #445932 !important; color: #f8fafc !important; }
-        body.theme-military .btn-primary, body.theme-military .send-btn { background: #3f542f !important; border-color: #557342 !important; }
-
-        body.theme-rocket { background-color: #1e1f22 !important; background-image: linear-gradient(180deg, #2b2d31 0%, #111214 100%) !important; color: #f2f3f5 !important; }
-        body.theme-rocket #app-header, body.theme-rocket .modal-header, body.theme-rocket .friend-item.active { background: #2b2d31 !important; border-color: #eab308 !important; }
-        body.theme-rocket .bubble.my-msg { background: #ca8a04 !important; color: #000000 !important; font-weight: bold; }
-        body.theme-rocket .btn-primary, body.theme-rocket .send-btn { background: #ca8a04 !important; border-color: #eab308 !important; color: #000 !important; }
-
-        body.theme-space { background-color: #05070f !important; background-image: radial-gradient(circle at center, #0c1020 0%, #030408 100%) !important; color: #c9d1d9 !important; }
-        body.theme-space #app-header, body.theme-space .modal-header, body.theme-space .friend-item.active { background: #0b0f19 !important; border-color: #7c3aed !important; box-shadow: 0 0 10px rgba(124, 58, 237, 0.2); }
-        body.theme-space .bubble.my-msg { background: #6d28d9 !important; color: #ffffff !important; }
-        body.theme-space .btn-primary, body.theme-space .send-btn { background: #5b21b6 !important; border-color: #7c3aed !important; }
+        body.theme-military { background: #141f14 !important; }
+        body.theme-military .panel, body.theme-military .notifications-window, body.theme-military #messenger-modal .app-wrapper { background: #1e2d1e !important; border-color: #3b5a3b !important; }
+        body.theme-rocket { background: #18181b !important; }
+        body.theme-rocket .panel, body.theme-rocket .notifications-window, body.theme-rocket #messenger-modal .app-wrapper { background: #27272a !important; border-color: #eab308 !important; }
+        body.theme-space { background: #060814 !important; }
+        body.theme-space .panel, body.theme-space .notifications-window, body.theme-space #messenger-modal .app-wrapper { background: #0f1429 !important; border-color: #7c3aed !important; }
+        .theme-chip-btn { width: auto !important; padding: 6px 12px !important; font-size: 12px !important; border-radius: 6px !important; cursor: pointer; }
+        .gif-mini-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 150px; overflow-y: auto; margin-top: 8px; padding: 6px; background: #020617; border-radius: 8px; border: 1px solid #334155; }
+        .gif-mini-grid img { width: 100%; height: 55px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 1px solid #475569; }
     </style>
 </head>
-<body class="theme-dark">
+<body>
 
-    <!-- ОКНО ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ С СЕРВЕРА -->
-    <div id="update-force-overlay">
-        <div class="update-card">
-            <div style="font-size: 40px; margin-bottom: 12px;">🔄</div>
-            <div style="color: #ef4444; font-size: 16px; font-weight: bold; margin-bottom: 8px; letter-spacing: 1px;">КРИТИЧЕСКОЕ ОБНОВЛЕНИЕ СИСТЕМЫ</div>
-            <div style="color: #94a3b8; font-size: 13px; margin-bottom: 20px;" id="update-time-label">Сборка: --.--.---- --:--</div>
-            <div style="color: #cbd5e1; font-size: 12px; line-height: 1.6; text-align: left; background: #020617; padding: 12px; border-radius: 6px; border: 1px solid #334155;">
-                Внимание! Администратор перезапустил файлы ядра МСБ-55115. Для исключения сбоев связи и кэширования старого кода, необходимо жестко обновить программные модули.
-            </div>
-            <button class="update-btn" onclick="executeForceSystemReload()">ПРИМЕНИТЬ И ПЕРЕЗАГРУЗИТЬ</button>
+    <div id="update-force-overlay" style="display:none; position:fixed; inset:0; background:rgba(2,6,23,0.95); z-index:999999; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center;">
+        <div style="background:#1e293b; border:2px solid #ef4444; border-radius:14px; padding:24px; max-width:420px; width:100%; box-shadow:0 0 30px rgba(239,68,68,0.4);">
+            <div style="font-size:42px; margin-bottom:8px;">🔄</div>
+            <h3 style="margin:0 0 8px 0; color:#f8fafc;">ДОСТУПНО НОВОЕ ОБНОВЛЕНИЕ!</h3>
+            <div id="update-time-label" style="color:#facc15; font-size:14px; font-weight:bold; margin-bottom:14px;">Дата и время: --</div>
+            <p style="color:#cbd5e1; font-size:13px; margin-bottom:18px;">Файлы на сервере МСБ-55115 были обновлены. Нажмите кнопку ниже для перехода на последнюю версию.</p>
+            <button onclick="executeForceSystemReload()" style="background:#22c55e; color:#fff; font-weight:bold; padding:12px; border-radius:8px; width:100%; font-size:15px;">🚀 ОБНОВИТЬ И ПЕРЕЗАГРУЗИТЬ</button>
         </div>
     </div>
 
-    <!-- ЭКРАН ЗАГРУЗКИ (SPLASH SCREEN) -->
+    <div id="dev-alert-modal" style="display:none; position:fixed; inset:0; background:rgba(2,6,23,0.88); z-index:999998; align-items:center; justify-content:center; padding:20px; text-align:center;" onclick="closeDevCallAlert(event)">
+        <div style="background:#1e293b; border:2px solid #38bdf8; border-radius:14px; padding:24px; max-width:380px; width:100%;" onclick="event.stopPropagation()">
+            <div style="font-size:40px; margin-bottom:8px;">📞 🎥</div>
+            <h3 style="margin:0 0 10px 0; color:#38bdf8;">В РАЗРАБОТКЕ МСБ-55115</h3>
+            <p style="color:#cbd5e1; font-size:13px; margin-bottom:16px;">Защищенные аудио и видео звонки сейчас находятся в разработке МСБ-55115 и скоро будут доступны!</p>
+            <button onclick="closeDevCallAlert(null)" style="background:#0284c7; color:#fff; font-weight:bold; padding:10px; border-radius:8px; width:100%;">ПОНЯТНО</button>
+        </div>
+    </div>
+
     <div id="splash-screen">
-        <div class="splash-container">
-            <div class="splash-logo">МСБ-55115</div>
-            <div class="splash-terminal" id="splash-file">Инициализация ядра...</div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="splash-bar"></div>
+        <div class="splash-box">
+            <svg class="splash-emblem" viewBox="0 0 220 240" xmlns="http://w3.org">
+                <defs>
+                    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#fef08a"/>
+                        <stop offset="50%" stop-color="#eab308"/>
+                        <stop offset="100%" stop-color="#a16207"/>
+                    </linearGradient>
+                    <linearGradient id="shieldBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#1e293b"/>
+                        <stop offset="100%" stop-color="#090d16"/>
+                    </linearGradient>
+                </defs>
+                <g stroke="url(#goldGrad)" stroke-width="5" stroke-linecap="round">
+                    <line x1="35" y1="195" x2="185" y2="45"/>
+                    <line x1="185" y1="195" x2="35" y2="45"/>
+                </g>
+                <path d="M110 15 L195 50 L195 125 C195 180 110 225 110 225 C110 225 25 180 25 125 L25 50 Z" 
+                      fill="url(#shieldBg)" stroke="url(#goldGrad)" stroke-width="4.5"/>
+                <path d="M110 26 L183 56 L183 122 C183 169 110 210 110 210 C110 210 37 169 37 122 L37 56 Z" 
+                      fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-dasharray="6,4" opacity="0.7"/>
+                <polygon points="110,42 117,57 133,59 121,70 124,86 110,78 96,86 99,70 87,59 103,57" 
+                         fill="url(#goldGrad)"/>
+                <g fill="none" stroke="url(#goldGrad)" stroke-width="8" stroke-linecap="miter">
+                    <polyline points="65,115 110,140 155,115"/>
+                    <polyline points="65,140 110,165 155,140"/>
+                    <polyline points="65,165 110,190 155,165"/>
+                </g>
+                <text x="110" y="106" text-anchor="middle" fill="#f8fafc" font-family="Courier New, monospace" font-weight="900" font-size="16" letter-spacing="2">МСБ-55115</text>
+            </svg>
+            <div class="splash-title">Мотострелковый батальон 55115</div>
+            <div class="splash-subtitle">СИСТЕМА ОПЕРАТИВНОГО УПРАВЛЕНИЯ И СВЯЗИ</div>
+            <div class="splash-bar-bg"><div id="splash-bar" class="splash-bar-fill"></div></div>
+            <div class="splash-status-row">
+                <span id="splash-percent">ЗАГРУЗКА: 0%</span>
+                <span id="splash-tag">[ИНИЦИАЛИЗАЦИЯ]</span>
             </div>
-            <div class="splash-footer">
-                <span id="splash-percent">ЗАГРУЗКА СИСТЕМЫ: 0%</span>
-                <span id="splash-tag">[ОЖИДАНИЕ]</span>
-            </div>
+            <div id="splash-file" class="splash-file-log">boot/kernel_msb55115.sys...</div>
         </div>
     </div>
-    <!-- ОКНО АВТОРИЗАЦИИ (LOGIN OVERLAY) -->
-    <div id="login-overlay">
-        <div class="login-card">
-            <div class="login-header">
-                <h2>ВХОД В СИСТЕМУ МСБ-55115</h2>
-                <p>Единый тактический терминал управления и связи</p>
+    <div id="photo-lightbox">
+        <div class="lightbox-topbar" style="flex-wrap:wrap; gap:8px;">
+            <div id="lightbox-caption" style="color:#38bdf8; font-weight:bold; font-size:14px;">🗺️ Просмотр</div>
+            <div class="lightbox-controls" style="flex-wrap:wrap;">
+                <button class="lb-btn" onclick="changePhotoZoom(0.4)">➕ Приблизить</button>
+                <button class="lb-btn" onclick="changePhotoZoom(-0.4)">➖ Отдалить</button>
+                <button class="lb-btn" onclick="resetPhotoZoom()">🔄 100%</button>
+                <span id="zoom-level-label" style="color:#94a3b8; font-size:13px; min-width:48px; text-align:center;">100%</span>
+                <button class="lb-btn close" onclick="closePhotoLightbox()">✖ ЗАКРЫТЬ</button>
             </div>
-            <div class="login-form">
-                <div class="form-group">
-                    <label for="login-select">ПОДРАЗДЕЛЕНИЕ / УРОВЕНЬ</label>
-                    <select id="login-select" onchange="hideAuthMessages()"></select>
-                </div>
-                <div class="form-group">
-                    <label for="login-callsign">ЛИЧНЫЙ ПОЗЫВНОЙ</label>
-                    <input type="text" id="login-callsign" placeholder="Введите позывной..." autocomplete="username" oninput="hideAuthMessages()">
-                </div>
-                <div class="form-group">
-                    <label for="login-pass">ПАРОЛЬ ДОСТУПА</label>
-                    <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" oninput="hideAuthMessages()">
-                </div>
-                <div id="login-error" class="error-msg"></div>
-                <button class="btn-login" onclick="attemptLogin()">ПОДКЛЮЧИТЬСЯ</button>
-                <div class="login-actions-row">
-                    <button class="btn-secondary-link" onclick="openRegisterModal()">Регистрация позывного</button>
-                    <button class="btn-secondary-link" onclick="loginAsViewer()">Режим просмотра</button>
-                </div>
+            <div style="width:100%; display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; padding-top:4px; border-top:1px solid #334155;">
+                <span style="color:#cbd5e1; font-size:12px; font-weight:bold;">🎨 ТЕМА И ГИФКИ:</span>
+                <button type="button" class="theme-chip-btn" style="background:#365314;" onclick="switchAppTacticalTheme('military')">🛡️ Военная (20 GIF)</button>
+                <button type="button" class="theme-chip-btn" style="background:#b45309;" onclick="switchAppTacticalTheme('rocket')">🚀 Ракетная (20 GIF)</button>
+                <button type="button" class="theme-chip-btn" style="background:#6d28d9;" onclick="switchAppTacticalTheme('space')">🌌 Космическая (20 GIF)</button>
             </div>
+            <div id="tactical-gif-grid-view" class="gif-mini-grid" style="width:100%;"></div>
+        </div>
+        <div class="lightbox-viewport" id="lb-viewport">
+            <img id="lightbox-img" src="" alt="Фото">
         </div>
     </div>
 
-    <!-- ГЛАВНОЕ ОКНО ПРИЛОЖЕНИЯ -->
-    <div id="app-container">
-        <header id="app-header">
-            <div class="header-left">
-                <div class="logo-icon"></div>
-                <div class="app-title-block">
-                    <h1>МСБ-55115</h1>
-                    <div class="status-row">
-                        <span class="status-dot"></span>
-                        <span id="my-name">Загрузка...</span>
-                        <span id="my-callsign-badge" style="color:#38bdf8; font-weight:bold; margin-left:4px;"></span>
-                    </div>
-                </div>
+    <div id="stream-page">
+        <div class="stream-page-header">
+            <div style="color:#ef4444; font-weight:bold; font-size:16px;">🔴 ПРЯМОЙ ВИДЕОСТРИМ МСБ-55115</div>
+            <div style="display:flex; gap:10px;">
+                <button class="lb-btn" style="background:#2563eb;" onclick="openStreamExternalFallback()">↗️ Открыть в отдельном окне</button>
+                <button class="lb-btn close" onclick="closeStreamPage()">✖ ВЕРНУТЬСЯ В ЖУРНАЛ</button>
             </div>
-            <div class="header-right">
-                <button class="header-icon-btn pwa-install-btn" style="display:none;" onclick="installPWA()" title="Установить как приложение">📥 Установить</button>
-                <button class="header-icon-btn" onclick="openSoundModal()" title="Настройка звука">🔊 Звук</button>
-                <button class="header-icon-btn" id="admin-users-btn" style="display:none;" onclick="openAdminUsersModal()">👥 Пользователи <span class="badge-count" id="pending-count-badge" style="display:none;">0</span></button>
-                <!-- Трубки звонков общего меню -->
-                <button class="header-icon-btn" onclick="triggerDevCallAlert()" title="Защищенный аудиозвонок">📞</button>
-                <button class="header-icon-btn" onclick="triggerDevCallAlert()" title="Защищенный видеозвонок">🎥</button>
-                <button class="btn-logout" onclick="logoutUser()">ВЫХОД</button>
-            </div>
-        </header>
-
-        <!-- БЕГУЩАЯ СТРОКА ОБЩИХ ОПОВЕЩЕНИЙ -->
-        <div id="broadcast-ticker-container">
-            <div id="msg-broadcast-ticker">📢 СВОДКА «ВСЕМ»: Синхронизация тактического канала связи...</div>
         </div>
-        <main id="app-main-content">
-            <!-- БЛОК ВВОДА ДАННЫХ ЖУРНАЛА -->
-            <section id="input-panel" style="display:none; margin-bottom:12px;">
-                <div class="panel-header-mini">📤 ВВОД ТАКТИЧЕСКОЙ СВЕДЕНИЙ В ЖУРНАЛ СОБЫТИЙ</div>
-                <div class="inputs-grid" id="dynamic-inputs"></div>
-                <button class="send-btn" onclick="submitRow()">ОТПРАВИТЬ ЗАПИСЬ В ТЕКУЩИЙ ЖУРНАЛ</button>
-            </section>
+        <iframe id="stream-iframe" allow="camera; microphone; fullscreen; display-capture; autoplay" allowfullscreen></iframe>
+    </div>
 
-            <!-- ГЛАВНЫЕ КНОПКИ УПРАВЛЕНИЯ (СТРИМ, КАРТЫ, АРХИВ) -->
-            <div class="main-navigation-row">
-                <button class="nav-main-card-btn" id="stream-main-btn" style="display:none;" onclick="handleStreamBtnClick()">🎥 ВИДЕОСТРИМ МСБ-55115</button>
-                <button class="nav-main-card-btn" id="maps-main-btn" style="display:none;" onclick="toggleMapsSection()">🗺️ ВВОДНЫЕ / КАРТА</button>
-                <button class="nav-main-card-btn archive-main-btn" style="display:none;" onclick="openArchivePage()">🗂️ АРХИВ ЖУРНАЛА</button>
-                <button class="nav-main-card-btn messenger-trigger-btn" onclick="openMessengerWindow()" style="background:#00a884; position:relative;">💬 МЕССЕНДЖЕР СВЯЗИ <span class="badge-count" id="msg-unread-total" style="display:none; background:#ef4444; position:absolute; top:-6px; right:-6px;">0</span></button>
+    <div id="archive-page">
+        <div class="archive-header">
+            <div>
+                <div style="color:#facc15; font-weight:bold; font-size:18px;">🗂️ АРХИВ ЖУРНАЛА МСБ-55115</div>
+                <div style="color:#94a3b8; font-size:12px;">Автоматическое сохранение каждые сутки в 24:00</div>
             </div>
-
-            <!-- СЕКЦИЯ АДМИНИСТРИРОВАНИЯ СТРИМА -->
-            <div id="admin-stream-box" class="collapsible-panel" style="display:none;">
-                <div class="panel-content-card">
-                    <h3>УПРАВЛЕНИЕ ВИДЕОПОТОКОМ (ТОЛЬКО ДЛЯ АДМИНИСТРАТОРА)</h3>
-                    <div style="display:flex; gap:10px; margin-top:8px;">
-                        <input type="text" id="stream-url-input" placeholder="Вставьте URL-ссылку на SaluteJazz / RTMP поток..." style="flex:1;">
-                        <button onclick="startVideoStream()" style="background:#22c55e; width:auto; padding:0 20px;">ЗАПУСТИТЬ</button>
-                        <button onclick="stopVideoStream()" style="background:#ef4444; width:auto; padding:0 20px;">ОСТАНОВИТЬ</button>
-                    </div>
+            <button class="lb-btn close" onclick="closeArchivePage()">✖ ЗАКРЫТЬ АРХИВ</button>
+        </div>
+        <div class="archive-body">
+            <div class="calendar-card">
+                <div class="cal-nav">
+                    <button type="button" onclick="changeArchiveMonth(-1)">◀</button>
+                    <div class="cal-title" id="cal-month-label">МЕСЯЦ</div>
+                    <button type="button" onclick="changeArchiveMonth(1)">▶</button>
+                </div>
+                <div class="cal-weekdays">
+                    <div>ПН</div><div>ВТ</div><div>СР</div><div>ЧТ</div><div>ПТ</div><div>СБ</div><div>ВС</div>
+                </div>
+                <div class="cal-grid" id="cal-days-grid"></div>
+                <div style="margin-top:14px; font-size:12px; color:#94a3b8; line-height:1.5;">
+                    🟢 <b>Зеленая рамка</b> — в этот день есть сохраненные записи.<br>
+                    Нажмите на любую дату в календаре, чтобы открыть журнал за этот день.
                 </div>
             </div>
-
-            <!-- СЕКЦИЯ ПРОСМОТРА СТРИМА ДЛЯ ПОЛЬЗОВАТЕЛЕЙ -->
-            <div id="user-stream-box" class="collapsible-panel" style="display:none;">
-                <div class="panel-content-card" style="text-align:center;">
-                    <span class="map-tile-fresh" style="position:static; display:inline-block; margin-bottom:8px;">ТРАНСЛЯЦИЯ АКТИВНА</span>
-                    <p style="font-size:13px; color:#cbd5e1; margin-bottom:10px;">Администратор запустил защищенную видеотрансляцию МСБ-55115.</p>
-                    <button class="btn-primary" onclick="openActiveStreamWindow()" style="width:auto; padding:10px 24px; background:#ef4444; font-weight:bold;">ПЕРЕЙТИ К ПРОСМОТРУ СТРИМА</button>
+            <div class="archive-table-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                    <div style="font-size:16px; font-weight:bold; color:#38bdf8;" id="archive-table-title">Выберите дату в календаре</div>
+                    <div style="font-size:13px; color:#94a3b8;" id="archive-count-badge">0 записей</div>
                 </div>
-            </div>
-            <div id="viewer-stream-panel" style="display:none; margin-bottom:12px; background:#1e293b; padding:12px; border-radius:8px; text-align:center; border:1px solid #ef4444;">
-                <span style="color:#ef4444; font-weight:bold; font-size:13px;">🔴 ДЕЖУРНЫЙ СТРИМ АКТИВЕН!</span>
-                <button onclick="openActiveStreamWindow()" style="margin-left:12px; padding:4px 12px; background:#ef4444; font-size:12px; border-radius:4px;">СМОТРЕТЬ</button>
-            </div>
-            <!-- СЕКЦИЯ ПРОСМОТРА ТАКТИЧЕСКИХ КАРТ -->
-            <section id="maps-section-box" class="collapsible-panel" style="display:none; margin-bottom:12px;">
-                <div class="panel-header-mini">🗺️ АКТУАЛЬНЫЕ ТАКТИЧЕСКИЕ ВВОДНЫЕ / КАРТЫ СЕКТОРОВ</div>
-                <div class="panel-content-card">
-                    <!-- Блок загрузки для админа -->
-                    <div id="admin-maps-upload" style="display:none; margin-bottom:15px; background:#1e293b; padding:12px; border-radius:8px; border:1px dashed #475569;">
-                        <label style="display:block; font-size:11px; color:#94a3b8; margin-bottom:4px; font-weight:bold;">ЗАГРУЗКА НОВОЙ КАРТЫ / СНИМКА (АДМИН)</label>
-                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <input type="file" id="map-file-input" accept="image/*" style="font-size:12px; max-width:220px;">
-                            <select id="map-target-select" style="width:auto; max-width:180px; padding:6px; font-size:12px;"></select>
-                            <button onclick="uploadMapPhoto()" style="width:auto; padding:6px 16px; background:#8b5cf6; font-size:12px;">ЗАГРУЗИТЬ</button>
-                        </div>
-                    </div>
-                    <!-- Сетка плиток карт -->
-                    <div class="maps-grid" id="maps-tiles-grid"></div>
-                </div>
-            </section>
-
-            <!-- ГЛАВНАЯ ТАБЛИЦА ТЕКУЩЕГО ЖУРНАЛА -->
-            <section id="journal-table-section" style="display:none;">
-                <div class="table-container-wrapper">
-                    <table id="journal-main-table">
-                        <thead>
-                            <tr id="table-headers"></tr>
-                        </thead>
-                        <tbody id="table-body"></tbody>
+                <div class="table-wrapper" style="margin-top:0;">
+                    <table>
+                        <thead><tr id="archive-table-headers"></tr></thead>
+                        <tbody id="archive-table-body"></tbody>
                     </table>
                 </div>
-                <div id="clear-history-box" style="display:none; margin-top:8px; text-align:right;">
-                    <button class="btn-danger-clear" onclick="clearHistoryAdmin()">⚠️ ПОЛНАЯ ОЧИСТКА ТЕКУЩЕГО ЖУРНАЛА</button>
-                </div>
-            </section>
-
-            <!-- НИЖНИЙ БЛОК УВЕДОМЛЕНИЙ И СВЯЗИ -->
-            <section id="notifications-panel-block" style="margin-top:12px;">
-                <div class="panel-header-mini" style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>🔔 ОПОВЕЩЕНИЯ, ТРЕВОГИ И МИНИ-СВЯЗЬ</span>
-                    <button class="archive-main-btn" id="notif-archive-btn" style="display:none; width:auto; padding:2px 10px; background:#334155; font-size:11px;" onclick="openArchivePage()">🗂️ КАЛЕНДАРЬ АРХИВА</button>
-                </div>
-                <div class="panel-content-card">
-                    <!-- Мини-форма отправки -->
-                    <div id="mini-notif-reply-bar" style="display:none; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:#1e293b; padding:8px; border-radius:6px;">
-                        <label style="font-size:12px; color:#cbd5e1; font-weight:bold; font-family:monospace;">КОМУ:</label>
-                        <select id="mini-notif-target" style="width:auto; max-width:200px; padding:6px; font-size:12px;"></select>
-                        <input type="text" id="mini-notif-input" placeholder="Напишите быстрое сообщение / тревогу..." style="flex:1; min-width:180px; padding:6px; font-size:12px;">
-                        <button onclick="sendMiniNotification()" style="width:auto; padding:6px 16px; background:#3b82f6; font-size:12px; font-weight:bold;">ОТПРАВИТЬ</button>
-                    </div>
-                    <!-- Список истории уведомлений -->
-                    <div id="notifications-list" class="notifs-log-container"></div>
-                </div>
-            </section>
-        </main>
+            </div>
+        </div>
     </div>
-    <!-- МОДАЛЬНОЕ ОКНО ВСТРОЕННОГО МЕССЕНДЖЕРА СВЯЗИ -->
-    <div id="messenger-modal" class="messenger-full-overlay" style="display:none;">
-        <div class="messenger-window-box">
-            <!-- Левая колонка: Контакты и управление -->
-            <div id="app-sidebar" class="messenger-sidebar-panel">
-                <div class="sidebar-user-header">
-                    <div class="my-avatar-container" id="my-avatar" onclick="document.getElementById('avatar-file-input').click()" title="Изменить тактический аватар"></div>
-                    <input type="file" id="avatar-file-input" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">
-                    
-                        <div class="my-profile-name" id="msg-my-name">Загрузка...</div>
-                        <div class="my-profile-status">авторизован</div>
-                    </div>
-                    <button class="sidebar-action-add-btn" onclick="openCreateGroupModal()" title="Создать конференцию">👥 +</button>
+    <div id="alert-modal">
+        <div class="alert-box">
+            <div style="font-size: 55px;">🚨</div>
+            <h2>ВНИМАНИЕ! СРОЧНОЕ СООБЩЕНИЕ!</h2>
+            <div id="alert-target-label" style="color: #fca5a5; font-weight: bold; margin-bottom: 5px;"></div>
+            <div class="alert-text" id="alert-text">Текст сообщения</div>
+            <button class="confirm-btn" onclick="confirmAlert()">✅ ДА, Я ПОНЯЛ (ОЗНАКОМЛЕН)</button>
+        </div>
+    </div>
+
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2>🔐 Вход в систему</h2>
+            <p style="color: #94a3b8; font-size: 13px; margin-top:-5px;">Выберите подразделение, введите ваш позывной и пароль</p>
+            <select id="login-select"></select>
+            <input type="text" id="login-callsign" placeholder="Ваш позывной (Логин)...">
+            <input type="password" id="login-pass" placeholder="Введите пароль...">
+            <button onclick="attemptLogin()">Войти в журнал</button>
+            <button onclick="openRegisterModal()" style="background:#0284c7; margin-top:8px;">📝 Регистрация нового позывного</button>
+            <p id="login-error" style="color:#ef4444; display:none; margin:0; font-size: 14px;">❌ Ошибка входа!</p>
+            <div class="divider">или</div>
+            <button class="viewer-btn" onclick="loginAsViewer()">👁️ Просмотр (Без пароля)</button>
+            <button class="pwa-install-btn" onclick="installPWA()" style="display:none; background:#10b981; margin-top:8px;">📲 Скачать приложение МСБ55115</button>
+        </div>
+    </div>
+
+    <div id="register-modal">
+        <div class="login-box" style="border-color:#38bdf8;">
+            <h3 style="margin:0; color:#38bdf8;">📝 Регистрация позывного</h3>
+            <p style="color:#94a3b8; font-size:12px; margin:0;">После отправки заявки АДМИН увидит её и одобрит ваш доступ</p>
+            <label style="font-size:12px; color:#cbd5e1; text-align:left;">Подразделение:</label>
+            <select id="reg-unit-select"></select>
+            <input type="text" id="reg-callsign" placeholder="Придумайте Позывной (например: Сокол)...">
+            <input type="text" id="reg-pass" placeholder="Придумайте Пароль...">
+            <div id="reg-status-msg" style="font-size:13px; font-weight:bold; display:none;"></div>
+            <button onclick="submitRegistration()" style="background:#22c55e;">✅ Отправить заявку АДМИНУ</button>
+            <button onclick="closeRegisterModal()" style="background:#475569;">Отмена</button>
+        </div>
+    </div>
+
+    <div id="admin-users-modal">
+        <div class="users-modal-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:10px; margin-bottom:12px;">
+                <div style="font-size:18px; font-weight:bold; color:#38bdf8;">👥 Управление пользователями и правами доступа</div>
+                <button class="lb-btn close" onclick="closeAdminUsersModal()">✖ Закрыть</button>
+            </div>
+            <div style="margin-bottom:16px;">
+                <div style="color:#facc15; font-weight:bold; margin-bottom:8px;">⏳ Заявки на одобрение регистрации:</div>
+                <div id="admin-pending-list" style="color:#94a3b8; font-size:13px;">Нет новых заявок</div>
+            </div>
+            <div>
+                <div style="color:#4ade80; font-weight:bold; margin-bottom:8px;">✅ Зарегистрированные позывные (Галочки = что разрешено видеть и делать):</div>
+                <div id="admin-approved-list" style="color:#94a3b8; font-size:13px;">Загрузка...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="sound-modal">
+        <div class="users-modal-box" style="max-width:500px; border-color:#38bdf8;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; padding-bottom:10px; margin-bottom:12px;">
+                <div style="font-size:17px; font-weight:bold; color:#38bdf8;">🎵 Выбор звука уведомлений и тревоги</div>
+                <button class="lb-btn close" onclick="closeSoundModal()">✖ Закрыть</button>
+            </div>
+            <p style="color:#94a3b8; font-size:12px; margin-top:0;">Выберите сигнал. Нажмите на строку, чтобы прослушать и сохранить:</p>
+            <div id="sound-options-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+    </div>
+    <div id="input-panel" class="panel" style="display: none;">
+        <div class="status-bar">
+            <div>
+                Вы вошли как: <span id="my-name" style="font-weight:bold;"></span>
+                <span id="my-callsign-badge" style="color:#38bdf8; font-weight:bold; margin-left:6px;"></span>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button type="button" onclick="triggerDevCallAlert()" style="width:auto; padding:6px 12px; background:#0284c7; font-size:13px;" title="Аудиозвонок">📞 Звонок</button>
+                <button type="button" onclick="triggerDevCallAlert()" style="width:auto; padding:6px 12px; background:#7c3aed; font-size:13px;" title="Видеозвонок">🎥 Видео</button>
+                <button id="admin-users-btn" onclick="openAdminUsersModal()" style="display:none; width:auto; padding:6px 12px; background:#f59e0b; color:#000; font-size:13px;">👥 Пользователи и заявки <span id="pending-count-badge" style="background:#ef4444; color:#fff; padding:1px 6px; border-radius:10px; display:none;">0</span></button>
+                <button class="pwa-install-btn" onclick="installPWA()" style="display:none; width:auto; padding:6px 12px; background:#10b981; font-size:13px;">📲 Установить приложение</button>
+                <button onclick="logoutUser()" style="width:auto; padding:6px 14px; background:#475569; font-size:13px;">🚪 Выйти</button>
+            </div>
+        </div>
+
+        <div class="grid-inputs" id="dynamic-inputs"></div>
+        <button class="send-btn" onclick="submitRow()">📤 ОТПРАВИТЬ ЗАПИСЬ В ЖУРНАЛ</button>
+        <button id="stream-main-btn" class="stream-btn" onclick="handleStreamBtnClick()">🎥 ВИДЕОСТРИМ МСБ-55115</button>
+        <button id="maps-main-btn" class="maps-btn" onclick="toggleMapsSection()">🗺️ ВВОДНЫЕ / КАРТА</button>
+        <button class="archive-main-btn" onclick="openArchivePage()">🗂️ АРХИВ ЖУРНАЛА (КАЛЕНДАРЬ ПО ДНЯМ)</button>
+
+        <div id="maps-section-box" class="maps-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div style="font-weight:bold; color:#c4b5fd; font-size:15px;">🗺️ ВВОДНЫЕ И КАРТЫ ОБСТАНОВКИ (Последние 6 шт.)</div>
+                <button onclick="toggleMapsSection()" style="width:auto; padding:4px 10px; background:#334155; font-size:12px;">Свернуть ▲</button>
+            </div>
+            <div id="admin-maps-upload" style="display:none; margin-top:10px; padding:10px; background:rgba(15,23,42,0.8); border-radius:8px; border:1px dashed #8b5cf6;">
+                <div style="font-size:13px; color:#ddd6fe; font-weight:bold; margin-bottom:8px;">📤 Загрузить новую карту / вводную (Только АДМИН):</div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                    <input type="file" id="map-file-input" accept="image/*" style="flex:1; min-width:200px; padding:6px;">
+                    <select id="map-target-select" style="width:auto; min-width:190px;"></select>
+                    <button onclick="uploadMapPhoto()" style="width:auto; background:#7c3aed; padding:10px 18px;">🚀 ОТПРАВИТЬ КАРТУ</button>
                 </div>
-                <!-- Форма добавления позывного в друзья -->
-                <div class="add-friend-input-row">
-                    <input type="text" id="new-friend-name" placeholder="Добавить позывной...">
-                    <button onclick="sendFriendRequest()">+</button>
+            </div>
+            <div id="maps-tiles-grid" class="maps-grid">
+                <div style="color:#64748b; font-size:13px;">Загрузка карт...</div>
+            </div>
+        </div>
+
+        <div id="admin-stream-box" style="display:none; margin-top:10px; padding:12px; background:rgba(37, 99, 235, 0.12); border:1px solid #3b82f6; border-radius:8px;">
+            <div style="font-weight:bold; color:#60a5fa; margin-bottom:8px;">📡 Управление видеостримом (АДМИН):</div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <input type="text" id="stream-url-input" placeholder="Вставьте ссылку на видеовстречу SaluteJazz..." value="https://salutejazz.ru" style="flex:1; min-width:220px;">
+                <button onclick="startVideoStream()" style="width:auto; background:#16a34a; padding:10px 18px;">▶️ ЗАПУСТИТЬ И ОПОВЕСТИТЬ ВСЕХ</button>
+                <button onclick="stopVideoStream()" style="width:auto; background:#dc2626; padding:10px 18px;">⏹️ ОСТАНОВИТЬ СТРИМ</button>
+            </div>
+        </div>
+
+        <div id="user-stream-box" style="display:none; margin-top:10px; padding:12px; background:rgba(220, 38, 38, 0.15); border:2px solid #ef4444; border-radius:8px; text-align:center;">
+            <div style="font-weight:bold; color:#fca5a5; margin-bottom:8px; font-size:15px;">🔴 ВНИМАНИЕ! СЕЙЧАС ИДЕТ ПРЯМОЙ ВИДЕОСТРИМ МСБ-55115!</div>
+            <button onclick="openActiveStreamWindow()" style="background:#ef4444; font-size:15px; padding:12px;">🔗 ПЕРЕЙТИ ПО ССЫЛКЕ НА ВИДЕОСТРИМ</button>
+        </div>
+
+        <div id="admin-zone" style="display: none; margin-top: 15px; border-top: 1px solid #334155; padding-top: 12px;">
+            <div class="admin-panel" id="admin-alert-box">
+                <div style="font-weight:bold; color:#ef4444; margin-bottom:8px;">⚡ УПРАВЛЕНИЕ И СВЯЗЬ (ОТПРАВКА СООБЩЕНИЯ):</div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <select id="admin-target" style="width: auto; min-width: 220px;"></select>
+                    <input type="text" id="admin-msg" placeholder="Введите текст сообщения..." style="flex: 1; min-width: 200px;">
+                    <button onclick="sendAdminAlert()" style="width: auto; background: #ef4444; padding: 10px 20px;">🚨 ОТПРАВИТЬ</button>
                 </div>
-                <!-- Списки контактов и заявок -->
-                <div class="sidebar-scrollable-lists">
-                    <div id="requests-box" class="requests-section-box" style="display:none;"></div>
-                    <div id="friends-box" class="friends-list-container"></div>
+            </div>
+        </div>
+
+        <div id="clear-history-box" style="display: none; margin-top: 10px; text-align: right;">
+            <button onclick="clearHistoryAdmin()" style="width: auto; background: #7f1d1d; border: 1px solid #ef4444; padding: 8px 16px; font-size: 13px;">🗑️ Очистить весь журнал</button>
+        </div>
+    </div>
+    <div id="viewer-stream-panel" class="panel" style="display:none; background:rgba(220, 38, 38, 0.15); border:2px solid #ef4444; text-align:center;">
+        <div style="font-weight:bold; color:#fca5a5; margin-bottom:8px; font-size:15px;">🔴 ВНИМАНИЕ! ИДЕТ ПРЯМОЙ ВИДЕОСТРИМ МСБ-55115!</div>
+        <button onclick="openActiveStreamWindow()" style="background:#ef4444; font-size:15px; padding:12px;">🔗 ПЕРЕЙТИ ПО ССЫЛКЕ НА ВИДЕОСТРИМ</button>
+    </div>
+
+    <div class="notifications-window" id="notifications-window">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <h3 style="margin:0;">🔔 Окно уведомлений и Связь (Последние 10 сообщений)</h3>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                <button type="button" onclick="triggerDevCallAlert()" style="width:auto; padding:6px 10px; background:#0284c7; font-size:12px; border-radius:6px;" title="Аудиозвонок">📞</button>
+                <button type="button" onclick="triggerDevCallAlert()" style="width:auto; padding:6px 10px; background:#7c3aed; font-size:12px; border-radius:6px;" title="Видеозвонок">🎥</button>
+                <button type="button" id="sound-select-btn" onclick="openSoundModal()" style="width:auto; padding:6px 12px; background:#0284c7; color:#fff; font-size:12px; font-weight:bold; border-radius:6px;">🎵 Мелодия</button>
+                <button type="button" id="notif-archive-btn" onclick="openArchivePage()" style="display:none; width:auto; padding:6px 12px; background:#d97706; color:#000; font-size:12px; font-weight:bold; border-radius:6px;">🗂️ Открыть Архив</button>
+                <button type="button" class="open-messenger-btn" onclick="openMessengerWindow()">
+                    💬 ОТКРЫТЬ МЕССЕНДЖЕР
+                    <span id="msg-unread-total" class="msg-unread-total">0</span>
+                </button>
+            </div>
+        </div>
+        <div class="notif-list" id="notifications-list">
+            <div style="color: #64748b; font-size: 13px;" id="no-notif-placeholder">Пока нет уведомлений</div>
+        </div>
+        <div id="mini-notif-reply-bar" style="display:none; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid #334155; flex-wrap:wrap; align-items:center;">
+            <select id="mini-notif-target" style="width:auto; min-width:190px; padding:8px; font-size:13px;"></select>
+            <input type="text" id="mini-notif-input" placeholder="Быстрое сообщение другу..." style="flex:1; min-width:180px; padding:8px; font-size:13px;" onkeydown="if(event.key==='Enter') sendMiniNotification()">
+            <button type="button" onclick="sendMiniNotification()" style="width:auto; background:#ef4444; padding:8px 16px; font-size:13px;">🚨 Отправить</button>
+        </div>
+    </div>
+
+    <div id="journal-table-section" class="table-wrapper" style="display:none;">
+        <table>
+            <thead><tr id="table-headers"></tr></thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
+
+    <div id="messenger-modal">
+        <div class="msg-top-bar">
+            <div class="msg-top-title">
+                <span>🛡️ ВСТРОЕННЫЙ МЕССЕНДЖЕР МСБ-55115</span>
+                </span>
+            </div>
+            <div class="broadcast-ticker-wrap">
+                <div class="broadcast-ticker-move" id="msg-broadcast-ticker">📢 СВОДКА «ВСЕМ»: Пока нет общих оповещений...</div>
+            </div>
+            <button type="button" class="close-messenger-btn" onclick="closeMessengerWindow()">✖ ВЕРНУТЬСЯ В ЖУРНАЛ</button>
+        </div>
+
+        <div class="app-wrapper">
+            <div class="forward-modal" id="forward-modal" onclick="closeForwardModal()">
+                <div class="modal-card" onclick="event.stopPropagation()">
+                    <div class="modal-header">Выберите чат для пересылки</div>
+                    <div class="modal-list" id="modal-contacts-list"></div>
+                    <button type="button" class="modal-close" onclick="closeForwardModal()">Отмена</button>
                 </div>
-                <button class="messenger-close-btn-mobile" onclick="closeMessengerWindow()">❌ ЗАКРЫТЬ МЕССЕНДЖЕР</button>
             </div>
 
-            <!-- Правая колонка: Активная зона чата -->
-            <div id="app-chat-area" class="messenger-chat-area">
-                <div class="chat-main-header">
-                    <button class="chat-back-btn-mobile" onclick="closeChatMobile()">⬅</button>
-                    <div class="partner-avatar-box" id="partner-avatar">?</div>
-                    <div class="partner-meta-box">
-                        <div class="partner-title-name" id="partner-display-name">Чат не выбран</div>
-                        <div class="partner-status-label" id="chat-status" style="display:none;">не в сети</div>
+            <div class="forward-modal" id="group-modal" onclick="closeGroupModal()">
+                <div class="modal-card" onclick="event.stopPropagation()">
+                    <div class="modal-header">Создать конференцию</div>
+                    <div class="group-form">
+                        <input type="text" id="group-name-input" placeholder="Название (напр. Штаб)">
+                        <input type="text" id="group-members-input" placeholder="Участники через запятую">
+                        <button type="button" onclick="submitCreateGroup()">Создать группу</button>
                     </div>
-                    <!-- НАШИ ТРУБКИ ЗВОНКОВ В ШАПКЕ АКТИВНОГО ЧАТА -->
-                    <div class="call-btn-container">
-                        <button class="call-icon-btn" onclick="triggerDevCallAlert()" title="Голосовой вызов МСБ">📞</button>
-                        <button class="call-icon-btn" onclick="triggerDevCallAlert()" title="Видеовызов МСБ">🎥</button>
+                    <button type="button" class="modal-close" onclick="closeGroupModal()" style="margin-top:8px;">Отмена</button>
+                </div>
+            </div>
+            <div class="sidebar" id="app-sidebar">
+                <div class="sidebar-header">
+                    <div class="user-profile">
+                        <label style="cursor:pointer; position:relative;" title="Нажмите, чтобы загрузить свою аватарку">
+                            <div class="avatar" id="my-avatar">Я</div>
+                            <input type="file" id="my-avatar-input" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">
+                            <span style="position:absolute; bottom:-2px; right:-2px; background:#00a884; color:#fff; border-radius:50%; font-size:10px; padding:2px 4px;">📷</span>
+                        </label>
+                        <div>
+                            <div class="username-title" id="msg-my-name">Боец</div>
+                            <div style="font-size:10px; color:#94a3b8;">Нажмите на фото для смены аватарки</div>
+                        </div>
                     </div>
-                    <button class="messenger-close-btn-desktop" onclick="closeMessengerWindow()">&times;</button>
+                    <button type="button" class="create-group-btn" onclick="openCreateGroupModal()" title="Создать конференцию">👥+</button>
                 </div>
-                <!-- Список сообщений -->
-                <div id="messages" class="chat-messages-history-box">
-                    <div class="chat-placeholder">Выберите контакт или конференцию слева.</div>
+
+                <div class="add-friend-bar">
+                    <input type="text" id="new-friend-name" placeholder="Введите Позывной друга...">
+                    <button type="button" onclick="sendFriendRequest()" title="Отправить запрос">+</button>
                 </div>
-                <!-- Превью записи видео-кружка под телефон -->
-                <video id="video-preview" autoplay playsinline muted style="display:none; width:120px; height:120px; border-radius:50%; object-fit:cover; position:absolute; bottom:70px; right:15px; border:2px solid #ef4444; z-index:10; background:#000; transform:scaleX(-1);"></video>
-                <!-- Панель ответа / цитирования -->
-                <div id="reply-bar" style="display:none; align-items:center; background:#1e293b; padding:6px 12px; border-left:4px solid #38bdf8; font-size:12px; font-family:monospace; color:#cbd5e1; justify-content:space-between; gap:10px;">
-                    <span id="reply-bar-text" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;"></span>
-                    <button onclick="cancelReply()" style="background:none; border:none; color:#ef4444; font-size:16px; cursor:pointer; font-weight:bold; width:auto; padding:0;">&times;</button>
+
+                <div class="lists-container">
+                    <div class="requests-list" id="requests-box" style="display: none;"></div>
+                    <div class="friends-list" id="friends-box"></div>
                 </div>
-                <!-- Нижняя панель ввода мессенджера -->
-                <div class="chat-input-controls-bar">
-                    <button class="media-attach-btn" onclick="document.getElementById('chat-file-input').click()" title="Прикрепить файл/фото">📎</button>
-                    <input type="file" id="chat-file-input" style="display:none;" onchange="uploadAnyFile(this)">
-                    <input type="text" id="text-input" placeholder="Сообщение..." disabled autocomplete="off">
-                    <button class="media-record-btn" id="voice-btn" onclick="toggleVoiceRecord()" title="Запись голосового сообщения">🎙️</button>
-                    <button class="media-record-btn" id="video-btn" onclick="toggleVideoRecord()" title="Запись видео-кружка">🎥</button>
-                    <button class="chat-submit-send-btn" onclick="sendMessage()">➔</button>
+            </div>
+
+            <div class="chat-area">
+                <video id="video-preview" class="video-preview-circle" muted playsinline autoplay></video>
+
+                <div class="chat-header">
+                    <button type="button" class="back-btn" onclick="closeChatMobile()">⬅️</button>
+                    <div class="avatar" id="partner-avatar" style="width: 38px; height: 38px; font-size: 14px; cursor:pointer;" onclick="if(this.querySelector('img')) openPhotoLightbox(this.querySelector('img').src, 'Аватар контакта')">?</div>
+                    <div class="chat-header-info" style="flex:1;">
+                        <div class="partner-name" id="partner-display-name">Чат не выбран</div>
+                        <div class="partner-status" id="chat-status">в сети</div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <button type="button" onclick="triggerDevCallAlert()" style="width:auto; padding:6px 10px; background:#1e293b; border:1px solid #334155; border-radius:8px; font-size:16px;" title="Аудиозвонок">📞</button>
+                        <button type="button" onclick="triggerDevCallAlert()" style="width:auto; padding:6px 10px; background:#1e293b; border:1px solid #334155; border-radius:8px; font-size:16px;" title="Видеозвонок">🎥</button>
+                    </div>
+                </div>
+
+                <div id="messages">
+                    <div class="chat-placeholder">Выберите контакт или конференцию слева для начала связи.</div>
+                </div>
+
+                <div class="reply-bar" id="reply-bar">
+                    <div class="reply-bar-text" id="reply-bar-text">Ответ на сообщение...</div>
+                    <button type="button" class="reply-bar-close" onclick="cancelReply()">✕</button>
+                </div>
+
+                <div class="input-area">
+                    <label class="icon-btn" title="Прикрепить фото или документ">
+                        📎
+                        <input type="file" id="file-input" style="display: none;" onchange="uploadAnyFile(this)">
+                    </label>
+                    <input type="text" id="text-input" placeholder="Сообщение..." autocomplete="off" disabled>
+                    <button type="button" class="icon-btn" id="voice-btn" onclick="toggleVoiceRecord()" title="Голосовое сообщение">🎙️</button>
+                    <button type="button" class="icon-btn" id="video-btn" onclick="toggleVideoRecord()" title="Видео-кружок">🎥</button>
+                    <button type="button" class="msg-send-btn" onclick="sendMessage()">➤</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ОКНО "ФУНКЦИЯ В РАЗРАБОТКЕ" ДЛЯ ТРУБОК ВЫЗОВА -->
-    <div id="dev-alert-modal" onclick="closeDevCallAlert(event)">
-        <div class="dev-alert-card" onclick="event.stopPropagation()">
-            <div style="font-size:36px; margin-bottom:8px;">⚠️</div>
-            <div style="color:#38bdf8; font-size:14px; font-weight:bold; margin-bottom:10px; letter-spacing:0.5px;">ФУНКЦИЯ В РАЗРАБОТКЕ МСБ-55115</div>
-            <div style="color:#cbd5e1; font-size:12px; line-height:1.5; background:#0f172a; padding:12px; border-radius:6px; border:1px solid #334155; text-align:left;">
-                Защищенный тактический канал связи **МСБ-55115** готовится к запуску.<br><br>Модули шифрования голосовых пакетов и видеопотока реального времени проходят проверку криптографической службы.
-            </div>
-            <button class="update-btn" style="background:#38bdf8; color:#0f172a; box-shadow:none; margin-top:15px; padding:10px;" onclick="closeDevCallAlert(null)">ПРИНЯЛ</button>
-        </div>
-    </div>
-    <!-- МОДАЛЬНОЕ ОКНО ПРОСМОТРА КАРТ И ЛАЙТБОКСА С ТЕМАМИ И ГАЛЕРЕЕЙ ГИФОК -->
-    <div id="photo-lightbox" class="lightbox-overlay" style="display:none;" onclick="closePhotoLightbox()">
-        <div class="lightbox-card" onclick="event.stopPropagation()">
-            <div class="lightbox-header-row">
-                <span id="lightbox-caption" class="lightbox-text-caption">Просмотр вводной / снимка</span>
-                <span id="zoom-level-label" class="lightbox-zoom-badge">100%</span>
-                <button type="button" class="lightbox-close-x-btn" onclick="closePhotoLightbox()">&times;</button>
-            </div>
-            
-            <!-- Зона зума и панорамирования фото -->
-            <div id="lb-viewport" class="lightbox-viewport-view">
-                <img id="lightbox-img" src="" alt="Тактический объект">
-            </div>
-
-            <!-- ПАНЕЛЬ УПРАВЛЕНИЯ ТАКТИЧЕСКИМИ ТЕМАМИ МСБ-55115 -->
-            <div class="theme-select-panel">
-                <div class="theme-chip military" onclick="switchAppTacticalTheme('military')" title="Переключить на темно-оливковый камуфляж хаки">🛡️ ВОЕННАЯ</div>
-                <div class="theme-chip rocket" onclick="switchAppTacticalTheme('rocket')" title="Переключить на стальной металл и черно-желтый неон">🚀 РАКЕТНАЯ</div>
-                <div class="theme-chip space" onclick="switchAppTacticalTheme('space')" title="Переключить на глубокий космический радарный неон">🌌 КОСМИЧЕСКАЯ</div>
-            </div>
-
-            <!-- ГАЛЕРЕЯ АРМЕЙСКИХ, РАКЕТНЫХ И КОСМИЧЕСКИХ GIF-АНИМАЦИЙ -->
-            <div class="gif-gallery-title">🖼️ ДОСТУПНЫЕ ТАКТИЧЕСКИЕ GIF-ЗАСТАВКИ (ТЕМАТИЧЕСКИЕ):</div>
-            <div class="gif-grid-container" id="tactical-gif-grid-view"></div>
-        </div>
-    </div>
-    <!-- МОДАЛЬНОЕ ОКНО АРХИВА С КАЛЕНДАРЕМ -->
-    <div id="archive-page" class="archive-full-overlay" style="display:none;">
-        <div class="archive-window-box">
-            <div class="archive-header-nav">
-                <h2>🗂️ АРХИВ ЖУРНАЛА И ПРОВЕРКА СВЕДЕНИЙ</h2>
-                <button class="archive-close-x-btn" onclick="closeArchivePage()">&times;</button>
-            </div>
-            <div class="archive-main-layout">
-                <!-- Календарь -->
-                <div class="archive-calendar-sidebar">
-                    <div class="calendar-month-controls">
-                        <button onclick="changeArchiveMonth(-1)">◀</button>
-                        <span id="cal-month-label">ЗАГРУЗКА...</span>
-                        <button onclick="changeArchiveMonth(1)">▶</button>
-                    </div>
-                    <div class="calendar-days-header-row">
-                        <div>ПН</div><div>ВТ</div><div>СР</div><div>ЧТ</div><div>ПТ</div><div>СБ</div><div>ВС</div>
-                    </div>
-                    <div class="calendar-days-grid-mesh" id="cal-days-grid"></div>
-                    <div class="calendar-selected-date-card" id="archive-selected-label">📅 Не выбрана</div>
-                </div>
-                <!-- Таблица данных архива -->
-                <div class="archive-table-data-area">
-                    <div class="archive-table-title-bar">
-                        <h3 id="archive-table-title">📊 Архив журнала</h3>
-                        <span class="archive-badge-count" id="archive-count-badge">0 записей</span>
-                    </div>
-                    <div class="archive-table-scroll-container">
-                        <table id="archive-data-table">
-                            <thead>
-                                <tr id="archive-table-headers"></tr>
-                            </thead>
-                            <tbody id="archive-table-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- МОДАЛЬНОЕ ОКНО СОЗДАНИЯ КОНФЕРЕНЦИИ -->
-    <div id="group-modal" class="modal-mini-overlay" style="display:none;">
-        <div class="modal-mini-card">
-            <div class="modal-header">
-                <h3>👥 СОЗДАТЬ КОНФЕРЕНЦИЮ</h3>
-                <button onclick="closeGroupModal()">&times;</button>
-            </div>
-            <div class="modal-body-form" style="padding:15px; font-family:monospace;">
-                <div class="form-group" style="margin-bottom:12px;">
-                    <label style="color:#94a3b8; font-size:11px; display:block; margin-bottom:4px;">НАЗВАНИЕ КОНФЕРЕНЦИИ</label>
-                    <input type="text" id="group-name-input" placeholder="Например: ГРУППА ЭФИРА 1" style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
-                </div>
-                <div class="form-group" style="margin-bottom:15px;">
-                    <label style="color:#94a3b8; font-size:11px; display:block; margin-bottom:4px;">УЧАСТНИКИ (ЧЕРЕЗ ЗАПАТУЮ)</label>
-                    <input type="text" id="group-members-input" placeholder="Позывной1, Позывной2..." style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
-                </div>
-                <button class="send-btn" onclick="submitCreateGroup()" style="margin:0; width:100%; padding:10px; background:#22c55e;">СОЗДАТЬ ГРУППУ</button>
-            </div>
-        </div>
-    </div>
-    <!-- МОДАЛЬНОЕ ОКНО УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ ДЛЯ АДМИНА -->
-    <div id="admin-users-modal" class="modal-large-overlay" style="display:none;">
-        <div class="modal-large-card">
-            <div class="modal-header">
-                <h3>👥 УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ, ЗАЯВКАМИ И ДОСТУПОМ</h3>
-                <button onclick="closeAdminUsersModal()">&times;</button>
-            </div>
-            <div class="modal-large-body-scroll">
-                <h4 style="color:#facc15; font-family:monospace; margin-bottom:8px; border-bottom:1px solid #334155; padding-bottom:4px;">⏳ НОВЫЕ ЗАЯВКИ НА РЕГИСТРАЦИЮ (ОЖИДАЮТ ОДОБРЕНИЯ)</h4>
-                <div id="admin-pending-list" style="margin-bottom:20px; font-family:monospace; font-size:12px;"></div>
-                
-                <h4 style="color:#4ade80; font-family:monospace; margin-bottom:8px; border-bottom:1px solid #334155; padding-bottom:4px;">✅ АКТИВНЫЕ ПОДРАЗДЕЛЕНИЯ И ПОЗЫВНЫЕ В СИСТЕМЕ</h4>
-                <div id="admin-approved-list" style="font-family:monospace; font-size:12px;"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- МОДАЛЬНОЕ ОКНО РЕГИСТРАЦИИ ПОЗЫВНОГО -->
-    <div id="register-modal" class="modal-mini-overlay" style="display:none;">
-        <div class="modal-mini-card">
-            <div class="modal-header">
-                <h3>📝 РЕГИСТРАЦИЯ В МСБ-55115</h3>
-                <button onclick="closeRegisterModal()">&times;</button>
-            </div>
-            <div class="modal-body-form" style="padding:15px; font-family:monospace;">
-                <div class="form-group" style="margin-bottom:10px;">
-                    <label style="color:#94a3b8; font-size:11px; display:block; margin-bottom:4px;">ВЫБЕРИТЕ РОТУ / ШР</label>
-                    <select id="reg-unit-select" style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;"></select>
-                </div>
-                <div class="form-group" style="margin-bottom:10px;">
-                    <label style="color:#94a3b8; font-size:11px; display:block; margin-bottom:4px;">ВАШ ЛИЧНЫЙ ПОЗЫВНОЙ</label>
-                    <input type="text" id="reg-callsign" placeholder="Введите позывной..." style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
-                </div>
-                <div class="form-group" style="margin-bottom:12px;">
-                    <label style="color:#94a3b8; font-size:11px; display:block; margin-bottom:4px;">ПАРОЛЬ ДЛЯ ВХОДА</label>
-                    <input type="password" id="reg-pass" placeholder="••••••••" style="width:100%; padding:8px; background:#0f172a; border:1px solid #334155; color:#fff; border-radius:6px;">
-                </div>
-                <div id="reg-status-msg" style="display:none; font-size:12px; margin-bottom:12px; font-weight:bold; text-align:center;"></div>
-                <button class="send-btn" onclick="submitRegistration()" style="margin:0; width:100%; padding:10px; background:#3b82f6;">ОТПРАВИТЬ ЗАЯВКУ АДМИНУ</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- МОДАЛЬНОЕ ОКНО ПРЕДУПРЕЖДЕНИЙ И ТРЕВОГ (ALERT MODAL) -->
-    <div id="alert-modal" style="display:none;">
-        <div class="alert-container-box">
-            <div class="alert-pulse-icon">🛑 ТРЕВОГА</div>
-            <div class="alert-target-title" id="alert-target-label">ДЛЯ [--]:</div>
-            <div class="alert-msg-body-text" id="alert-text">Внимание! Обнаружена активность сектора. Ознакомьтесь с оперативной сводкой.</div>
-            <button class="alert-acknowledge-btn" onclick="confirmAlert()">ДА, Я ПОНЯЛ</button>
-        </div>
-    </div>
-
-    <!-- ПОДКЛЮЧЕНИЕ СЦЕНАРИЕВ ТАКТИЧЕСКИХ МОДУЛЕЙ -->
-    <script src="/messenger.js"></script>
     <script src="/journal.js"></script>
+    <script src="/messenger.js"></script>
 </body>
 </html>
