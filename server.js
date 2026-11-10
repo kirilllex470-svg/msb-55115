@@ -93,12 +93,15 @@ let streamState = { active: false, url: '' };
 
 function getServerDateTime() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
-    return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+    return String(d.getUTCDate()).padStart(2, '0') + '.' +
+           String(d.getUTCMonth() + 1).padStart(2, '0') + '.' +
+           d.getUTCFullYear() + ' ' +
+           String(d.getUTCHours()).padStart(2, '0') + ':' +
+           String(d.getUTCMinutes()).padStart(2, '0');
 }
 
-// МЕТКА ВРЕМЕНИ И ID ЗАПУСКА СЕРВЕРА ДЛЯ ОКНА ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ
-const SERVER_BOOT_ID = 'boot_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
-const SERVER_BOOT_TIME = getServerDateTime();
+var SERVER_BOOT_ID = 'build_' + Date.now();
+var SERVER_BOOT_TIME = getServerDateTime();
 function makeTacticalIcon(size) {
     const crcTable = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -185,7 +188,7 @@ const SW_CODE = [
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
-    "        tag: 'msb-alert-' + Date.now(),",
+    "        tag: 'msb-single-alert',",
     "        data: { url: '/' }",
     "    }));",
     "});",
@@ -208,11 +211,49 @@ function readBodyJSON(req, cb) {
         try { cb(null, JSON.parse(body)); } catch (e) { cb(e, null); }
     });
 }
+const SW_CODE = [
+    "self.addEventListener('install', function(e) { self.skipWaiting(); });",
+    "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
+    "self.addEventListener('push', function(event) {",
+    "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!' };",
+    "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
+    "    event.waitUntil(self.registration.showNotification(data.title, {",
+    "        body: data.body,",
+    "        icon: '/icon-192.png',",
+    "        badge: '/icon-192.png',",
+    "        vibrate: Array.of(400, 100, 400, 100, 400, 200, 600),",
+    "        silent: false,",
+    "        requireInteraction: true,",
+    "        renotify: true,",
+    "        tag: 'msb-single-alert',",
+    "        data: { url: '/' }",
+    "    }));",
+    "});",
+    "self.addEventListener('notificationclick', function(event) {",
+    "    event.notification.close();",
+    "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
+    "        for (var i = 0; i < clientList.length; i++) {",
+    "            var cl = clientList[i];",
+    "            if (cl && 'focus' in cl) return cl.focus();",
+    "        }",
+    "        if (clients.openWindow) return clients.openWindow('/');",
+    "    }));",
+    "});"
+].join('\n');
+
+function readBodyJSON(req, cb) {
+    let body = '';
+    req.on('data', function(chunk) { body += chunk.toString(); });
+    req.on('end', function() {
+        try { cb(null, JSON.parse(body)); } catch (e) { cb(e, null); }
+    });
+}
+
 const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
     if (urlPath === '/sw.js') {
-        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-store, no-cache, must-revalidate' });
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-cache' });
         return res.end(SW_CODE);
     }
     if (urlPath === '/manifest.json') {
@@ -227,15 +268,11 @@ const server = http.createServer(function(req, res) {
         res.writeHead(200, { 'Content-Type': 'image/png' });
         return res.end(TACTICAL_ICON_512);
     }
-    if (urlPath === '/api/version') {
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-        return res.end(JSON.stringify({ bootId: SERVER_BOOT_ID, bootTime: SERVER_BOOT_TIME }));
-    }
     if (urlPath === '/style.css' || urlPath === '/journal.js' || urlPath === '/messenger.js') {
         const cType = urlPath.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8';
         fs.readFile(path.join(__dirname, urlPath.slice(1)), function(err, data) {
             if (err) { res.writeHead(404); return res.end('Not Found'); }
-            res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' });
+            res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-cache' });
             res.end(data);
         });
         return;
@@ -503,18 +540,12 @@ const server = http.createServer(function(req, res) {
         let otherParticipants = new Array();
         if (room) {
             if (groupsDB[room] && Array.isArray(groupsDB[room].members)) {
-                otherParticipants = groupsDB[room].members
-                    .map(function(m) { return String(m).trim().toLowerCase(); })
-                    .filter(function(m) { return m !== reqUser; });
+                otherParticipants = groupsDB[room].members.map(function(m) { return String(m).trim().toLowerCase(); }).filter(function(m) { return m !== reqUser; });
                 partnerOnline = otherParticipants.some(function(m) { return isUserOnlineNow(m); });
             } else {
                 const pairParts = room.split('_').at(0).split(',');
-                otherParticipants = pairParts
-                    .map(function(p) { return String(p).trim().toLowerCase(); })
-                    .filter(function(p) { return p !== reqUser; });
-                if (otherParticipants.length > 0) {
-                    partnerOnline = isUserOnlineNow(otherParticipants.at(0));
-                }
+                otherParticipants = pairParts.map(function(p) { return String(p).trim().toLowerCase(); }).filter(function(p) { return p !== reqUser; });
+                if (otherParticipants.length > 0) partnerOnline = isUserOnlineNow(otherParticipants.at(0));
             }
         }
         const enriched = rawList.map(function(msg) {
@@ -560,51 +591,26 @@ const server = http.createServer(function(req, res) {
             else if (ext === '.png') contentType = 'image/png';
             else if (ext === '.gif') contentType = 'image/gif';
             else if (ext === '.pdf') contentType = 'application/pdf';
-
             const range = req.headers.range;
             if (range) {
                 const parts = range.replace(/bytes=/, "").split("-");
                 const start = parseInt(parts.at(0), 10);
                 const end = parts.at(1) ? parseInt(parts.at(1), 10) : stat.size - 1;
-                if (start >= stat.size) {
-                    res.writeHead(416, { 'Content-Range': 'bytes */' + stat.size });
-                    return res.end();
-                }
-                res.writeHead(206, {
-                    'Content-Range': 'bytes ' + start + '-' + end + '/' + stat.size,
-                    'Accept-Ranges': 'bytes',
-                    'Content-Length': (end - start) + 1,
-                    'Content-Type': contentType,
-                    'Cache-Control': 'public, max-age=86400'
-                });
+                if (start >= stat.size) { res.writeHead(416, { 'Content-Range': 'bytes */' + stat.size }); return res.end(); }
+                res.writeHead(206, { 'Content-Range': 'bytes ' + start + '-' + end + '/' + stat.size, 'Accept-Ranges': 'bytes', 'Content-Length': (end - start) + 1, 'Content-Type': contentType, 'Cache-Control': 'public, max-age=86400' });
                 fs.createReadStream(filePath, { start: start, end: end }).pipe(res);
             } else {
-                res.writeHead(200, {
-                    'Content-Length': stat.size,
-                    'Content-Type': contentType,
-                    'Accept-Ranges': 'bytes',
-                    'Cache-Control': 'public, max-age=86400'
-                });
+                res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=86400' });
                 fs.createReadStream(filePath).pipe(res);
             }
         });
         return;
     }
-
     fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
-        if (err) {
-            res.writeHead(500);
-            res.end('Error loading index.html');
-        } else {
-            res.writeHead(200, {
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
-            });
-            res.end(data);
-        }
+        if (err) { res.writeHead(500); res.end('Error loading index.html'); }
+        else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' }); res.end(data); }
     });
 });
-
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup) {
     const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
     let lastMsgText = "Нет сообщений", lastMsgTime = "", unreadCount = 0;
@@ -614,7 +620,7 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         if (lastMsg.type === 'audio') lastMsgText = "🎙️ " + prefix + "Голосовое";
         else if (lastMsg.type === 'video') lastMsgText = "🎥 " + prefix + "Кружок";
         else if (lastMsg.type === 'file') lastMsgText = "📎 " + prefix + "Файл";
-        else if (lastMsg.type === 'gif') lastMsgText = "🎬 " + prefix + "GIF-анимация";
+        else if (lastMsg.type === 'gif') lastMsgText = "🎬 " + prefix + "GIF";
         else lastMsgText = prefix + (lastMsg.text || "");
         lastMsgTime = lastMsg.time || "";
         roomMessages.forEach(function(msg) {
@@ -636,6 +642,7 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         online: isOnline
     };
 }
+
 function handleMultipartSend(req, res) {
     const contentType = req.headers['content-type'] || '';
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
@@ -708,7 +715,6 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
     notifyJournalFromMessenger(room, sender, finalContent, type, timeStr);
     res.writeHead(200); res.end('OK');
 }
-
 function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     let cleanText = rawContent || '';
     if (type === 'audio') cleanText = '🎙️ Голосовое сообщение в Мессенджере';
@@ -716,19 +722,25 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     else if (type === 'file') cleanText = '📎 Файл в Мессенджере';
     else if (type === 'gif') cleanText = '🎬 GIF-анимация в Мессенджере';
     else cleanText = '💬 Мессенджер: ' + cleanText;
+    const senderLow = String(sender || '').trim().toLowerCase();
     let targets = new Array();
     if (groupsDB[room]) {
-        targets = groupsDB[room].members.filter(function(m) { return m.toLowerCase() !== sender.toLowerCase(); });
+        targets = (groupsDB[room].members || new Array()).filter(function(m) {
+            return String(m || '').trim().toLowerCase() !== senderLow;
+        });
     } else {
         const parts = room.split('_').at(0).split(',');
-        targets = parts.filter(function(n) { return n.toLowerCase() !== sender.toLowerCase(); });
+        targets = parts.filter(function(n) {
+            return String(n || '').trim().toLowerCase() !== senderLow;
+        });
     }
     targets.forEach(function(t) {
-        const uObj = usersDB[t.toLowerCase()];
+        const uObj = usersDB[String(t || '').trim().toLowerCase()];
         const realTarget = uObj ? uObj.username : t.toUpperCase();
         broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
+
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
@@ -742,9 +754,6 @@ function getIsoDateNow() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
     return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
-
-const SERVER_BOOT_ID = 'build_' + Date.now();
-const SERVER_BOOT_TIME = getServerDateTime();
 
 let currentActiveDay = getIsoDateNow();
 if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
@@ -765,7 +774,6 @@ setInterval(function() {
         broadcastWS({ type: 'daily_archived', date: currentActiveDay });
     }
 }, 30000);
-
 notificationsHistory.forEach(function(n) {
     if (!n.read) {
         if (!Array.isArray(activeAlerts[n.target])) activeAlerts[n.target] = new Array();
@@ -795,13 +803,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
     const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!', body: sender + ': ' + text });
-    const pushOptions = {
-        TTL: 0,
-        headers: {
-            'Urgency': 'high',
-            'Topic': 'admin-alert'
-        }
-    };
+    const pushOptions = { TTL: 0, headers: { 'Urgency': 'high', 'Topic': 'admin-alert' } };
     const tLow = String(target).toLowerCase();
     pushSubscriptions.forEach(function(item, index) {
         const uLow = String(item.user || '').toLowerCase();
@@ -816,6 +818,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     });
 }
+
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
         type: 'init',
@@ -827,18 +830,13 @@ wss.on('connection', function(ws) {
         streamState: streamState,
         vapidPublicKey: vapidKeys.publicKey
     }));
-
     ws.on('message', function(message) {
         try {
             const msg = JSON.parse(message.toString());
             if (msg.type === 'ping') {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
-                ws.send(JSON.stringify({
-                    type: 'pong',
-                    serverBootId: SERVER_BOOT_ID,
-                    serverBootTime: SERVER_BOOT_TIME
-                }));
+                ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
             if (msg.type === 'save_sub' && msg.sub) {
@@ -882,27 +880,32 @@ wss.on('connection', function(ws) {
                 const tStr = msg.readTime || now.toLocaleTimeString().slice(0, 5);
                 const whoStr = msg.readBy || 'Просмотр';
                 const stamp = whoStr + ' ' + tStr;
-                if (Array.isArray(activeAlerts[msg.target])) {
-                    if (msg.target === 'ВСЕМ') {
-                        activeAlerts[msg.target].forEach(function(a) {
-                            if (!msg.notifId || a.id === msg.notifId) {
-                                if (!Array.isArray(a.readList)) a.readList = new Array();
-                                if (a.readList.indexOf(whoStr) === -1) a.readList.push(whoStr);
-                            }
-                        });
-                    } else {
-                        if (msg.notifId) activeAlerts[msg.target] = activeAlerts[msg.target].filter(function(a) { return a.id !== msg.notifId; });
-                        else activeAlerts[msg.target].shift();
-                        if (activeAlerts[msg.target].length === 0) delete activeAlerts[msg.target];
+                const targetLow = String(msg.target || '').trim().toLowerCase();
+
+                Object.keys(activeAlerts).forEach(function(k) {
+                    if (String(k).trim().toLowerCase() === targetLow && Array.isArray(activeAlerts[k])) {
+                        if (targetLow === 'всем') {
+                            activeAlerts[k].forEach(function(a) {
+                                if (!msg.notifId || a.id === msg.notifId) {
+                                    if (!Array.isArray(a.readList)) a.readList = new Array();
+                                    if (a.readList.indexOf(whoStr) === -1) a.readList.push(whoStr);
+                                }
+                            });
+                        } else {
+                            if (msg.notifId) activeAlerts[k] = activeAlerts[k].filter(function(a) { return a.id !== msg.notifId; });
+                            else activeAlerts[k].shift();
+                            if (activeAlerts[k].length === 0) delete activeAlerts[k];
+                        }
                     }
-                } else { delete activeAlerts[msg.target]; }
+                });
 
                 let updatedReadBy = stamp, marked = false;
                 notificationsHistory.forEach(function(n) {
-                    const match = (msg.notifId && n.id === msg.notifId) || (!msg.notifId && !marked && n.target === msg.target);
+                    const nTargLow = String(n.target || '').trim().toLowerCase();
+                    const match = (msg.notifId && n.id === msg.notifId) || (!msg.notifId && !marked && nTargLow === targetLow && !n.read);
                     if (match) {
                         n.read = true;
-                        if (n.target === 'ВСЕМ') {
+                        if (nTargLow === 'всем') {
                             if (!n.readBy) n.readBy = stamp;
                             else if (n.readBy.indexOf(whoStr) === -1) n.readBy = n.readBy + ', ' + stamp;
                         } else { n.readBy = stamp; }
@@ -919,5 +922,5 @@ wss.on('connection', function(ws) {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', function() {
-    console.log('🚀 ЕДИНЫЙ СЕРВЕР МСБ-55115 (ЖУРНАЛ + МЕССЕНДЖЕР) ЗАПУЩЕН НА ПОРТУ ' + PORT + ' | СБОРКА: ' + SERVER_BOOT_TIME);
+    console.log('🚀 ЕДИНЫЙ СЕРВЕР МСБ-55115 ЗАПУЩЕН НА ПОРТУ ' + PORT + ' | СБОРКА: ' + SERVER_BOOT_TIME);
 });
