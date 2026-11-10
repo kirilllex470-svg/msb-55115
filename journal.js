@@ -43,7 +43,6 @@ const COLUMNS_CONFIG = [
     ]},
     { label: "ПРИМЕЧАНИЯ", options: new Array() }
 ];
-
 let ws = null;
 let currentUser = null;
 let currentCallsign = "";
@@ -72,6 +71,9 @@ let keepAliveAudio = null;
 let sirenAudio = null;
 let publicVapidKey = null;
 let deferredPrompt = null;
+let knownServerBootId = sessionStorage.getItem('msb_server_boot_id') || null;
+let pendingServerBootId = null;
+
 function getStaticDateTime() {
     const d = new Date();
     const dd = String(d.getDate()).padStart(2, '0');
@@ -111,7 +113,6 @@ function runSplash() {
         }
     }, 200);
 }
-
 window.addEventListener('beforeinstallprompt', function(e) {
     e.preventDefault();
     deferredPrompt = e;
@@ -174,6 +175,7 @@ async function subscribeToWebPush() {
         }
     } catch (e) { console.error('Push error:', e); }
 }
+
 function sendLocalNotification(target, text, sender) {
     const fromWho = sender || 'АДМИН';
     const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
@@ -191,7 +193,6 @@ function sendLocalNotification(target, text, sender) {
         });
     }
 }
-
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
@@ -257,7 +258,6 @@ const SOUND_PRESETS = [
     { id: 'bank1',  name: '🏦 Банк 1 (Сбер / Перевод зачислен)', type: 'bank' },
     { id: 'bank2',  name: '🏦 Банк 2 (Премиум Банк / Push)', type: 'bank' }
 ];
-
 function playToneNotes(notes, waveType) {
     try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -279,6 +279,7 @@ function playToneNotes(notes, waveType) {
         });
     } catch (e) {}
 }
+
 function playSoundById(soundId, isPreview) {
     const id = soundId || selectedSoundId || 'alarm1';
     try {
@@ -343,7 +344,6 @@ function playSoundById(soundId, isPreview) {
 function playBeep() {
     playSoundById(selectedSoundId, false);
 }
-
 function openSoundModal() {
     const modal = document.getElementById('sound-modal');
     const list = document.getElementById('sound-options-list');
@@ -486,7 +486,6 @@ function resetPhotoZoom() {
     photoZoom = 1; photoPanX = 0; photoPanY = 0;
     applyPhotoTransform();
 }
-
 function bindPhotoZoomEvents() {
     if (zoomEventsBound) return;
     zoomEventsBound = true;
@@ -549,6 +548,7 @@ function fetchMapsFromServer() {
         .then(function(list) { if (Array.isArray(list)) { allMaps = list; renderMapsGrid(); } })
         .catch(function() {});
 }
+
 function uploadMapPhoto() {
     if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
     const fileInput = document.getElementById('map-file-input');
@@ -589,7 +589,6 @@ function uploadMapPhoto() {
     };
     reader.readAsDataURL(file);
 }
-
 const MONTH_NAMES = Array.of("ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ", "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ");
 
 function formatIsoDate(y, m, d) {
@@ -663,6 +662,7 @@ function renderArchiveCalendar() {
         gridEl.appendChild(cell);
     }
 }
+
 function selectArchiveDate(dateKey) {
     selectedArchiveDate = dateKey;
     renderArchiveCalendar();
@@ -692,7 +692,6 @@ function selectArchiveDate(dateKey) {
         tbody.appendChild(tr);
     });
 }
-
 function isNotificationVisibleForMe(notif) {
     if (!notif) return false;
     if (notif.target === "ВСЕМ") return true;
@@ -750,12 +749,53 @@ function getAlertsQueue(target) {
     return Array.of(raw);
 }
 
+function checkServerVersionChange(bootId, bootTime) {
+    if (!bootId) return;
+    if (!knownServerBootId) {
+        knownServerBootId = bootId;
+        sessionStorage.setItem('msb_server_boot_id', bootId);
+        return;
+    }
+    if (knownServerBootId !== bootId) {
+        pendingServerBootId = bootId;
+        const modal = document.getElementById('server-update-modal');
+        const timeEl = document.getElementById('update-server-time');
+        if (timeEl) timeEl.innerText = bootTime || getStaticDateTime();
+        if (modal && modal.style.display !== 'flex') {
+            modal.style.display = 'flex';
+            playSoundById('bank2', true);
+        }
+    }
+}
+
+async function forceReloadApp() {
+    if (pendingServerBootId) {
+        sessionStorage.setItem('msb_server_boot_id', pendingServerBootId);
+    } else {
+        sessionStorage.removeItem('msb_server_boot_id');
+    }
+    try {
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (let r of regs) { await r.update(); }
+        }
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            for (let k of keys) { await caches.delete(k); }
+        }
+    } catch (e) {}
+    window.location.href = window.location.pathname + '?v=' + Date.now();
+}
 function connectWS() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
 
     ws.onmessage = function(event) {
         const msg = JSON.parse(event.data);
+        if (msg.serverBootId) {
+            checkServerVersionChange(msg.serverBootId, msg.serverBootTime);
+        }
+        if (msg.type === 'pong') return;
         if (msg.type === 'init') {
             document.getElementById('table-body').innerHTML = '';
             msg.data.forEach(appendRow);
@@ -875,40 +915,30 @@ function populateTargetSelect() {
     const adminSelect = document.getElementById('admin-target');
     const miniSelect = document.getElementById('mini-notif-target');
     const mapSelect = document.getElementById('map-target-select');
-
     const onlyFriends = myMessengerFriends.filter(function(f) { return f && !f.isGroup; });
     const sigParts = Array.of(currentUser || '');
     onlyFriends.forEach(function(f) {
         sigParts.push(f.name + ':' + (f.online ? '1' : '0') + ':' + (f.unit || ''));
     });
     const newSig = sigParts.join('|');
-
     if (newSig !== lastTargetOptionsSig) {
         lastTargetOptionsSig = newSig;
         Array.of(adminSelect, miniSelect).forEach(function(sel) {
             if (!sel) return;
             const prevVal = sel.value;
             sel.innerHTML = '';
-
             let optAll = document.createElement('option');
-            optAll.value = "ВСЕМ";
-            optAll.innerText = "📢 ВСЕМ";
+            optAll.value = "ВСЕМ"; optAll.innerText = "📢 ВСЕМ";
             sel.appendChild(optAll);
-
             onlyFriends.forEach(function(f) {
                 let opt = document.createElement('option');
                 opt.value = f.name;
-                const dot = f.online ? "🟢 " : "⚫ ";
-                opt.innerText = dot + f.name + (f.unit ? " (" + f.unit + ")" : "");
+                opt.innerText = (f.online ? "🟢 " : "⚫ ") + f.name + (f.unit ? " (" + f.unit + ")" : "");
                 sel.appendChild(opt);
             });
-
-            if (prevVal && Array.from(sel.options).some(function(o) { return o.value === prevVal; })) {
-                sel.value = prevVal;
-            }
+            if (prevVal && Array.from(sel.options).some(function(o) { return o.value === prevVal; })) sel.value = prevVal;
         });
     }
-
     if (mapSelect && mapSelect.options.length === 0) {
         mapSelect.innerHTML = '<option value="ВСЕМ">📢 ВСЕМ</option>';
         USERS_CONFIG.forEach(function(u) {
@@ -920,7 +950,6 @@ function populateTargetSelect() {
         });
     }
 }
-
 function applyPermissionsUI() {
     const isAdmin = (currentUser === ADMIN_NAME);
     const canRow = isAdmin || (myPermissions && myPermissions.row);
@@ -953,20 +982,12 @@ function applyUserUI() {
     document.getElementById('my-name').style.color = userColor;
     const badge = document.getElementById('my-callsign-badge');
     if (badge) badge.innerText = currentCallsign ? ('[' + currentCallsign + ']') : '';
-
     const az = document.getElementById('admin-zone');
     if (az) az.style.display = 'none';
-
     const miniBar = document.getElementById('mini-notif-reply-bar');
     if (miniBar) miniBar.style.display = 'flex';
-
     lastTargetOptionsSig = "";
-    applyPermissionsUI();
-    populateTargetSelect();
-    renderNotificationsWindow();
-    renderMapsGrid();
-    updateStreamUI();
-
+    applyPermissionsUI(); populateTargetSelect(); renderNotificationsWindow(); renderMapsGrid(); updateStreamUI();
     if (currentUser === ADMIN_NAME) {
         document.getElementById('admin-maps-upload').style.display = 'block';
         document.getElementById('admin-users-btn').style.display = 'inline-block';
@@ -982,41 +1003,33 @@ function applyUserUI() {
 function initApp() {
     runSplash();
     hideAuthMessages();
+    const savedTheme = localStorage.getItem('msb_app_theme') || 'military';
+    setAppTheme(savedTheme, true);
     if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true) {
         document.querySelectorAll('.pwa-install-btn').forEach(function(btn) { btn.style.display = 'none'; });
     }
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(function() {});
-    }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function() {});
     document.body.addEventListener('click', function firstTouch() {
-        unlockMobileFeatures();
-        subscribeToWebPush();
+        unlockMobileFeatures(); subscribeToWebPush();
         document.body.removeEventListener('click', firstTouch);
     }, { once: true });
 
-    const loginSelect = document.getElementById('login-select');
-    const regSelect = document.getElementById('reg-unit-select');
+    const loginSelect = document.getElementById('login-select'), regSelect = document.getElementById('reg-unit-select');
     if (loginSelect) loginSelect.innerHTML = '';
     if (regSelect) regSelect.innerHTML = '';
-
     USERS_CONFIG.forEach(function(u, index) {
-        let opt = document.createElement('option');
-        opt.value = index; opt.innerText = u.name;
+        let opt = document.createElement('option'); opt.value = index; opt.innerText = u.name;
         if (loginSelect) loginSelect.appendChild(opt);
         if (regSelect && u.name !== ADMIN_NAME) {
-            let optR = document.createElement('option');
-            optR.value = u.name; optR.innerText = u.name;
+            let optR = document.createElement('option'); optR.value = u.name; optR.innerText = u.name;
             regSelect.appendChild(optR);
         }
     });
 
-    const headerRow = document.getElementById('table-headers');
-    const archHeaderRow = document.getElementById('archive-table-headers');
-    const inputContainer = document.getElementById('dynamic-inputs');
+    const headerRow = document.getElementById('table-headers'), archHeaderRow = document.getElementById('archive-table-headers'), inputContainer = document.getElementById('dynamic-inputs');
     headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
     if (archHeaderRow) archHeaderRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
     inputContainer.innerHTML = '';
-
     COLUMNS_CONFIG.forEach(function(col, index) {
         let th = document.createElement('th'); th.innerText = col.label; headerRow.appendChild(th);
         if (archHeaderRow) { let thA = document.createElement('th'); thA.innerText = col.label; archHeaderRow.appendChild(thA); }
@@ -1034,268 +1047,118 @@ function initApp() {
         inputContainer.appendChild(div);
     });
 
-    const savedUser = localStorage.getItem('journal_user');
-    const savedCall = localStorage.getItem('journal_callsign');
-    const savedColor = localStorage.getItem('journal_color');
-    if (savedUser) {
-        currentUser = savedUser;
-        currentCallsign = savedCall || savedUser;
-        userColor = savedColor || '#fff';
-        applyUserUI();
-    }
+    const savedUser = localStorage.getItem('journal_user'), savedCall = localStorage.getItem('journal_callsign'), savedColor = localStorage.getItem('journal_color');
+    if (savedUser) { currentUser = savedUser; currentCallsign = savedCall || savedUser; userColor = savedColor || '#fff'; applyUserUI(); }
     connectWS();
 }
-initApp();
-function hideAuthMessages() {
-    const err = document.getElementById('login-error');
-    if (err) err.style.display = 'none';
-}
-
-function openRegisterModal() {
-    document.getElementById('register-modal').style.display = 'flex';
-    document.getElementById('reg-status-msg').style.display = 'none';
-}
-
-function closeRegisterModal() {
-    document.getElementById('register-modal').style.display = 'none';
-}
+function hideAuthMessages() { const err = document.getElementById('login-error'); if (err) err.style.display = 'none'; }
+function openRegisterModal() { document.getElementById('register-modal').style.display = 'flex'; document.getElementById('reg-status-msg').style.display = 'none'; }
+function closeRegisterModal() { document.getElementById('register-modal').style.display = 'none'; }
 
 function submitRegistration() {
-    const unit = document.getElementById('reg-unit-select').value;
-    const callsign = document.getElementById('reg-callsign').value.trim();
-    const password = document.getElementById('reg-pass').value.trim();
-    const msgEl = document.getElementById('reg-status-msg');
-    if (!unit || !callsign || !password) {
-        msgEl.style.color = '#ef4444';
-        msgEl.innerText = '❌ Заполните позывной и пароль!';
+    const unit = document.getElementById('reg-unit-select').value, callsign = document.getElementById('reg-callsign').value.trim(), password = document.getElementById('reg-pass').value.trim(), msgEl = document.getElementById('reg-status-msg');
+    if (!unit || !callsign || !password) { msgEl.style.color = '#ef4444'; msgEl.innerText = '❌ Заполните позывной и пароль!'; msgEl.style.display = 'block'; return; }
+    fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unit: unit, username: callsign, password: password }) })
+    .then(function(r) { return r.json(); }).then(function(data) {
         msgEl.style.display = 'block';
-        return;
-    }
-    fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit: unit, username: callsign, password: password })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        msgEl.style.display = 'block';
-        if (data.success) {
-            msgEl.style.color = '#4ade80';
-            msgEl.innerText = '✅ Заявка отправлена АДМИНУ! Ожидайте одобрения.';
-            document.getElementById('reg-callsign').value = '';
-            document.getElementById('reg-pass').value = '';
-        } else {
-            msgEl.style.color = '#ef4444';
-            msgEl.innerText = '❌ ' + (data.message || 'Ошибка регистрации');
-        }
+        if (data.success) { msgEl.style.color = '#4ade80'; msgEl.innerText = '✅ Заявка отправлена АДМИНУ! Ожидайте одобрения.'; document.getElementById('reg-callsign').value = ''; document.getElementById('reg-pass').value = ''; }
+        else { msgEl.style.color = '#ef4444'; msgEl.innerText = '❌ ' + (data.message || 'Ошибка регистрации'); }
     });
 }
 
 function refreshMyPermissionsFromServer() {
     if (!currentCallsign) return;
-    if (currentUser === ADMIN_NAME) {
-        myPermissions = { row: true, stream: true, maps: true, archive: true, table: true };
-        applyPermissionsUI();
-        return;
-    }
-    fetch('/api/user/me?user=' + encodeURIComponent(currentCallsign) + '&t=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data && data.permissions) {
-                myPermissions = data.permissions;
-                applyPermissionsUI();
-            }
-        }).catch(function() {});
+    if (currentUser === ADMIN_NAME) { myPermissions = { row: true, stream: true, maps: true, archive: true, table: true }; applyPermissionsUI(); return; }
+    fetch('/api/user/me?user=' + encodeURIComponent(currentCallsign) + '&t=' + Date.now()).then(function(r) { return r.json(); }).then(function(data) {
+        if (data && data.permissions) { myPermissions = data.permissions; applyPermissionsUI(); }
+    }).catch(function() {});
 }
 
 function attemptLogin() {
     unlockMobileFeatures();
-    const userIndex = Number(document.getElementById('login-select').value);
-    const callsignInput = document.getElementById('login-callsign').value.trim();
-    const pass = document.getElementById('login-pass').value.trim();
-    const unitObj = USERS_CONFIG.at(userIndex);
-    const errEl = document.getElementById('login-error');
-
-    if (!unitObj || !pass) {
-        errEl.innerText = '❌ Введите пароль!';
-        errEl.style.display = 'block';
-        return;
-    }
-
+    const userIndex = Number(document.getElementById('login-select').value), callsignInput = document.getElementById('login-callsign').value.trim(), pass = document.getElementById('login-pass').value.trim(), unitObj = USERS_CONFIG.at(userIndex), errEl = document.getElementById('login-error');
+    if (!unitObj || !pass) { errEl.innerText = '❌ Введите пароль!'; errEl.style.display = 'block'; return; }
     if (unitObj.name === ADMIN_NAME && pass === "551150000" && (!callsignInput || callsignInput.toLowerCase() === "муравей")) {
         myPermissions = { row: true, stream: true, maps: true, archive: true, table: true };
-        completeLoginSuccess(ADMIN_NAME, "муравей", unitObj.color);
-        return;
+        completeLoginSuccess(ADMIN_NAME, "муравей", unitObj.color); return;
     }
-
-    if (!callsignInput) {
-        errEl.innerText = '❌ Введите ваш Позывной и пароль!';
-        errEl.style.display = 'block';
-        return;
-    }
-
-    fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit: unitObj.name, username: callsignInput, password: pass })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) {
-            myPermissions = data.permissions || { row: false, stream: false, maps: false, archive: false, table: false };
-            completeLoginSuccess(unitObj.name, data.username || callsignInput, unitObj.color);
-        } else {
-            errEl.innerText = '❌ ' + (data.message || 'Неверный пароль или позывной не одобрен');
-            errEl.style.display = 'block';
-        }
-    })
-    .catch(function() {
-        errEl.innerText = '❌ Ошибка связи с сервером';
-        errEl.style.display = 'block';
-    });
+    if (!callsignInput) { errEl.innerText = '❌ Введите ваш Позывной и пароль!'; errEl.style.display = 'block'; return; }
+    fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unit: unitObj.name, username: callsignInput, password: pass }) })
+    .then(function(r) { return r.json(); }).then(function(data) {
+        if (data.success) { myPermissions = data.permissions || { row: false, stream: false, maps: false, archive: false, table: false }; completeLoginSuccess(unitObj.name, data.username || callsignInput, unitObj.color); }
+        else { errEl.innerText = '❌ ' + (data.message || 'Неверный пароль или позывной не одобрен'); errEl.style.display = 'block'; }
+    }).catch(function() { errEl.innerText = '❌ Ошибка связи с сервером'; errEl.style.display = 'block'; });
 }
+
 function completeLoginSuccess(unitName, callsign, color) {
-    hideAuthMessages();
-    currentUser = unitName;
-    currentCallsign = callsign || unitName;
-    userColor = color;
-    localStorage.setItem('journal_user', currentUser);
-    localStorage.setItem('journal_callsign', currentCallsign);
-    localStorage.setItem('journal_color', userColor);
-    localStorage.setItem('chat_username', currentCallsign);
-    applyUserUI();
-    refreshMyPermissionsFromServer();
-    subscribeToWebPush();
-    checkAndShowAlerts(false);
+    hideAuthMessages(); currentUser = unitName; currentCallsign = callsign || unitName; userColor = color;
+    localStorage.setItem('journal_user', currentUser); localStorage.setItem('journal_callsign', currentCallsign); localStorage.setItem('journal_color', userColor); localStorage.setItem('chat_username', currentCallsign);
+    applyUserUI(); refreshMyPermissionsFromServer(); subscribeToWebPush(); checkAndShowAlerts(false);
 }
 
-function openAdminUsersModal() {
-    if (currentUser !== ADMIN_NAME) return;
-    document.getElementById('admin-users-modal').style.display = 'flex';
-    fetchAdminUsersList();
-}
-
-function closeAdminUsersModal() {
-    document.getElementById('admin-users-modal').style.display = 'none';
-}
+function openAdminUsersModal() { if (currentUser !== ADMIN_NAME) return; document.getElementById('admin-users-modal').style.display = 'flex'; fetchAdminUsersList(); }
+function closeAdminUsersModal() { document.getElementById('admin-users-modal').style.display = 'none'; }
 
 function renderPermCheckboxes(u) {
-    const p = u.permissions || { row: false, stream: false, maps: false, archive: false, table: false };
-    const k = u.key;
+    const p = u.permissions || { row: false, stream: false, maps: false, archive: false, table: false }, k = u.key;
     return '<div class="perm-grid">' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.row ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'row\', this.checked)"> 📤 Запись в журнал</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.table ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'table\', this.checked)"> 📊 Таблица журнала</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.stream ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'stream\', this.checked)"> 🎥 Видеострим</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.maps ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'maps\', this.checked)"> 🗺️ Вводные/Карта</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.archive ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'archive\', this.checked)"> 🗂️ Архив</label>' +
-    '</div>';
+        '<label class="perm-chip"><input type="checkbox" ' + (p.row ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'row\', this.checked)"> 📤 Запись</label>' +
+        '<label class="perm-chip"><input type="checkbox" ' + (p.table ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'table\', this.checked)"> 📊 Таблица</label>' +
+        '<label class="perm-chip"><input type="checkbox" ' + (p.stream ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'stream\', this.checked)"> 🎥 Стрим</label>' +
+        '<label class="perm-chip"><input type="checkbox" ' + (p.maps ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'maps\', this.checked)"> 🗺️ Карта</label>' +
+        '<label class="perm-chip"><input type="checkbox" ' + (p.archive ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'archive\', this.checked)"> 🗂️ Архив</label></div>';
 }
 
 function fetchAdminUsersList() {
     if (currentUser !== ADMIN_NAME) return;
-    fetch('/api/admin/users?t=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            const pBox = document.getElementById('admin-pending-list');
-            const aBox = document.getElementById('admin-approved-list');
-            const badge = document.getElementById('pending-count-badge');
-            if (!pBox || !aBox) return;
-            pBox.innerHTML = ''; aBox.innerHTML = '';
-            const pending = data.pending || new Array(), approved = data.approved || new Array();
-            if (badge) { badge.style.display = pending.length > 0 ? 'inline-block' : 'none'; badge.innerText = pending.length; }
-            if (pending.length === 0) pBox.innerHTML = '<div style="color:#64748b;">Нет новых заявок</div>';
-            pending.forEach(function(u) {
-                const row = document.createElement('div');
-                row.className = 'user-row-card';
-                row.innerHTML = '<div style="flex:1;"><div><b>Позывной:</b> <span style="color:#38bdf8;">' + u.username + '</span> | <b>Подр.:</b> ' + u.unit + ' | <b>Пароль:</b> <code style="color:#facc15;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div>' +
-                    '<div style="display:flex; gap:6px;"><button class="lb-btn" style="background:#22c55e;" onclick="adminUserAction(\'' + u.key + '\', \'approve\')">✅ Одобрить</button>' +
-                    '<button class="lb-btn" style="background:#ef4444;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">❌ Отклонить</button></div>';
-                pBox.appendChild(row);
-            });
-            if (approved.length === 0) aBox.innerHTML = '<div style="color:#64748b;">Пока нет зарегистрированных пользователей</div>';
-            approved.forEach(function(u) {
-                const row = document.createElement('div');
-                row.className = 'user-row-card';
-                row.innerHTML = '<div style="flex:1;"><div><b>' + u.username + '</b> (' + u.unit + ') — Пароль: <code style="color:#4ade80; font-weight:bold;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div>' +
-                    '<button class="lb-btn" style="background:#ef4444; padding:5px 10px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">🗑️ Удалить</button>';
-                aBox.appendChild(row);
-            });
+    fetch('/api/admin/users?t=' + Date.now()).then(function(r) { return r.json(); }).then(function(data) {
+        const pBox = document.getElementById('admin-pending-list'), aBox = document.getElementById('admin-approved-list'), badge = document.getElementById('pending-count-badge');
+        if (!pBox || !aBox) return;
+        pBox.innerHTML = ''; aBox.innerHTML = '';
+        const pending = data.pending || new Array(), approved = data.approved || new Array();
+        if (badge) { badge.style.display = pending.length > 0 ? 'inline-block' : 'none'; badge.innerText = pending.length; }
+        if (pending.length === 0) pBox.innerHTML = '<div style="color:#64748b;">Нет новых заявок</div>';
+        pending.forEach(function(u) {
+            const row = document.createElement('div'); row.className = 'user-row-card';
+            row.innerHTML = '<div style="flex:1;"><div><b>Позывной:</b> <span style="color:#38bdf8;">' + u.username + '</span> | <b>Подр.:</b> ' + u.unit + ' | <b>Пароль:</b> <code style="color:#facc15;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div>' +
+                '<div style="display:flex; gap:6px;"><button class="lb-btn" style="background:#22c55e;" onclick="adminUserAction(\'' + u.key + '\', \'approve\')">✅ Одобрить</button><button class="lb-btn" style="background:#ef4444;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">❌ Отклонить</button></div>';
+            pBox.appendChild(row);
         });
-}
-
-function toggleUserPerm(userKey, permName, val) {
-    fetch('/api/admin/users/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: userKey, action: 'set_perm', permName: permName, permVal: val })
+        if (approved.length === 0) aBox.innerHTML = '<div style="color:#64748b;">Пока нет пользователей</div>';
+        approved.forEach(function(u) {
+            const row = document.createElement('div'); row.className = 'user-row-card';
+            row.innerHTML = '<div style="flex:1;"><div><b>' + u.username + '</b> (' + u.unit + ') — Пароль: <code style="color:#4ade80; font-weight:bold;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div><button class="lb-btn" style="background:#ef4444; padding:5px 10px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">🗑️ Удалить</button>';
+            aBox.appendChild(row);
+        });
     });
 }
-
-function adminUserAction(userKey, action) {
-    fetch('/api/admin/users/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: userKey, action: action })
-    }).then(function() { fetchAdminUsersList(); });
-}
-
-function logoutUser() {
-    localStorage.removeItem('journal_user');
-    localStorage.removeItem('journal_callsign');
-    localStorage.removeItem('journal_color');
-    localStorage.removeItem('chat_username');
-    location.reload();
-}
-
-function loginAsViewer() {
-    unlockMobileFeatures();
-    document.getElementById('login-overlay').style.display = 'none';
-    renderNotificationsWindow();
-    renderMapsGrid();
-    updateStreamUI();
-    subscribeToWebPush();
-    checkAndShowAlerts(false);
-}
+function toggleUserPerm(userKey, permName, val) { fetch('/api/admin/users/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: userKey, action: 'set_perm', permName: permName, permVal: val }) }); }
+function adminUserAction(userKey, action) { fetch('/api/admin/users/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: userKey, action: action }) }).then(function() { fetchAdminUsersList(); }); }
+function logoutUser() { localStorage.removeItem('journal_user'); localStorage.removeItem('journal_callsign'); localStorage.removeItem('journal_color'); localStorage.removeItem('chat_username'); location.reload(); }
+function loginAsViewer() { unlockMobileFeatures(); document.getElementById('login-overlay').style.display = 'none'; renderNotificationsWindow(); renderMapsGrid(); updateStreamUI(); subscribeToWebPush(); checkAndShowAlerts(false); }
 function sendAdminAlert() {
     if (!currentUser) return;
     const target = document.getElementById('admin-target').value;
-    if (!target) return alert("Выберите получателя!");
     const msg = document.getElementById('admin-msg').value.trim();
-    if (!msg) return alert("Напишите текст!");
+    if (!target || !msg) return alert("Заполните получателя и текст!");
     const senderLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
-    ws.send(JSON.stringify({
-        type: 'admin_alert',
-        sender: senderLabel,
-        color: userColor,
-        time: getStaticDateTime(),
-        target: target,
-        text: msg
-    }));
+    ws.send(JSON.stringify({ type: 'admin_alert', sender: senderLabel, color: userColor, time: getStaticDateTime(), target: target, text: msg }));
     document.getElementById('admin-msg').value = '';
 }
 
 function sendMiniNotification() {
-    if (!currentUser) return alert("Войдите в систему, чтобы отправлять сообщения!");
+    if (!currentUser) return alert("Войдите в систему!");
     const target = document.getElementById('mini-notif-target').value;
-    if (!target) return alert("Выберите получателя!");
     const input = document.getElementById('mini-notif-input');
     const msg = input.value.trim();
-    if (!msg) return;
+    if (!target || !msg) return;
     const senderLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
-    ws.send(JSON.stringify({
-        type: 'admin_alert',
-        sender: senderLabel,
-        color: userColor,
-        time: getStaticDateTime(),
-        target: target,
-        text: msg
-    }));
+    ws.send(JSON.stringify({ type: 'admin_alert', sender: senderLabel, color: userColor, time: getStaticDateTime(), target: target, text: msg }));
     input.value = '';
 }
 
 function clearHistoryAdmin() {
-    if (currentUser !== ADMIN_NAME) return;
-    if (confirm("⚠️ Вы уверены, что хотите ПОЛНОСТЬЮ очистить текущий журнал событий у всех участников?")) {
+    if (currentUser === ADMIN_NAME && confirm("⚠️ Очистить текущий журнал событий у всех?")) {
         ws.send(JSON.stringify({ type: 'clear_history' }));
     }
 }
@@ -1311,32 +1174,36 @@ function checkAndShowAlerts(isNew) {
     if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
     let targetToShow = null, alertObj = null;
     if (currentCallsign) {
-        const callQueue = getAlertsQueue(currentCallsign).filter(isUnreadForMe);
-        if (callQueue.length > 0) { targetToShow = currentCallsign; alertObj = callQueue.at(0); }
+        const q = getAlertsQueue(currentCallsign).filter(isUnreadForMe);
+        if (q.length > 0) { targetToShow = currentCallsign; alertObj = q.at(0); }
     }
     if (!targetToShow && currentUser) {
-        const myQueue = getAlertsQueue(currentUser).filter(isUnreadForMe);
-        if (myQueue.length > 0) { targetToShow = currentUser; alertObj = myQueue.at(0); }
+        const q = getAlertsQueue(currentUser).filter(isUnreadForMe);
+        if (q.length > 0) { targetToShow = currentUser; alertObj = q.at(0); }
     }
     if (!targetToShow) {
-        const allQueue = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
-        if (allQueue.length > 0) { targetToShow = "ВСЕМ"; alertObj = allQueue.at(0); }
+        const q = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
+        if (q.length > 0) { targetToShow = "ВСЕМ"; alertObj = q.at(0); }
     }
     if (targetToShow && alertObj) showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
 }
-
 function showAlert(target, text, sender, notifId, isNew) {
-    currentAlertId = notifId || null; currentAlertTarget = target; currentAlertText = text; currentAlertSender = sender || ADMIN_NAME;
+    currentAlertId = notifId || null;
+    currentAlertTarget = target;
+    currentAlertText = text;
+    currentAlertSender = sender || ADMIN_NAME;
     const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-    const countBadge = queueLen > 1 ? ' (1 из ' + queueLen + ')' : '';
-    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + countBadge + ':';
+    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
     document.getElementById('alert-text').innerText = text;
     document.getElementById('alert-modal').style.display = 'flex';
     updateLockScreenAlert(target, text, currentAlertSender);
     if (isNew || document.visibilityState === 'hidden') sendLocalNotification(target, text, currentAlertSender);
     if (!titleInterval) {
         let flag = false;
-        titleInterval = setInterval(function() { document.title = flag ? "🛑 ТРЕВОГА! СООБЩЕНИЕ!" : "⚠️ ПРОЧИТАЙТЕ СООБЩЕНИЕ!"; flag = !flag; }, 600);
+        titleInterval = setInterval(function() {
+            document.title = flag ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!";
+            flag = !flag;
+        }, 600);
     }
     playBeep();
     if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
@@ -1344,7 +1211,8 @@ function showAlert(target, text, sender, notifId, isNew) {
 
 function stopAlertVisuals() {
     document.getElementById('alert-modal').style.display = 'none';
-    currentAlertId = null; currentAlertTarget = "";
+    currentAlertId = null;
+    currentAlertTarget = "";
     if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
     if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
     if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
@@ -1360,24 +1228,15 @@ function confirmAlert() {
     const idToClear = currentAlertId;
     const alertTextCopy = String(currentAlertText || '');
     const alertSenderCopy = String(currentAlertSender || '');
-
     stopAlertVisuals();
-
     if (targetToClear) {
         ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
     }
-
-    const isFromMessenger =
-        alertTextCopy.indexOf('💬 Мессенджер:') === 0 ||
-        alertTextCopy.indexOf('🎙️ Голосовое сообщение в Мессенджере') === 0 ||
-        alertTextCopy.indexOf('🎥 Видео-кружок в Мессенджере') === 0 ||
-        alertTextCopy.indexOf('📎 Файл в Мессенджере') === 0;
-
+    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
     if (isFromMessenger && typeof openMessengerWindow === 'function') {
         openMessengerWindow(alertSenderCopy);
         return;
     }
-
     checkAndShowAlerts(false);
 }
 
@@ -1404,12 +1263,180 @@ function appendRow(row) {
     }
     const tbody = document.getElementById('table-body');
     const tr = document.createElement('tr');
-    let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color: ' + row.color + '">' + row.user + '</td>';
+    let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color:' + row.color + '">' + row.user + '</td>';
     for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-        const val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
-        html += '<td>' + (val || '-') + '</td>';
+        html += '<td>' + ((row.values && row.values.at(i)) ? row.values.at(i) : '-') + '</td>';
     }
     tr.innerHTML = html;
     tbody.appendChild(tr);
     requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
 }
+function triggerCallInDev(callType, targetName) {
+    playSoundById('nice2', true);
+    const modal = document.getElementById('call-dev-modal');
+    const icon = document.getElementById('call-dev-icon');
+    const title = document.getElementById('call-dev-title');
+    const text = document.getElementById('call-dev-text');
+    if (icon) icon.innerText = (callType === 'Видеозвонок') ? '🎥' : '📞';
+    if (title) title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
+    if (text) text.innerHTML = 'Защищенный модуль <b>«' + callType + '»</b> находится в разработке системы <b>МСБ-55115</b> и скоро будет активирован!';
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeCallDevModal() {
+    const m = document.getElementById('call-dev-modal');
+    if (m) m.style.display = 'none';
+}
+
+const GIF_TITLES = {
+    military: [
+        "🪖 Спецназ в деле", "🛡️ Броня крепка", "🚁 Вертушка прикрытия", "📡 Радар ПВО",
+        "🎯 Снайперский выстрел", "🟩 Ночное видение ПНВ", "🚜 Танковый прорыв", "⚡ Штурмовая группа",
+        "🎖️ Честь и Отвага", "📻 Связь без помех", "🔥 Артиллерия работает", "🛩️ Истребитель Су-57",
+        "🧭 Тактический маршрут", "💣 Разминирование", "🐕 Военная разведка", "🚢 Флот на рубеже",
+        "🚁 Десант с воздуха", "🛡️ Оборона рубежа", "🎆 Салют Победы", "🏆 МСБ-55115 Сила"
+    ],
+    rocket: [
+        "🚀 Пуск из шахты", "🔥 Гиперзвук Мах-10", "⚡ Тополь-М на старте", "💥 Перехват цели",
+        "🛰️ Баллистическая дуга", "🚀 РВСН на дежурстве", "🌋 Огненный старт", "🎯 Точно в яблочко",
+        "🚀 Ярс выходит на позицию", "🧭 Телеметрия пуска", "🔥 Форсаж первой ступени", "🛡️ Купол ПВО С-400",
+        "⚡ Сверхзвуковой удар", "🚀 Залп РСЗО", "🛰️ Разделение блоков", "🔥 Плазменный след",
+        "🚀 Калибр в полете", "⏱️ Обратный отсчет 3..2..1", "💥 Ударная волна", "🚀 Ракетный щит МСБ"
+    ],
+    cosmic: [
+        "🌌 Глубокий космос", "🛰️ Орбитальная станция", "👨‍🚀 Выход в открытый космос", "🌟 Взрыв сверхновой",
+        "🛸 Варп-прыжок", "🪐 Кольца Сатурна", "☄️ Метеоритный поток", "🌌 Туманность Андромеды",
+        "🛰️ Спутник связи ВКС", "🌑 Лунная база", "⚡ Солнечный шторм", "🕳️ Черная дыра",
+        "🚀 Стыковка на орбите", "🌠 Звездный патруль", "🪐 Марсианский рассвет", "🛰️ Лазерная связь",
+        "🌌 Галактический вихрь", "👨‍🚀 Невесомость", "🌟 Пульсар в ночи", "🌌 Космический флот МСБ"
+    ]
+};
+
+function makeAnimatedSvgGif(cat, idx, title) {
+    const palettes = {
+        military: ['#062011', '#14532d', '#22c55e', '#facc15'],
+        rocket: ['#270905', '#7c2d12', '#f97316', '#fde047'],
+        cosmic: ['#090420', '#311068', '#38bdf8', '#c084fc']
+    };
+    const pal = palettes[cat] || palettes.military;
+    const icon = title.split(' ').at(0);
+    const label = title.replace(icon, '').trim();
+    const svg = '<svg xmlns="http://w3.org" viewBox="0 0 320 200" width="320" height="200">' +
+        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+        '<stop offset="0%" stop-color="' + pal.at(0) + '"/><stop offset="100%" stop-color="' + pal.at(1) + '"/>' +
+        '</linearGradient></defs>' +
+        '<rect width="320" height="200" rx="14" fill="url(#g)"/>' +
+        '<circle cx="160" cy="85" r="30" fill="none" stroke="' + pal.at(2) + '" stroke-width="2" opacity="0.5">' +
+        '<animate attributeName="r" values="18;75;18" dur="2.6s" repeatCount="indefinite"/>' +
+        '<animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.6s" repeatCount="indefinite"/></circle>' +
+        '<circle cx="160" cy="85" r="48" fill="none" stroke="' + pal.at(3) + '" stroke-dasharray="8 6" stroke-width="2">' +
+        '<animateTransform attributeName="transform" type="rotate" from="0 160 85" to="360 160 85" dur="6s" repeatCount="indefinite"/></circle>' +
+        '<text x="160" y="98" font-size="42" text-anchor="middle">' + icon +
+        '<animateTransform attributeName="transform" type="translate" values="0,-5; 0,5; 0,-5" dur="1.4s" repeatCount="indefinite"/></text>' +
+        '<rect x="12" y="148" width="296" height="38" rx="8" fill="rgba(0,0,0,0.65)" stroke="' + pal.at(2) + '" stroke-width="1"/>' +
+        '<text x="160" y="172" font-family="monospace, sans-serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle">' +
+        label + ' #' + (idx + 1) + '</text></svg>';
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+function setAppTheme(themeName, silent) {
+    const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
+    document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
+    document.body.classList.add('theme-' + clean);
+    localStorage.setItem('msb_app_theme', clean);
+    Array.of('military', 'rocket', 'cosmic').forEach(function(t) {
+        const b = document.getElementById('theme-btn-' + t);
+        if (b) b.classList.toggle('active', t === clean);
+    });
+    if (!silent) switchGifCategory(clean);
+}
+
+function switchGifCategory(cat) {
+    currentGifCategory = (cat === 'rocket' || cat === 'cosmic') ? cat : 'military';
+    Array.of('military', 'rocket', 'cosmic').forEach(function(t) {
+        const tab = document.getElementById('gif-tab-' + t);
+        if (tab) tab.classList.toggle('active', t === currentGifCategory);
+    });
+    const grid = document.getElementById('viewer-gifs-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    const titles = GIF_TITLES[currentGifCategory] || GIF_TITLES.military;
+    titles.forEach(function(title, idx) {
+        const src = makeAnimatedSvgGif(currentGifCategory, idx, title);
+        const card = document.createElement('div');
+        card.className = 'gif-card-item';
+        card.innerHTML = '<img src="' + src + '" alt="GIF"><div class="gif-card-title">' + title + '</div>';
+        card.onclick = function() {
+            const img = document.getElementById('msg-viewer-img');
+            if (img) img.src = src;
+            sendGifToCurrentChat(src, title);
+        };
+        grid.appendChild(card);
+    });
+}
+
+function sendGifToCurrentChat(gifSrc, title) {
+    if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof getActiveChatIdentity === 'function') {
+        const sender = getActiveChatIdentity();
+        if (!sender) return;
+        const formData = new FormData();
+        formData.append('sender', sender);
+        formData.append('room', currentRoomId);
+        formData.append('text', gifSrc);
+        formData.append('type', 'gif');
+        fetch('/api/send', { method: 'POST', body: formData }).then(function() {
+            closeMsgPhotoViewer();
+            if (typeof fetchMessages === 'function') {
+                lastMessagesCount = -1;
+                fetchMessages();
+            }
+        });
+    }
+}
+
+function openMsgPhotoViewer(src, title) {
+    const modal = document.getElementById('msg-photo-viewer-modal');
+    const img = document.getElementById('msg-viewer-img');
+    const ttl = document.getElementById('msg-viewer-title');
+    msgImageZoom = 1;
+    if (img) {
+        img.src = src || makeAnimatedSvgGif(currentGifCategory || 'military', 0, '🪖 МСБ-55115');
+        img.style.transform = 'scale(1)';
+    }
+    if (ttl) ttl.innerText = title || '🖼️ Просмотр фото, темы и GIF';
+    const zLbl = document.getElementById('msg-zoom-label');
+    if (zLbl) zLbl.innerText = '100%';
+    switchGifCategory(localStorage.getItem('msb_app_theme') || 'military');
+    if (modal) modal.style.display = 'flex';
+}
+
+function openAvatarInViewer(el, titleName) {
+    const imgEl = el ? el.querySelector('img') : null;
+    const defaultGif = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ Профиль ' + (titleName || currentCallsign || 'МСБ'));
+    const src = imgEl ? imgEl.src : defaultGif;
+    openMsgPhotoViewer(src, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
+}
+
+function openThemeAndGifHub() {
+    const previewGif = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎨 Темы и GIF МСБ-55115');
+    openMsgPhotoViewer(previewGif, '🎨 Настройки темы и коллекция GIF (60 шт.)');
+}
+
+function closeMsgPhotoViewer() {
+    const m = document.getElementById('msg-photo-viewer-modal');
+    if (m) m.style.display = 'none';
+}
+
+function changeMsgImageZoom(delta) {
+    msgImageZoom = Math.min(4, Math.max(0.5, msgImageZoom + delta));
+    const img = document.getElementById('msg-viewer-img');
+    const lbl = document.getElementById('msg-zoom-label');
+    if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
+    if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
+}
+
+function toggleViewerSettingsPanel() {
+    const p = document.getElementById('msg-viewer-settings');
+    if (p) p.style.display = (p.style.display === 'none') ? 'flex' : 'none';
+}
+
+initApp();

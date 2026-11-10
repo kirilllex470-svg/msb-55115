@@ -46,7 +46,6 @@ if (!vapidKeys || !vapidKeys.publicKey) {
     writeJSON(VAPID_FILE, vapidKeys);
 }
 webpush.setVapidDetails('mailto:admin@msb55115.local', vapidKeys.publicKey, vapidKeys.privateKey);
-
 let pushSubscriptions = readJSON(SUBS_FILE, new Array());
 if (!Array.isArray(pushSubscriptions)) pushSubscriptions = new Array();
 
@@ -96,6 +95,10 @@ function getServerDateTime() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
     return String(d.getUTCDate()).padStart(2, '0') + '.' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.' + d.getUTCFullYear() + ' ' + String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
 }
+
+// МЕТКА ВРЕМЕНИ И ID ЗАПУСКА СЕРВЕРА ДЛЯ ОКНА ПРИНУДИТЕЛЬНОГО ОБНОВЛЕНИЯ
+const SERVER_BOOT_ID = 'boot_' + Date.now() + '_' + crypto.randomBytes(4).toString('hex');
+const SERVER_BOOT_TIME = getServerDateTime();
 function makeTacticalIcon(size) {
     const crcTable = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -153,7 +156,6 @@ function makeTacticalIcon(size) {
     const sig = Buffer.from('89504e470d0a1a0a', 'hex');
     return Buffer.concat(Array.of(sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))));
 }
-
 const TACTICAL_ICON_192 = makeTacticalIcon(192);
 const TACTICAL_ICON_512 = makeTacticalIcon(512);
 const MANIFEST_JSON = JSON.stringify({
@@ -177,13 +179,13 @@ const SW_CODE = [
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
     "    event.waitUntil(self.registration.showNotification(data.title, {",
     "        body: data.body,",
-    "        icon: '/icon-192.png',", // Логотип как большая иконка уведомления
-    "        badge: '/icon-192.png',", // Силуэт логотипа в строке состояния Android
+    "        icon: '/icon-192.png',",
+    "        badge: '/icon-192.png',",
     "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
     "        silent: false,",
-    "        requireInteraction: true,", // Не исчезнет, пока боец не нажмет кнопку
-    "        renotify: true,", // Заставит вибрировать даже при повторных пушах
-    "        tag: 'msb-alert-' + Date.now(),", // Убирает группировку и исключает задержки ОС
+    "        requireInteraction: true,",
+    "        renotify: true,",
+    "        tag: 'msb-alert-' + Date.now(),",
     "        data: { url: '/' }",
     "    }));",
     "});",
@@ -210,7 +212,7 @@ const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
     if (urlPath === '/sw.js') {
-        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-cache' });
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Service-Worker-Allowed': '/', 'Cache-Control': 'no-store, no-cache, must-revalidate' });
         return res.end(SW_CODE);
     }
     if (urlPath === '/manifest.json') {
@@ -225,11 +227,15 @@ const server = http.createServer(function(req, res) {
         res.writeHead(200, { 'Content-Type': 'image/png' });
         return res.end(TACTICAL_ICON_512);
     }
+    if (urlPath === '/api/version') {
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(JSON.stringify({ bootId: SERVER_BOOT_ID, bootTime: SERVER_BOOT_TIME }));
+    }
     if (urlPath === '/style.css' || urlPath === '/journal.js' || urlPath === '/messenger.js') {
         const cType = urlPath.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8';
         fs.readFile(path.join(__dirname, urlPath.slice(1)), function(err, data) {
             if (err) { res.writeHead(404); return res.end('Not Found'); }
-            res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-cache' });
+            res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' });
             res.end(data);
         });
         return;
@@ -345,12 +351,10 @@ const server = http.createServer(function(req, res) {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         return res.end(JSON.stringify(mapsHistory));
     }
-
     if (req.method === 'GET' && urlPath === '/archive-data') {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
         return res.end(JSON.stringify(archiveHistory));
     }
-
     if (req.method === 'POST' && urlPath === '/upload-map') {
         const chunks = new Array();
         req.on('data', function(chunk) { chunks.push(chunk); });
@@ -366,7 +370,6 @@ const server = http.createServer(function(req, res) {
         });
         return;
     }
-
     if (urlPath === '/api/friends/get' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
@@ -390,7 +393,6 @@ const server = http.createServer(function(req, res) {
         });
         return res.end(JSON.stringify(listData));
     }
-
     if (urlPath === '/api/friends/request/send' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.from || !data.to) {
@@ -421,7 +423,6 @@ const server = http.createServer(function(req, res) {
         const list = (user && Array.isArray(requestsDB[user.toLowerCase()])) ? requestsDB[user.toLowerCase()] : new Array();
         return res.end(JSON.stringify(list));
     }
-
     if (urlPath === '/api/friends/request/respond' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.user || !data.from || !data.action) { res.writeHead(400); return res.end('Bad'); }
@@ -443,7 +444,6 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200); res.end('OK');
         });
     }
-
     if (urlPath === '/api/friends/save' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && Array.isArray(data.friends)) {
@@ -454,7 +454,6 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200); res.end('OK');
         });
     }
-
     if (urlPath === '/api/groups/create' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.creator || !data.groupName || !Array.isArray(data.members)) { res.writeHead(400); return res.end('Bad'); }
@@ -467,7 +466,6 @@ const server = http.createServer(function(req, res) {
             res.end(JSON.stringify({ success: true, groupId: groupId }));
         });
     }
-
     if (urlPath === '/api/groups/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.groupId && groupsDB[data.groupId]) {
@@ -478,7 +476,6 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200); res.end('OK');
         });
     }
-
     if (urlPath === '/api/messages/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.room && data.messageId && Array.isArray(roomsDB[data.room])) {
@@ -488,7 +485,6 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200); res.end('OK');
         });
     }
-
     if (urlPath === '/api/messages' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const room = myUrl.searchParams.get('room');
@@ -536,7 +532,6 @@ const server = http.createServer(function(req, res) {
         });
         return res.end(JSON.stringify({ messages: enriched, partnerOnline: partnerOnline }));
     }
-
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && data.room) {
@@ -549,7 +544,6 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200); res.end('OK');
         });
     }
-
     if (urlPath === '/api/send' && req.method === 'POST') {
         return handleMultipartSend(req, res);
     }
@@ -610,6 +604,7 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
+
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup) {
     const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
     let lastMsgText = "Нет сообщений", lastMsgTime = "", unreadCount = 0;
@@ -619,6 +614,7 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         if (lastMsg.type === 'audio') lastMsgText = "🎙️ " + prefix + "Голосовое";
         else if (lastMsg.type === 'video') lastMsgText = "🎥 " + prefix + "Кружок";
         else if (lastMsg.type === 'file') lastMsgText = "📎 " + prefix + "Файл";
+        else if (lastMsg.type === 'gif') lastMsgText = "🎬 " + prefix + "GIF-анимация";
         else lastMsgText = prefix + (lastMsg.text || "");
         lastMsgTime = lastMsg.time || "";
         roomMessages.forEach(function(msg) {
@@ -640,7 +636,6 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         online: isOnline
     };
 }
-
 function handleMultipartSend(req, res) {
     const contentType = req.headers['content-type'] || '';
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
@@ -683,6 +678,7 @@ function handleMultipartSend(req, res) {
         saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res);
     });
 }
+
 function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res) {
     const sender = fields.sender, room = fields.room, type = fields.type || 'text';
     if (!sender || !room) { res.writeHead(400); return res.end('Incomplete'); }
@@ -718,6 +714,7 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     if (type === 'audio') cleanText = '🎙️ Голосовое сообщение в Мессенджере';
     else if (type === 'video') cleanText = '🎥 Видео-кружок в Мессенджере';
     else if (type === 'file') cleanText = '📎 Файл в Мессенджере';
+    else if (type === 'gif') cleanText = '🎬 GIF-анимация в Мессенджере';
     else cleanText = '💬 Мессенджер: ' + cleanText;
     let targets = new Array();
     if (groupsDB[room]) {
@@ -732,7 +729,6 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
-
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
@@ -746,6 +742,9 @@ function getIsoDateNow() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
     return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
+
+const SERVER_BOOT_ID = 'build_' + Date.now();
+const SERVER_BOOT_TIME = getServerDateTime();
 
 let currentActiveDay = getIsoDateNow();
 if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
@@ -796,13 +795,12 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
     const payload = JSON.stringify({ title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!', body: sender + ': ' + text });
-    // Параметры для форсирования доставки без задержек операторов связи
-    const pushOptions = { 
-        TTL: 0, // Доставить немедленно или отбросить, не копить задержки
-        headers: { 
-            'Urgency': 'high', // Принудительно будит спящий Android/iOS
+    const pushOptions = {
+        TTL: 0,
+        headers: {
+            'Urgency': 'high',
             'Topic': 'admin-alert'
-        } 
+        }
     };
     const tLow = String(target).toLowerCase();
     pushSubscriptions.forEach(function(item, index) {
@@ -821,6 +819,8 @@ function broadcastAlert(sender, color, timeStr, target, text) {
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
         type: 'init',
+        serverBootId: SERVER_BOOT_ID,
+        serverBootTime: SERVER_BOOT_TIME,
         data: tableHistory,
         notifications: notificationsHistory,
         alerts: activeAlerts,
@@ -834,7 +834,11 @@ wss.on('connection', function(ws) {
             if (msg.type === 'ping') {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
-                ws.send(JSON.stringify({ type: 'pong' }));
+                ws.send(JSON.stringify({
+                    type: 'pong',
+                    serverBootId: SERVER_BOOT_ID,
+                    serverBootTime: SERVER_BOOT_TIME
+                }));
                 return;
             }
             if (msg.type === 'save_sub' && msg.sub) {
@@ -915,5 +919,5 @@ wss.on('connection', function(ws) {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', function() {
-    console.log('🚀 ЕДИНЫЙ СЕРВЕР МСБ-55115 (ЖУРНАЛ + МЕССЕНДЖЕР) ЗАПУЩЕН НА ПОРТУ ' + PORT);
+    console.log('🚀 ЕДИНЫЙ СЕРВЕР МСБ-55115 (ЖУРНАЛ + МЕССЕНДЖЕР) ЗАПУЩЕН НА ПОРТУ ' + PORT + ' | СБОРКА: ' + SERVER_BOOT_TIME);
 });
