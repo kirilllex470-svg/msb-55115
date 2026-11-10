@@ -374,31 +374,17 @@
             </div>
             <div id="messages"><div class="chat-placeholder">Выберите друга или конференцию слева, чтобы начать переписку.</div></div>
             <video id="video-preview" autoplay muted playsinline style="display:none; position:absolute; bottom:90px; right:20px; width:150px; height:150px; border-radius:50%; object-fit:cover; border:3px solid #f43f5e; z-index:30;"></video>
- <div class="input-container">
-    <!-- Полоса цитаты (если выбрана) -->
-    <div id="reply-bar" class="reply-preview-bar">
-        <span id="reply-bar-text">Цитата: ...</span>
-        <button type="button" class="reply-preview-close" onclick="cancelReply()">&times;</button>
-    </div>
-
-    <!-- Верхний ряд: все иконки и кнопка GIF подняты над строкой ввода -->
-    <div class="tools-row">
-        <button type="button" class="media-btn" id="voice-btn" onclick="toggleVoiceRecord()" title="Голосовое сообщение">🎙️</button>
-        <button type="button" class="media-btn" id="video-btn" onclick="toggleVideoRecord()" title="Видео-кружок">🎥</button>
-        <label class="media-btn" title="Прикрепить файл" style="margin:0;">
-            📎
-            <input type="file" id="file-input" style="display:none;" onchange="uploadAnyFile(this)">
-        </label>
-        <button type="button" class="media-btn gif-btn-wide" onclick="toggleChatGifDrawer()" title="Коллекция GIF">🎬 GIF</button>
-    </div>
-
-    <!-- Нижний ряд: строка ввода и отправка -->
-    <div class="input-row">
-        <input type="text" id="text-input" placeholder="Написать сообщение..." disabled autocomplete="off">
-        <button type="button" id="send-btn" onclick="sendMessage()">ОТПРАВИТЬ</button>
-    </div>
-</div>
-
+            <div class="input-container">
+                <div id="reply-bar" class="reply-preview-bar"><span id="reply-bar-text">Цитата: ...</span><button type="button" class="reply-preview-close" onclick="cancelReply()">×</button></div>
+                <div class="input-row">
+                    <button type="button" id="voice-btn" class="media-btn" onclick="toggleVoiceRecord()">🎙</button>
+                    <button type="button" id="video-btn" class="media-btn" onclick="toggleVideoRecord()">🎥</button>
+                    <label class="media-btn" style="margin:0;">📎<input type="file" style="display:none;" onchange="uploadAnyFile(this)"></label>
+                    <button type="button" class="media-btn" onclick="openThemeAndGifHub()" title="Отправить GIF или сменить тему">🎬</button>
+                    <input type="text" id="text-input" placeholder="Сообщение..." disabled>
+                    <button type="button" id="send-btn" onclick="sendMessage()">ОТПРАВИТЬ</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
