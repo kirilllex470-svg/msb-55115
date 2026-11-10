@@ -897,43 +897,62 @@ setInterval(function() {
     }
 }, 4000);
 function handleAlertClearedMsg(msg) {
-    const queue = getAlertsQueue(msg.target);
-    if (msg.target === 'ВСЕМ') {
-        queue.forEach(function(a) {
-            if (!msg.notifId || a.id === msg.notifId) {
-                if (!Array.isArray(a.readList)) a.readList = new Array();
-                if (msg.who && a.readList.indexOf(msg.who) === -1) a.readList.push(msg.who);
+    const targetLow = String(msg.target || '').trim().toLowerCase();
+
+    Object.keys(pendingAlerts).forEach(function(k) {
+        if (String(k).trim().toLowerCase() === targetLow) {
+            const queue = getAlertsQueue(k);
+            if (targetLow === 'всем') {
+                queue.forEach(function(a) {
+                    if (!msg.notifId || a.id === msg.notifId) {
+                        if (!Array.isArray(a.readList)) a.readList = new Array();
+                        if (msg.who && a.readList.indexOf(msg.who) === -1) a.readList.push(msg.who);
+                    }
+                });
+                pendingAlerts[k] = queue;
+            } else {
+                if (msg.notifId) {
+                    pendingAlerts[k] = queue.filter(function(a) { return a.id !== msg.notifId; });
+                } else {
+                    queue.shift();
+                    pendingAlerts[k] = queue;
+                }
+                if (pendingAlerts[k] && pendingAlerts[k].length === 0) delete pendingAlerts[k];
             }
-        });
-        pendingAlerts[msg.target] = queue;
-    } else {
-        if (msg.notifId) {
-            pendingAlerts[msg.target] = queue.filter(function(a) { return a.id !== msg.notifId; });
-        } else {
-            queue.shift();
-            pendingAlerts[msg.target] = queue;
         }
-        if (pendingAlerts[msg.target] && pendingAlerts[msg.target].length === 0) delete pendingAlerts[msg.target];
-    }
+    });
 
     if (msg.notifId) {
         allNotifications.forEach(function(n) {
-            if (n.id === msg.notifId) { n.read = true; n.readBy = msg.readBy || ''; }
+            if (n.id === msg.notifId) {
+                n.read = true;
+                n.readBy = msg.readBy || msg.who || '';
+            }
         });
     } else {
         let marked = false;
         allNotifications.forEach(function(n) {
-            if (!marked && n.target === msg.target) { n.read = true; n.readBy = msg.readBy || ''; marked = true; }
+            if (!marked && String(n.target || '').trim().toLowerCase() === targetLow && !n.read) {
+                n.read = true;
+                n.readBy = msg.readBy || msg.who || '';
+                marked = true;
+            }
         });
     }
     renderNotificationsWindow();
 
-    const myName = currentCallsign || currentUser || 'Просмотр';
-    if (currentAlertTarget === msg.target && (!msg.notifId || currentAlertId === msg.notifId)) {
-        if (msg.target !== 'ВСЕМ' || msg.who === myName || msg.who === currentUser) stopAlertVisuals();
+    const myName = String(currentCallsign || currentUser || 'Просмотр').trim().toLowerCase();
+    const myUnit = String(currentUser || '').trim().toLowerCase();
+    const whoLow = String(msg.who || '').trim().toLowerCase();
+
+    if (String(currentAlertTarget || '').trim().toLowerCase() === targetLow && (!msg.notifId || currentAlertId === msg.notifId)) {
+        if (targetLow !== 'всем' || whoLow === myName || whoLow === myUnit) {
+            stopAlertVisuals();
+        }
     }
     checkAndShowAlerts(false);
 }
+
 
 function populateTargetSelect() {
     const adminSelect = document.getElementById('admin-target');
