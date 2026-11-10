@@ -174,7 +174,7 @@ const MANIFEST_JSON = JSON.stringify({
     )
 });
 
-const SW_CODE = [
+var SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
     "self.addEventListener('push', function(event) {",
@@ -184,7 +184,7 @@ const SW_CODE = [
     "        body: data.body,",
     "        icon: '/icon-192.png',",
     "        badge: '/icon-192.png',",
-    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
+    "        vibrate: Array.of(400, 100, 400, 100, 400, 200, 600),",
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
@@ -211,6 +211,7 @@ function readBodyJSON(req, cb) {
         try { cb(null, JSON.parse(body)); } catch (e) { cb(e, null); }
     });
 }
+
 const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
