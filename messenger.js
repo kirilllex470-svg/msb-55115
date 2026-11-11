@@ -1,10 +1,11 @@
-// --- МОДУЛЬ НАДЁЖНОЙ ОТПРАВКИ (OUTBOX QUEUE ДЛЯ ПЛОХОЙ СВЯЗИ) ---
-const OUTBOX_KEY = 'msb_outbox_queue_v1';
-let isQueueProcessing = false;
+// --- ИСПРАВЛЕННЫЙ МОДУЛЬ НАДЁЖНОЙ ОТПРАВКИ (OUTBOX QUEUE V2) ---
+const OUTBOX_KEY = 'msb_outbox_queue_v2';
+let isSendingNow = false;
 
 function getOutbox() {
     try {
-        return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || [];
+        const raw = localStorage.getItem(OUTBOX_KEY);
+        return raw ? JSON.parse(raw) : [];
     } catch (e) {
         return [];
     }
@@ -18,8 +19,9 @@ function saveOutbox(queue) {
 
 function enqueueMessage(payload) {
     const queue = getOutbox();
+    const localId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const task = {
-        id: payload.localId || ('local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+        localId: localId,
         sender: payload.sender,
         room: payload.room,
         text: payload.text || '',
@@ -30,57 +32,72 @@ function enqueueMessage(payload) {
         forwardedFrom: payload.forwardedFrom || null,
         mediaBase64: payload.mediaBase64 || null,
         mediaName: payload.mediaName || 'file.bin',
-        attempts: 0,
+        status: 'pending',
         createdAt: Date.now()
     };
+    
     queue.push(task);
     saveOutbox(queue);
-    triggerQueueProcess();
+    
+    // Сразу запускаем отправку
+    processOutboxQueue();
     return task;
 }
 
-async function triggerQueueProcess() {
-    if (isQueueProcessing) return;
+async function processOutboxQueue() {
+    if (isSendingNow) return;
+    
     const queue = getOutbox();
     if (queue.length === 0) return;
 
-    isQueueProcessing = true;
+    isSendingNow = true;
 
-    while (getOutbox().length > 0) {
-        const curQueue = getOutbox();
-        const task = curQueue[0];
+    while (true) {
+        const currentList = getOutbox();
+        if (currentList.length === 0) break;
+
+        const currentTask = currentList[0];
 
         try {
-            await sendWithTimeout(task, 15000);
-            const updated = getOutbox();
-            updated.shift();
-            saveOutbox(updated);
+            await sendTaskToServer(currentTask);
+            
+            // Успех: удаляем задачу из очереди
+            const afterSend = getOutbox();
+            afterSend.shift();
+            saveOutbox(afterSend);
 
+            // Удаляем временный пузырек ожидания из чата
+            const tempEl = document.querySelector(`.message-row[data-local-id="${currentTask.localId}"]`);
+            if (tempEl) tempEl.remove();
+
+            // Принудительно запрашиваем актуальный список с сервера
             if (typeof fetchMessages === 'function') {
                 lastMessagesCount = -1;
                 fetchMessages();
             }
         } catch (err) {
-            task.attempts = (task.attempts || 0) + 1;
-            saveOutbox(curQueue);
-            await new Promise(function(res) { setTimeout(res, 3000); });
+            // При реальном сбое сети ждем 4 секунды перед повторной попыткой
+            console.warn('[MSB Outbox] Ошибка отправки, ожидание канала...', err);
+            await new Promise(r => setTimeout(r, 4000));
             break;
         }
     }
 
-    isQueueProcessing = false;
+    isSendingNow = false;
 }
 
-function sendWithTimeout(task, timeoutMs) {
-    return new Promise(async function(resolve, reject) {
+function sendTaskToServer(task) {
+    return new Promise(async (resolve, reject) => {
         const controller = new AbortController();
-        const timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+        const timeoutTimer = setTimeout(() => controller.abort(), 12000);
 
         try {
             const formData = new FormData();
             formData.append('sender', task.sender);
             formData.append('room', task.room);
             formData.append('type', task.type);
+            formData.append('clientMsgId', task.localId);
+            
             if (task.text) formData.append('text', task.text);
             if (task.quoteId) {
                 formData.append('quoteId', task.quoteId);
@@ -90,27 +107,38 @@ function sendWithTimeout(task, timeoutMs) {
             if (task.forwardedFrom) formData.append('forwardedFrom', task.forwardedFrom);
 
             if (task.mediaBase64) {
-                const blob = await (await fetch(task.mediaBase64)).blob();
+                const resBlob = await fetch(task.mediaBase64);
+                const blob = await resBlob.blob();
                 formData.append('media', blob, task.mediaName);
             }
-            const res = await fetch('/api/send', {
+
+            const response = await fetch('/api/send', {
                 method: 'POST',
                 body: formData,
                 signal: controller.signal
             });
 
-            clearTimeout(timer);
-            if (res.ok) resolve(true);
-            else reject(new Error('HTTP Error ' + res.status));
+            clearTimeout(timeoutTimer);
+
+            if (response.ok) {
+                resolve(true);
+            } else {
+                reject(new Error('Server status: ' + response.status));
+            }
         } catch (e) {
-            clearTimeout(timer);
+            clearTimeout(timeoutTimer);
             reject(e);
         }
     });
 }
 
-window.addEventListener('online', triggerQueueProcess);
-setInterval(triggerQueueProcess, 5000);
+// Запуск очереди при появлении сети или раз в 8 секунд (без наслоения)
+window.addEventListener('online', () => processOutboxQueue());
+setInterval(() => {
+    if (!isSendingNow && getOutbox().length > 0) {
+        processOutboxQueue();
+    }
+}, 8000);
 
 // --- ОСНОВНЫЕ ПЕРЕМЕННЫЕ И СОСТОЯНИЕ МЕССЕНДЖЕРА ---
 var chatUser = null;
@@ -733,20 +761,24 @@ function sendMessage() {
     textInput.value = '';
     cancelReply();
 
-    enqueueMessage(payload);
+    // 1. Ставим в очередь и получаем присвоенный локальный ID
+    var task = enqueueMessage(payload);
 
+    // 2. Отображаем временный пузырек со строгой привязкой к data-local-id
     var mDiv = getMessagesDiv();
     if (mDiv) {
         var tempRow = document.createElement('div');
         tempRow.className = 'message-row my-msg';
+        tempRow.setAttribute('data-local-id', task.localId);
         tempRow.innerHTML = '<div class="swipe-container"><div class="bubble">' +
             '<div class="msg-text">' + text + '</div>' +
-            '<div class="msg-time">⏳ В очереди...</div>' +
+            '<div class="msg-time" style="color:#facc15;">⏳ Отправка...</div>' +
             '</div></div>';
         mDiv.appendChild(tempRow);
         mDiv.scrollTop = mDiv.scrollHeight;
     }
 }
+
 function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     var container = rowElement.querySelector('.swipe-container');
     var leftIndicator = rowElement.querySelector('.left-indicator');
