@@ -83,6 +83,7 @@ function openMessengerWindow(targetPartnerName) {
         return;
     }
     var modal = document.getElementById('messenger-modal');
+    var wasAlreadyOpen = (modal && modal.style.display === 'flex');
     if (modal) {
         modal.style.display = 'flex';
     }
@@ -92,9 +93,24 @@ function openMessengerWindow(targetPartnerName) {
             updateBroadcastTicker();
         } catch (e) {}
     }
+    if (wasAlreadyOpen && currentRoomId) {
+        fetchMessages();
+        loadFriendsAndRequests();
+        return;
+    }
     if (targetPartnerName && typeof targetPartnerName === 'string') {
         try {
             var cleanName = targetPartnerName.trim();
+            if (cleanName.indexOf('👥 ') === 0) {
+                var gTitle = cleanName.replace('👥 ', '').trim().toLowerCase();
+                var foundGroup = friendsList.find(function(f) {
+                    return f && f.isGroup && String(f.name || '').trim().toLowerCase() === gTitle;
+                });
+                if (foundGroup) {
+                    selectChat(foundGroup);
+                    return;
+                }
+            }
             var openIdx = cleanName.indexOf('(');
             var closeIdx = cleanName.indexOf(')');
             if (openIdx !== -1 && closeIdx > openIdx) {
@@ -119,6 +135,7 @@ function openMessengerWindow(targetPartnerName) {
     loadFriendsAndRequests();
 }
 window.openMessengerWindow = openMessengerWindow;
+
 
 function closeMessengerWindow() {
     var modal = document.getElementById('messenger-modal');
