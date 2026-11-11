@@ -706,18 +706,27 @@ const server = http.createServer(function(req, res) {
     if (urlPath === '/api/groups/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.groupId && groupsDB[data.groupId]) {
-                delete groupsDB[data.groupId];
-                writeJSON(GROUPS_FILE, groupsDB);
-                if (roomsDB[data.groupId]) {
-                    delete roomsDB[data.groupId];
-                    writeJSON(CHAT_ROOMS_FILE, roomsDB);
+                const reqUser = String(data.user || '').trim().toLowerCase();
+                if (reqUser && Array.isArray(groupsDB[data.groupId].members)) {
+                    groupsDB[data.groupId].members = groupsDB[data.groupId].members.filter(function(m) {
+                        return String(m).trim().toLowerCase() !== reqUser;
+                    });
                 }
+                if (!reqUser || !Array.isArray(groupsDB[data.groupId].members) || groupsDB[data.groupId].members.length === 0) {
+                    delete groupsDB[data.groupId];
+                    if (roomsDB[data.groupId]) {
+                        delete roomsDB[data.groupId];
+                        writeJSON(CHAT_ROOMS_FILE, roomsDB);
+                    }
+                }
+                writeJSON(GROUPS_FILE, groupsDB);
                 broadcastWS({ type: 'users_updated' });
             }
             res.writeHead(200);
             res.end('OK');
         });
     }
+
 
     if (urlPath === '/api/messages/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
@@ -1005,14 +1014,18 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
 }
 function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     let cleanText = rawContent || '';
-    if (type === 'audio') cleanText = '🎙️ Голосовое сообщение в Мессенджере';
-    else if (type === 'video') cleanText = '🎥 Видео-кружок в Мессенджере';
-    else if (type === 'file') cleanText = '📎 Файл в Мессенджере';
-    else if (type === 'gif') cleanText = '🎬 GIF-анимация в Мессенджере';
-    else cleanText = '💬 Мессенджер: ' + cleanText;
+    const isGroupRoom = Boolean(groupsDB[room]);
+    const groupTitle = isGroupRoom ? groupsDB[room].name : '';
+    const prefix = isGroupRoom ? ('👥 [' + groupTitle + '] ') : '💬 Мессенджер: ';
+
+    if (type === 'audio') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '🎙️ Голосовое сообщение в Мессенджере';
+    else if (type === 'video') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '🎥 Видео-кружок в Мессенджере';
+    else if (type === 'file') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '📎 Файл в Мессенджере';
+    else if (type === 'gif') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '🎬 GIF-анимация в Мессенджере';
+    else cleanText = prefix + cleanText;
 
     let targets = new Array();
-    if (groupsDB[room]) {
+    if (isGroupRoom) {
         targets = groupsDB[room].members.filter(function(m) {
             return String(m).trim().toLowerCase() !== String(sender).trim().toLowerCase();
         });
@@ -1026,9 +1039,11 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         const cleanKey = String(t).trim().toLowerCase();
         const uObj = usersDB[cleanKey];
         const realTarget = uObj ? uObj.username : String(t).trim();
-        broadcastAlert(sender, '#00a884', timeStr, realTarget, cleanText);
+        const alertSender = isGroupRoom ? ('👥 ' + groupTitle) : sender;
+        broadcastAlert(alertSender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
+
 
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
