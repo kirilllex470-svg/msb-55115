@@ -1,8 +1,3 @@
-// ==========================================
-// МСБ-55115: МЕССЕНДЖЕР (messenger.js)
-// ЧАСТЬ 1/11: Состояние, буферы и переменные
-// ==========================================
-
 var chatUser = null;
 var currentPartner = null;
 var currentRoomId = null;
@@ -12,7 +7,6 @@ var friendRequests = new Array();
 var updateInterval = null;
 var lastMessagesCount = -1;
 var renderedMsgIds = new Set();
-
 var audioRecorder = null;
 var videoRecorder = null;
 var audioChunks = new Array();
@@ -31,9 +25,9 @@ var quotedMessageSender = null;
 var msgImageZoom = 1;
 var currentGifCategory = 'military';
 
-// --- Флаги защиты сети МСБ-55115 ---
+// --- СИСТЕМА ЗАЩИТЫ ОТ СБОЕВ СЕТИ, ДУБЛИРОВАНИЯ И АВТОПОВТОРА МСБ-55115 ---
 var isSendingPayload = false;
-var pendingRetryQueue = [];
+var pendingRetryQueue = new Array();
 
 function getMessagesDiv() {
     return document.getElementById('messages');
@@ -46,10 +40,7 @@ function getActiveChatIdentity() {
     if (typeof currentUser !== 'undefined' && currentUser) {
         return currentUser;
     }
-    return localStorage.getItem('journal_callsign') || 
-           localStorage.getItem('chat_username') || 
-           localStorage.getItem('journal_user') || 
-           null;
+    return localStorage.getItem('journal_callsign') || localStorage.getItem('chat_username') || localStorage.getItem('journal_user') || null;
 }
 
 function makeDirectRoomId(u1, u2) {
@@ -60,17 +51,13 @@ function makeDirectRoomId(u1, u2) {
     var pair = sorted.join(',');
     return pair + '_' + pair;
 }
-// ==========================================
-// ЧАСТЬ 2/11: Проверка связи и очередь повторов
-// ==========================================
 
 async function checkServerConnection() {
     if (!navigator.onLine) return false;
     try {
         var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 3000);
-        var targetUser = getActiveChatIdentity() || '';
-        var res = await fetch('/api/user/me?user=' + encodeURIComponent(targetUser) + '&t=' + Date.now(), {
+        var timeoutId = setTimeout(function() { controller.abort(); }, 2500);
+        var res = await fetch('/api/user/me?user=' + encodeURIComponent(chatUser || '') + '&t=' + Date.now(), {
             method: 'GET',
             cache: 'no-store',
             signal: controller.signal
@@ -85,15 +72,13 @@ async function checkServerConnection() {
 function showNetworkErrorBanner() {
     var mDiv = getMessagesDiv();
     if (!mDiv) return;
-    
     var oldBanner = document.getElementById('msb-net-error-banner');
     if (oldBanner) oldBanner.remove();
 
     var banner = document.createElement('div');
     banner.id = 'msb-net-error-banner';
     banner.style.cssText = 'background: rgba(239, 68, 68, 0.22); border: 1.5px solid #ef4444; border-left: 5px solid #ef4444; color: #fca5a5; padding: 10px 14px; border-radius: 8px; font-size: 13px; text-align: center; margin: 10px 0; font-weight: bold; animation: pulseLive 1.5s infinite; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);';
-    banner.innerHTML = '⚠️ подождите пока наладится связь или наладится интеренет,передача данных отсутствует МСБ55115';
-    
+    banner.innerHTML = '⚠️ Подождите пока наладится связь или наладится интеренет,передача данных отсутствует МСБ55115';
     mDiv.appendChild(banner);
     mDiv.scrollTop = mDiv.scrollHeight;
 }
@@ -101,6 +86,50 @@ function showNetworkErrorBanner() {
 function clearNetworkErrorBanner() {
     var oldBanner = document.getElementById('msb-net-error-banner');
     if (oldBanner) oldBanner.remove();
+}
+async function executeSendFormData(formData, onSuccessCallback, onErrorCallback) {
+    if (isSendingPayload) return false;
+
+    var isOnline = await checkServerConnection();
+    if (!isOnline) {
+        showNetworkErrorBanner();
+        if (onErrorCallback) onErrorCallback();
+        return false;
+    }
+
+    clearNetworkErrorBanner();
+    isSendingPayload = true;
+
+    if (!formData.has('clientMsgId')) {
+        formData.append('clientMsgId', Date.now() + '_' + Math.random().toString(36).substring(2, 9));
+    }
+
+    var controller = new AbortController();
+    var sendTimer = setTimeout(function() { controller.abort(); }, 6000);
+
+    fetch('/api/send', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+    })
+    .then(function(res) {
+        clearTimeout(sendTimer);
+        if (!res.ok) throw new Error('Send failed');
+        if (onSuccessCallback) onSuccessCallback();
+        lastMessagesCount = -1;
+        fetchMessages();
+    })
+    .catch(function() {
+        clearTimeout(sendTimer);
+        showNetworkErrorBanner();
+        pendingRetryQueue.push(formData);
+        if (onErrorCallback) onErrorCallback();
+    })
+    .finally(function() {
+        isSendingPayload = false;
+    });
+
+    return true;
 }
 
 async function flushRetryQueue() {
@@ -124,15 +153,19 @@ async function flushRetryQueue() {
 }
 
 window.addEventListener('online', function() {
+    clearNetworkErrorBanner();
     flushRetryQueue();
+    if (currentRoomId) {
+        fetchMessages();
+        markChatAsRead(currentRoomId);
+    }
 });
 
 setInterval(function() {
-    if (pendingRetryQueue.length > 0) flushRetryQueue();
+    if (pendingRetryQueue.length > 0) {
+        flushRetryQueue();
+    }
 }, 4000);
-// ==========================================
-// ЧАСТЬ 3/11: Авторизация окна и синхронизация
-// ==========================================
 
 function syncMessengerAuth() {
     chatUser = getActiveChatIdentity();
@@ -162,7 +195,6 @@ function syncMessengerAuth() {
     }
     loadFriendsAndRequests();
 }
-
 function openMessengerWindow(targetPartnerName) {
     chatUser = getActiveChatIdentity();
     if (!chatUser) {
@@ -176,7 +208,9 @@ function openMessengerWindow(targetPartnerName) {
     }
     syncMessengerAuth();
     if (typeof updateBroadcastTicker === 'function') {
-        try { updateBroadcastTicker(); } catch (e) {}
+        try {
+            updateBroadcastTicker();
+        } catch (e) {}
     }
     if (wasAlreadyOpen && currentRoomId) {
         fetchMessages();
@@ -220,9 +254,6 @@ function openMessengerWindow(targetPartnerName) {
     loadFriendsAndRequests();
 }
 window.openMessengerWindow = openMessengerWindow;
-// ==========================================
-// ЧАСТЬ 4/11: Аватары, закрытие и Event Listeners
-// ==========================================
 
 function closeMessengerWindow() {
     var modal = document.getElementById('messenger-modal');
@@ -230,7 +261,9 @@ function closeMessengerWindow() {
         modal.style.display = 'none';
     }
     document.querySelectorAll('#messages video, #messages audio').forEach(function(media) {
-        try { media.pause(); } catch (e) {}
+        try {
+            media.pause();
+        } catch (e) {}
     });
 }
 window.closeMessengerWindow = closeMessengerWindow;
@@ -278,7 +311,6 @@ function uploadMyAvatar(inputEl) {
     };
     reader.readAsDataURL(file);
 }
-
 document.addEventListener('DOMContentLoaded', function() {
     var tInput = document.getElementById('text-input');
     var fInput = document.getElementById('new-friend-name');
@@ -298,9 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     syncMessengerAuth();
 });
-// ==========================================
-// ЧАСТЬ 5/11: Загрузка друзей, заявок и бейджей
-// ==========================================
 
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
@@ -364,10 +393,6 @@ function renderRequests() {
         box.appendChild(item);
     });
 }
-// ==========================================
-// ЧАСТЬ 6/11: Рендер списка контактов и групп
-// ==========================================
-
 function renderFriends() {
     chatUser = getActiveChatIdentity();
     var box = document.getElementById('friends-box');
@@ -454,10 +479,6 @@ function submitCreateGroup() {
         }
     });
 }
-// ==========================================
-// ЧАСТЬ 7/11: Выбор чата, сброс и удаление
-// ==========================================
-
 function deleteFriend(friendObj, event) {
     chatUser = getActiveChatIdentity();
     if (event) event.stopPropagation();
@@ -498,12 +519,16 @@ function resetChatArea() {
     currentRoomId = null;
     isCurrentGroup = false;
     cancelReply();
+    clearNetworkErrorBanner();
     lastMessagesCount = -1;
     renderedMsgIds.clear();
     document.getElementById('partner-display-name').textContent = "Чат не выбран";
     document.getElementById('chat-status').style.display = "none";
-    document.getElementById('text-input').setAttribute('disabled', 'true');
-    document.getElementById('text-input').placeholder = "Сообщение...";
+    var tInput = document.getElementById('text-input');
+    if (tInput) {
+        tInput.setAttribute('disabled', 'true');
+        tInput.placeholder = "Сообщение...";
+    }
     var mDiv = getMessagesDiv();
     if (mDiv) {
         mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
@@ -552,7 +577,6 @@ function selectChat(itemObj) {
     fetchMessages();
     renderFriends();
 }
-
 function closeChatMobile() {
     document.getElementById('app-sidebar').classList.remove('hidden');
 }
@@ -567,54 +591,6 @@ function markChatAsRead(roomId) {
     }).then(function() {
         loadFriendsAndRequests();
     });
-}
-// ==========================================
-// ЧАСТЬ 8/11: Антидубликат и отправка сообщений
-// ==========================================
-
-async function executeSendFormData(formData, onSuccessCallback, onErrorCallback) {
-    if (isSendingPayload) return false;
-
-    var isOnline = await checkServerConnection();
-    if (!isOnline) {
-        showNetworkErrorBanner();
-        if (onErrorCallback) onErrorCallback();
-        return false;
-    }
-
-    clearNetworkErrorBanner();
-    isSendingPayload = true;
-
-    if (!formData.has('clientMsgId')) {
-        formData.append('clientMsgId', Date.now() + '_' + Math.random().toString(36).substring(2, 9));
-    }
-
-    var controller = new AbortController();
-    var sendTimer = setTimeout(function() { controller.abort(); }, 6000);
-
-    fetch('/api/send', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal
-    })
-    .then(function(res) {
-        clearTimeout(sendTimer);
-        if (!res.ok) throw new Error('Send failed');
-        if (onSuccessCallback) onSuccessCallback();
-        lastMessagesCount = -1;
-        fetchMessages();
-    })
-    .catch(function(err) {
-        clearTimeout(sendTimer);
-        showNetworkErrorBanner();
-        pendingRetryQueue.push(formData);
-        if (onErrorCallback) onErrorCallback();
-    })
-    .finally(function() {
-        isSendingPayload = false;
-    });
-
-    return true;
 }
 
 async function sendMessage() {
@@ -643,35 +619,14 @@ async function sendMessage() {
 
     await executeSendFormData(formData, function() {
         textInput.value = '';
-    }, function() {});
+    }, function() {
+        // Ошибка или обрыв: текст сохраняется в поле ввода для пользователя
+    });
 
     textInput.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
     textInput.focus();
 }
-
-function uploadAnyFile(inputElement) {
-    chatUser = getActiveChatIdentity();
-    if (!inputElement.files || inputElement.files.length === 0 || !chatUser || !currentRoomId) return;
-    var file = inputElement.files.item(0);
-    var formData = new FormData();
-    formData.append('sender', chatUser);
-    formData.append('room', currentRoomId);
-    formData.append('type', 'file');
-    formData.append('media', file, file.name);
-    if (quotedMessageId) {
-        formData.append('quoteId', quotedMessageId);
-        formData.append('quoteText', quotedMessageText);
-        formData.append('quoteSender', quotedMessageSender);
-        cancelReply();
-    }
-    executeSendFormData(formData, function() {
-        inputElement.value = '';
-    });
-}
-// ==========================================
-// ЧАСТЬ 9/11: Запись Voice и Video-сообщений
-// ==========================================
 
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
@@ -721,7 +676,6 @@ function toggleVoiceRecord() {
         }).catch(function() { alert("Нет доступа к микрофону!"); });
     }
 }
-
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -783,112 +737,357 @@ function toggleVideoRecord() {
         }).catch(function() { alert("Нет доступа к камере!"); });
     }
 }
-// ==========================================
-// ОКНО 10: СЛЕЖЕНИЕ ЗА СЕТЬЮ И ОБРАБОТЧИКИ UI
-// ==========================================
 
-// Очистка очереди при смене чата
-function clearPendingQueueForCurrentRoom() {
-    if (!currentRoomId) return;
-    pendingRetryQueue = pendingRetryQueue.filter(function(item) {
-        return item.room !== currentRoomId;
+function uploadAnyFile(inputElement) {
+    chatUser = getActiveChatIdentity();
+    if (!inputElement.files || inputElement.files.length === 0 || !chatUser || !currentRoomId) return;
+    var file = inputElement.files.item(0);
+    var formData = new FormData();
+    formData.append('sender', chatUser);
+    formData.append('room', currentRoomId);
+    formData.append('type', 'file');
+    formData.append('media', file, file.name);
+    if (quotedMessageId) {
+        formData.append('quoteId', quotedMessageId);
+        formData.append('quoteText', quotedMessageText);
+        formData.append('quoteSender', quotedMessageSender);
+        cancelReply();
+    }
+    executeSendFormData(formData, function() {
+        inputElement.value = '';
+    });
+}
+function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
+    var container = rowElement.querySelector('.swipe-container');
+    var leftIndicator = rowElement.querySelector('.left-indicator');
+    var rightIndicator = rowElement.querySelector('.right-indicator');
+    var startX = 0, startY = 0, currentX = 0, isSwiping = false, isHorizontal = false;
+    var displayStr = rawText;
+    if (msgType === 'audio') displayStr = "🎙️ Голосовое сообщение";
+    if (msgType === 'video') displayStr = "🎥 Видео-кружок";
+    if (msgType === 'gif') displayStr = "🎬 GIF-анимация";
+    if (msgType === 'file') {
+        try {
+            displayStr = '📎 Файл: ' + JSON.parse(rawText).name;
+        } catch (e) {}
+    }
+
+    container.addEventListener('touchstart', function(e) {
+        var touch = e.touches.item(0);
+        startX = touch.clientX;
+        startY = touch.clientY;
+        isSwiping = true;
+        isHorizontal = false;
+        container.style.transition = 'none';
+    }, { passive: true });
+
+    container.addEventListener('touchmove', function(e) {
+        if (!isSwiping) return;
+        var touch = e.touches.item(0);
+        var diffX = touch.clientX - startX;
+        var diffY = touch.clientY - startY;
+        if (!isHorizontal && Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 8) {
+            isHorizontal = true;
+        }
+        if (isHorizontal) {
+            if (e.cancelable) e.preventDefault();
+            currentX = Math.max(-80, Math.min(80, diffX * 0.6));
+            container.style.transform = 'translateX(' + currentX + 'px)';
+            leftIndicator.style.opacity = (currentX > 35) ? '1' : '0';
+            rightIndicator.style.opacity = (currentX < -35) ? '1' : '0';
+        }
+    }, { passive: false });
+
+    container.addEventListener('touchend', function() {
+        isSwiping = false;
+        container.style.transition = 'transform 0.2s cubic-bezier(0.1, 0.8, 0.3, 1)';
+        container.style.transform = 'translateX(0px)';
+        leftIndicator.style.opacity = '0';
+        rightIndicator.style.opacity = '0';
+        if (currentX > 50) {
+            handleQuoteTrigger(msgId, displayStr, sender);
+        } else if (currentX < -50) {
+            handleForwardTrigger(msgId, rawText, msgType, sender);
+        }
+        currentX = 0;
     });
 }
 
-// Глобальное слежение за возвращением связи
-window.addEventListener('online', function() {
-    clearNetworkErrorBanner();
-    flushRetryQueue();
-    if (currentRoomId) {
+function handleQuoteTrigger(id, text, sender) {
+    quotedMessageId = id;
+    quotedMessageText = text;
+    quotedMessageSender = sender;
+    var bar = document.getElementById('reply-bar');
+    var textEl = document.getElementById('reply-bar-text');
+    textEl.textContent = 'Цитата от ' + sender + ': ' + text;
+    bar.style.display = 'flex';
+    document.getElementById('text-input').focus();
+}
+
+function cancelReply() {
+    quotedMessageId = null;
+    quotedMessageText = null;
+    quotedMessageSender = null;
+    var bar = document.getElementById('reply-bar');
+    if (bar) bar.style.display = 'none';
+}
+
+function handleForwardTrigger(id, text, type, sender) {
+    activeMessageId = id;
+    activeMessageText = text;
+    activeMessageType = type;
+    activeMessageOriginalSender = sender;
+    var modal = document.getElementById('forward-modal');
+    var listContainer = document.getElementById('modal-contacts-list');
+    listContainer.innerHTML = '';
+    if (friendsList.length === 0) {
+        listContainer.innerHTML = '<div style="color:#64748b;font-size:14px;text-align:center;">Нет контактов</div>';
+    } else {
+        friendsList.forEach(function(f) {
+            var item = document.createElement('div');
+            item.className = 'modal-item';
+            item.innerHTML = '<span>' + (f.isGroup ? '👥 ' : (f.online ? '🟢 ' : '⚫ ')) + f.name + '</span><span class="modal-forward-icon">➔</span>';
+            item.onclick = function() { executeForward(f); };
+            listContainer.appendChild(item);
+        });
+    }
+    modal.style.display = 'flex';
+}
+function closeForwardModal() {
+    document.getElementById('forward-modal').style.display = 'none';
+}
+
+function executeForward(targetObj) {
+    chatUser = getActiveChatIdentity();
+    var targetRoomId = targetObj.isGroup ? targetObj.id : makeDirectRoomId(chatUser, targetObj.name);
+    var originalAuthor = activeMessageOriginalSender || chatUser;
+    if (activeMessageType === 'audio' || activeMessageType === 'video' || activeMessageType === 'file') {
+        var fileUrl = activeMessageType === 'file' ? JSON.parse(activeMessageText).path : activeMessageText;
+        fetch(fileUrl).then(function(res) { return res.blob(); }).then(function(blob) {
+            var formData = new FormData();
+            formData.append('sender', chatUser);
+            formData.append('room', targetRoomId);
+            formData.append('type', activeMessageType);
+            formData.append('forwardedFrom', originalAuthor);
+            formData.append('media', blob, 'media_file');
+            executeSendFormData(formData, function() {
+                closeForwardModal();
+                loadFriendsAndRequests();
+            });
+        });
+    } else {
+        var formData = new FormData();
+        formData.append('sender', chatUser);
+        formData.append('room', targetRoomId);
+        formData.append('text', activeMessageText);
+        formData.append('type', activeMessageType || 'text');
+        formData.append('forwardedFrom', originalAuthor);
+        executeSendFormData(formData, function() {
+            closeForwardModal();
+            loadFriendsAndRequests();
+        });
+    }
+}
+
+function inlineDeleteMessage(msgId) {
+    if (!confirm("Удалить это сообщение?")) return;
+    fetch('/api/messages/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room: currentRoomId, messageId: msgId })
+    }).then(function() {
+        var existingRow = document.querySelector('.message-row[data-msg-id="' + msgId + '"]');
+        if (existingRow) existingRow.remove();
+        renderedMsgIds.delete(msgId);
+        lastMessagesCount = -1;
         fetchMessages();
-        markChatAsRead(currentRoomId);
-    }
-});
+    });
+}
 
-// Периодическая фоновая проверка и выталкивание очереди
-setInterval(function() {
-    if (pendingRetryQueue.length > 0) {
-        flushRetryQueue();
-    }
-}, 4000);
+function fetchMessages() {
+    chatUser = getActiveChatIdentity();
+    var mDiv = getMessagesDiv();
+    if (!chatUser || !currentRoomId || !mDiv) return;
+    var modal = document.getElementById('messenger-modal');
+    var isModalOpen = modal && modal.style.display === 'flex';
 
-// Инициализация при загрузке документа
-document.addEventListener('DOMContentLoaded', function() {
-    var tInput = document.getElementById('text-input');
-    var fInput = document.getElementById('new-friend-name');
-
-    if (tInput) {
-        tInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
+    fetch('/api/messages?room=' + encodeURIComponent(currentRoomId) + '&user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
+    .then(function(res) { return res.json(); })
+    .then(function(resp) {
+        var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
+        var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
+        if (!isCurrentGroup && currentPartner) {
+            var stEl = document.getElementById('chat-status');
+            if (stEl) {
+                stEl.style.display = 'block';
+                stEl.textContent = partnerOnline ? '🟢 в сети' : '⚫ не в сети';
+                stEl.style.color = partnerOnline ? '#4ade80' : '#94a3b8';
+            }
+        }
+        if (data.length === 0) {
+            if (lastMessagesCount !== 0) {
+                renderedMsgIds.clear();
+                lastMessagesCount = 0;
+                mDiv.innerHTML = '<div class="chat-placeholder">История сообщений пуста.</div>';
+            }
+            return;
+        }
+        var placeholder = mDiv.querySelector('.chat-placeholder');
+        if (placeholder) placeholder.remove();
+        var serverIds = new Set(data.map(function(m) { return m.id; }));
+        renderedMsgIds.forEach(function(id) {
+            if (!serverIds.has(id)) {
+                var el = mDiv.querySelector('.message-row[data-msg-id="' + id + '"]');
+                if (el) el.remove();
+                renderedMsgIds.delete(id);
             }
         });
-    }
-
-    if (fInput) {
-        fInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                sendFriendRequest();
+        var addedNew = false, hasUnreadIncoming = false;
+        data.forEach(function(msg) {
+            var isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
+            if (!isMy && !msg.read) hasUnreadIncoming = true;
+            var checkIcon = isMy
+                ? (msg.read
+                    ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;" title="Прочитано">✓✓</span>'
+                    : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;" title="Доставлено">✓</span>')
+                : '';
+            if (renderedMsgIds.has(msg.id)) {
+                if (isMy) {
+                    var existingRow = mDiv.querySelector('.message-row[data-msg-id="' + msg.id + '"]');
+                    if (existingRow) {
+                        var timeBox = existingRow.querySelector('.msg-time');
+                        var desiredTimeHTML = msg.time + checkIcon;
+                        if (timeBox && timeBox.innerHTML !== desiredTimeHTML) timeBox.innerHTML = desiredTimeHTML;
+                    }
+                }
+                return;
             }
+            renderedMsgIds.add(msg.id);
+            addedNew = true;
+            renderSingleRow(mDiv, msg, isMy, checkIcon);
         });
+        lastMessagesCount = data.length;
+        if (addedNew) setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 50);
+        if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) {
+            fetch('/api/messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: chatUser, room: currentRoomId }) });
+        }
+    }).catch(function() {});
+}
+function renderSingleRow(mDiv, msg, isMy, checkIcon) {
+    var row = document.createElement('div');
+    row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
+    row.setAttribute('data-msg-id', msg.id);
+    row.innerHTML = '<div class="swipe-indicator left-indicator">💬</div><div class="swipe-container"><div class="bubble"></div></div><div class="swipe-indicator right-indicator">↪️</div>';
+    var bubble = row.querySelector('.bubble');
+    var quoteHTML = (msg.quoteId && msg.quoteText) ? ('<div class="msg-quote-block"><div class="msg-quote-author">' + (msg.quoteSender || 'Система') + '</div>' + msg.quoteText + '</div>') : '';
+    var forwardHTML = msg.forwardedFrom ? ('<div class="msg-forwarded-label">↪ Переслано от: ' + msg.forwardedFrom + '</div>') : '';
+    var authorHTML = (isCurrentGroup && !isMy) ? ('<div class="msg-author">' + msg.sender + '</div>') : '';
+    var delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
+    var contentHTML = '';
+    if (msg.type === 'audio') {
+        contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="metadata" style="display:block; max-width:100%;"></audio>';
+    } else if (msg.type === 'video') {
+        contentHTML = '<video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" style="display:block;" onclick="playVideoWithSound(this)"></video>';
+    } else if (msg.type === 'gif') {
+        contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF от ' + msg.sender + '\')">';
+    } else if (msg.type === 'file') {
+        try {
+            var fileObj = JSON.parse(msg.text);
+            var ext = fileObj.name.split('.').pop().toLowerCase();
+            if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) {
+                contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото: ' + fileObj.name + '\')">';
+            } else {
+                contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
+            }
+        } catch (e) {
+            contentHTML = '<div class="msg-text">Поврежденный файл</div>';
+        }
+    } else {
+        contentHTML = '<div class="msg-text">' + msg.text + '</div>';
     }
+    bubble.innerHTML = delBtnHTML + quoteHTML + forwardHTML + authorHTML + contentHTML + '<div class="msg-time">' + msg.time + checkIcon + '</div>';
+    mDiv.appendChild(row);
+    setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
+}
 
-    var savedTheme = localStorage.getItem('msb_app_theme') || 'military';
-    if (typeof setAppTheme === 'function') {
-        setAppTheme(savedTheme, true);
+function playVideoWithSound(v) {
+    document.querySelectorAll('#messages video.video-round').forEach(function(other) {
+        if (other !== v) { other.muted = true; other.pause(); }
+    });
+    if (!v.paused && !v.muted) {
+        v.muted = true; v.pause();
+    } else {
+        v.muted = false; v.loop = false; v.currentTime = 0;
+        v.play().catch(function() {});
+        v.onended = function() { v.muted = true; v.pause(); v.currentTime = 0; };
     }
-    syncMessengerAuth();
-});
+}
 
-// Экспорт критических функций в глобальную область видимости
+function sendFriendRequest() {
+    chatUser = getActiveChatIdentity();
+    var input = document.getElementById('new-friend-name');
+    if (!input) return;
+    var targetName = input.value.trim();
+    if (!targetName) return alert('Введите позывной для добавления в друзья!');
+    if (!chatUser) return alert('Сначала войдите в систему!');
+    if (targetName.toLowerCase() === chatUser.toLowerCase()) return alert('Нельзя добавить самого себя!');
+    fetch('/api/friends/request/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: chatUser, to: targetName })
+    }).then(function(res) { return res.json(); }).then(function(data) {
+        if (data && data.success) {
+            input.value = '';
+            alert('✅ Заявка в друзья отправлена позывному: ' + targetName);
+            loadFriendsAndRequests();
+        } else {
+            alert('❌ ' + (data && data.message ? data.message : 'Ошибка отправки заявки'));
+        }
+    }).catch(function() { alert('❌ Ошибка связи с сервером'); });
+}
+
+function handleRequest(fromUser, action) {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser || !fromUser) return;
+    fetch('/api/friends/request/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: chatUser, from: fromUser, action: action })
+    }).then(function() { loadFriendsAndRequests(); }).catch(function() {});
+}
+function updateTotalUnreadBadge() {
+    var badge = document.getElementById('msg-unread-total');
+    if (!badge) return;
+    var total = 0;
+    if (Array.isArray(friendsList)) friendsList.forEach(function(f) { if (f && f.unread > 0) total += f.unread; });
+    if (Array.isArray(friendRequests)) total += friendRequests.length;
+    if (total > 0) {
+        badge.style.display = 'inline-block';
+        badge.innerText = total;
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// Экспорт всех необходимых функций в глобальную область window
 window.openMessengerWindow = openMessengerWindow;
 window.closeMessengerWindow = closeMessengerWindow;
 window.selectChat = selectChat;
+window.closeChatMobile = closeChatMobile;
 window.sendMessage = sendMessage;
 window.toggleVoiceRecord = toggleVoiceRecord;
 window.toggleVideoRecord = toggleVideoRecord;
 window.uploadAnyFile = uploadAnyFile;
+window.uploadMyAvatar = uploadMyAvatar;
+window.deleteFriend = deleteFriend;
+window.openCreateGroupModal = openCreateGroupModal;
+window.closeGroupModal = closeGroupModal;
+window.submitCreateGroup = submitCreateGroup;
+window.sendFriendRequest = sendFriendRequest;
+window.handleRequest = handleRequest;
+window.closeForwardModal = closeForwardModal;
+window.cancelReply = cancelReply;
+window.inlineDeleteMessage = inlineDeleteMessage;
+window.playVideoWithSound = playVideoWithSound;
+window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
-// ==========================================
-// ОКНО 11: СЕРВЕРНАЯ ПРОВЕРКА ДУБЛИКАТОВ И СТАТУС
-// ==========================================
-
-// Вставка в функцию saveMultipartChatMsg в server.js перед сохранением:
-function checkAndFilterDuplicates(fields, room, sender, type, finalContent) {
-    const clientMsgId = fields.clientMsgId || null;
-
-    if (!Array.isArray(roomsDB[room]) || roomsDB[room].length === 0) {
-        return false; // Дубликатов нет, сохраняем
-    }
-
-    const recent = roomsDB[room].slice(-8); // Анализ последних сообщений в комнате
-    const isDup = recent.some(function(m) {
-        // 1. Точное совпадение по уникальному clientMsgId
-        if (clientMsgId && m.clientMsgId && m.clientMsgId === clientMsgId) {
-            return true;
-        }
-
-        // 2. Защита от дублей при дребезге клика (текст, автор и окно < 2.5 сек)
-        const sameAuthor = String(m.sender || '').trim().toLowerCase() === String(sender || '').trim().toLowerCase();
-        const sameBody = (type === 'text' && m.text === finalContent);
-        const withinTimeWindow = (Date.now() - (m.timestamp || 0)) < 2500;
-
-        return sameAuthor && sameBody && withinTimeWindow;
-    });
-
-    return isDup;
-}
-
-// Обновленная сигнатура вставки в roomsDB:
-function appendVerifiedMessage(room, msgPayload) {
-    if (!Array.isArray(roomsDB[room])) {
-        roomsDB[room] = [];
-    }
-    roomsDB[room].push(msgPayload);
-    if (roomsDB[room].length > 150) {
-        roomsDB[room].shift();
-    }
-    writeJSON(CHAT_ROOMS_FILE, roomsDB);
-}
