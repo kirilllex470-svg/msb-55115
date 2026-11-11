@@ -24,19 +24,31 @@ let quotedMessageSender = null;
 
 let msgImageZoom = 1;
 let currentGifCategory = 'military';
+let lastFriendsRenderSig = '';
+let lastRequestsRenderSig = '';
+let isFetchingMessages = false;
+let isFetchingFriends = false;
+let myCachedAvatar = '';
 
 function getMessagesDiv() {
     return document.getElementById('messages');
 }
 
 function getActiveChatIdentity() {
-    if (typeof currentCallsign !== 'undefined' && currentCallsign) return currentCallsign;
-    if (typeof currentUser !== 'undefined' && currentUser) return currentUser;
+    if (typeof currentCallsign !== 'undefined' && currentCallsign) {
+        return currentCallsign;
+    }
+    if (typeof currentUser !== 'undefined' && currentUser) {
+        return currentUser;
+    }
     return localStorage.getItem('journal_callsign') || localStorage.getItem('chat_username') || localStorage.getItem('journal_user') || null;
 }
 
 function makeDirectRoomId(u1, u2) {
-    const sorted = Array.of(String(u1 || '').trim().toLowerCase(), String(u2 || '').trim().toLowerCase()).sort();
+    const sorted = Array.of(
+        String(u1 || '').trim().toLowerCase(),
+        String(u2 || '').trim().toLowerCase()
+    ).sort();
     const pair = sorted.join(',');
     return pair + '_' + pair;
 }
@@ -48,11 +60,19 @@ function syncMessengerAuth() {
     const avEl = document.getElementById('my-avatar');
     const hdrEl = document.getElementById('msg-header-identity');
     const uName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : '';
-    if (nameEl) nameEl.textContent = chatUser + (uName && uName !== chatUser ? ' (' + uName + ')' : '');
-    if (avEl && !avEl.querySelector('img')) avEl.textContent = chatUser.substring(0, 2).toUpperCase();
-    if (hdrEl) hdrEl.textContent = '👤 ' + chatUser;
+    if (nameEl) {
+        nameEl.textContent = chatUser + (uName && uName !== chatUser ? ' (' + uName + ')' : '');
+    }
+    if (avEl && !avEl.querySelector('img')) {
+        avEl.textContent = chatUser.substring(0, 2).toUpperCase();
+    }
+    if (hdrEl) {
+        hdrEl.textContent = '👤 ' + chatUser;
+    }
+    fetchMyAvatarOnce();
     if (!updateInterval) {
         updateInterval = setInterval(function() {
+            if (document.visibilityState === 'hidden') return;
             const modal = document.getElementById('messenger-modal');
             if (modal && modal.style.display === 'flex') {
                 fetchMessages();
@@ -62,6 +82,18 @@ function syncMessengerAuth() {
     }
     loadFriendsAndRequests();
 }
+function fetchMyAvatarOnce() {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser) return;
+    fetch('/api/user/me?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d && d.avatar && d.avatar !== myCachedAvatar) {
+                myCachedAvatar = d.avatar;
+                renderAvatarElement(document.getElementById('my-avatar'), chatUser, d.avatar);
+            }
+        }).catch(function() {});
+}
 
 function openMessengerWindow(targetPartnerName) {
     chatUser = getActiveChatIdentity();
@@ -70,10 +102,14 @@ function openMessengerWindow(targetPartnerName) {
         return;
     }
     const modal = document.getElementById('messenger-modal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+        modal.style.display = 'flex';
+    }
     syncMessengerAuth();
     if (typeof updateBroadcastTicker === 'function') {
-        try { updateBroadcastTicker(); } catch (e) {}
+        try {
+            updateBroadcastTicker();
+        } catch (e) {}
     }
     if (targetPartnerName && typeof targetPartnerName === 'string') {
         try {
@@ -89,7 +125,12 @@ function openMessengerWindow(targetPartnerName) {
             if (foundFriend) {
                 selectChat(foundFriend);
             } else if (cleanName && cleanName.toLowerCase() !== chatUser.toLowerCase() && cleanName !== 'АДМИН') {
-                selectChat({ name: cleanName, isGroup: false, avatar: '', online: true });
+                selectChat({
+                    name: cleanName,
+                    isGroup: false,
+                    avatar: '',
+                    online: true
+                });
             }
         } catch (err) {}
     }
@@ -100,9 +141,13 @@ window.openMessengerWindow = openMessengerWindow;
 
 function closeMessengerWindow() {
     const modal = document.getElementById('messenger-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.style.display = 'none';
+    }
     document.querySelectorAll('#messages video, #messages audio').forEach(function(media) {
-        try { media.pause(); } catch (e) {}
+        try {
+            media.pause();
+        } catch (e) {}
     });
 }
 window.closeMessengerWindow = closeMessengerWindow;
@@ -116,7 +161,6 @@ function renderAvatarElement(el, name, avatarDataUrl) {
         el.textContent = (name || '?').substring(0, 2).toUpperCase();
     }
 }
-
 function uploadMyAvatar(inputEl) {
     chatUser = getActiveChatIdentity();
     if (!inputEl.files || inputEl.files.length === 0 || !chatUser) return;
@@ -126,10 +170,12 @@ function uploadMyAvatar(inputEl) {
         const img = new Image();
         img.onload = function() {
             const canvas = document.createElement('canvas');
-            canvas.width = 160; canvas.height = 160;
+            canvas.width = 160;
+            canvas.height = 160;
             const ctx = canvas.getContext('2d');
             const minSide = Math.min(img.width, img.height);
-            const sx = (img.width - minSide) / 2, sy = (img.height - minSide) / 2;
+            const sx = (img.width - minSide) / 2;
+            const sy = (img.height - minSide) / 2;
             ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 160, 160);
             const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
             fetch('/api/user/avatar', {
@@ -137,8 +183,12 @@ function uploadMyAvatar(inputEl) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user: chatUser, avatar: dataUrl })
             }).then(function() {
-                if (typeof allUsersAvatars !== 'undefined') allUsersAvatars[chatUser.toLowerCase()] = dataUrl;
+                myCachedAvatar = dataUrl;
+                if (typeof allUsersAvatars !== 'undefined') {
+                    allUsersAvatars[chatUser.toLowerCase()] = dataUrl;
+                }
                 renderAvatarElement(document.getElementById('my-avatar'), chatUser, dataUrl);
+                lastFriendsRenderSig = '';
                 loadFriendsAndRequests();
             });
         };
@@ -150,26 +200,66 @@ function uploadMyAvatar(inputEl) {
 document.addEventListener('DOMContentLoaded', function() {
     const tInput = document.getElementById('text-input');
     const fInput = document.getElementById('new-friend-name');
-    if (tInput) tInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendMessage(); });
-    if (fInput) fInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') sendFriendRequest(); });
+    if (tInput) {
+        tInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    }
+    if (fInput) {
+        fInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendFriendRequest();
+        });
+    }
     const savedTheme = localStorage.getItem('msb_app_theme') || 'military';
-    setAppTheme(savedTheme, true);
+    if (typeof setAppTheme === 'function') {
+        setAppTheme(savedTheme, true);
+    }
     syncMessengerAuth();
+});
+
+window.addEventListener('online', function() {
+    if (chatUser) {
+        lastFriendsRenderSig = '';
+        loadFriendsAndRequests();
+        const modal = document.getElementById('messenger-modal');
+        if (modal && modal.style.display === 'flex') {
+            fetchMessages();
+        }
+    }
+});
+
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && chatUser) {
+        loadFriendsAndRequests();
+        const modal = document.getElementById('messenger-modal');
+        if (modal && modal.style.display === 'flex') {
+            fetchMessages();
+        }
+    }
 });
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
-    if (!chatUser) return;
+    if (!chatUser || isFetchingFriends) return;
+    isFetchingFriends = true;
     fetch('/api/friends/get?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
+            isFetchingFriends = false;
             if (Array.isArray(data)) {
                 friendsList = data;
-                if (typeof myMessengerFriends !== 'undefined') myMessengerFriends = data;
-                if (typeof populateTargetSelect === 'function') populateTargetSelect();
+                if (typeof myMessengerFriends !== 'undefined') {
+                    myMessengerFriends = data;
+                }
+                if (typeof populateTargetSelect === 'function') {
+                    populateTargetSelect();
+                }
                 renderFriends();
                 updateTotalUnreadBadge();
             }
-        }).catch(function() {});
+        }).catch(function() {
+            isFetchingFriends = false;
+        });
+
     fetch('/api/friends/requests?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
@@ -179,25 +269,32 @@ function loadFriendsAndRequests() {
                 updateTotalUnreadBadge();
             }
         }).catch(function() {});
-    fetch('/api/user/me?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d && d.avatar) renderAvatarElement(document.getElementById('my-avatar'), chatUser, d.avatar);
-        }).catch(function() {});
 }
 
 function renderRequests() {
     const box = document.getElementById('requests-box');
     if (!box) return;
+    const sig = friendRequests.join('|');
+    if (sig === lastRequestsRenderSig) return;
+    lastRequestsRenderSig = sig;
     box.innerHTML = '';
-    if (friendRequests.length === 0) { box.style.display = 'none'; return; }
+    if (friendRequests.length === 0) {
+        box.style.display = 'none';
+        return;
+    }
     box.style.display = 'block';
     friendRequests.forEach(function(req) {
         const item = document.createElement('div');
         item.className = 'request-item';
-        item.innerHTML = '<div class="request-info"><span class="request-name">' + req + '</span><span class="request-label">Запрос в друзья</span></div>' +
-            '<div class="request-actions"><button class="req-btn req-accept" onclick="handleRequest(\'' + req + '\', \'accept\')">Принять</button>' +
-            '<button class="req-btn req-decline" onclick="handleRequest(\'' + req + '\', \'decline\')">Отклонить</button></div>';
+        item.innerHTML =
+            '<div class="request-info">' +
+                '<span class="request-name">' + req + '</span>' +
+                '<span class="request-label">Запрос в друзья</span>' +
+            '</div>' +
+            '<div class="request-actions">' +
+                '<button class="req-btn req-accept" onclick="handleRequest(\'' + req + '\', \'accept\')">Принять</button>' +
+                '<button class="req-btn req-decline" onclick="handleRequest(\'' + req + '\', \'decline\')">Отклонить</button>' +
+            '</div>';
         box.appendChild(item);
     });
 }
@@ -206,6 +303,12 @@ function renderFriends() {
     chatUser = getActiveChatIdentity();
     const box = document.getElementById('friends-box');
     if (!box || !chatUser) return;
+    const sig = (currentRoomId || '') + '::' + friendsList.map(function(f) {
+        return (f.id || f.name) + ':' + f.unread + ':' + f.lastMessage + ':' + f.time + ':' + (f.online ? '1' : '0') + ':' + (f.avatar ? f.avatar.length : 0);
+    }).join('|');
+    if (sig === lastFriendsRenderSig) return;
+    lastFriendsRenderSig = sig;
+
     box.innerHTML = '';
     if (friendsList.length === 0) {
         box.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Список друзей пуст</div>';
@@ -223,18 +326,36 @@ function renderFriends() {
         const statusDot = friend.isGroup ? '👥 ' : (friend.online ? '🟢 ' : '⚫ ');
         const displayName = statusDot + friend.name + unitTag;
         const avInner = friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : friend.name.substring(0, 2).toUpperCase();
-        const friendDataEscaped = JSON.stringify({ id: friend.id, name: friend.name, isGroup: friend.isGroup, avatar: friend.avatar || '', online: Boolean(friend.online) }).replace(/"/g, '&quot;');
-        const callBtnsHTML = '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Аудиозвонок\', \'' + friend.name + '\')" title="Аудиозвонок">📞</button>' +
-                             '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Видеозвонок\', \'' + friend.name + '\')" title="Видеозвонок">🎥</button>';
+        const friendDataEscaped = JSON.stringify({
+            id: friend.id,
+            name: friend.name,
+            isGroup: friend.isGroup,
+            avatar: friend.avatar || '',
+            online: Boolean(friend.online)
+        }).replace(/"/g, '&quot;');
+        const callBtnsHTML =
+            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Аудиозвонок\', \'' + friend.name + '\')" title="Аудиозвонок">📞</button>' +
+            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Видеозвонок\', \'' + friend.name + '\')" title="Видеозвонок">🎥</button>';
         const delBtnHTML = '<button class="delete-friend-btn" onclick="deleteFriend(' + friendDataEscaped + ', event)">&times;</button>';
-        item.innerHTML = '<div class="friend-info"><div class="avatar" style="width:38px; height:38px; font-size:13px;" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + friend.name + '\')">' + avInner + '</div>' +
-            '<div class="friend-meta"><div class="friend-name">' + displayName + '</div><div class="friend-last-msg">' + friend.lastMessage + '</div></div>' +
-            '<div class="friend-status-box">' + timeHTML + badgeHTML + '</div></div>' + callBtnsHTML + delBtnHTML;
+        item.innerHTML =
+            '<div class="friend-info">' +
+                '<div class="avatar" style="width:38px; height:38px; font-size:13px;" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + friend.name + '\')">' + avInner + '</div>' +
+                '<div class="friend-meta">' +
+                    '<div class="friend-name">' + displayName + '</div>' +
+                    '<div class="friend-last-msg">' + friend.lastMessage + '</div>' +
+                '</div>' +
+                '<div class="friend-status-box">' + timeHTML + badgeHTML + '</div>' +
+            '</div>' + callBtnsHTML + delBtnHTML;
         box.appendChild(item);
     });
 }
-function openCreateGroupModal() { document.getElementById('group-modal').style.display = 'flex'; }
-function closeGroupModal() { document.getElementById('group-modal').style.display = 'none'; }
+function openCreateGroupModal() {
+    document.getElementById('group-modal').style.display = 'flex';
+}
+
+function closeGroupModal() {
+    document.getElementById('group-modal').style.display = 'none';
+}
 
 function submitCreateGroup() {
     chatUser = getActiveChatIdentity();
@@ -242,16 +363,32 @@ function submitCreateGroup() {
     const membersInput = document.getElementById('group-members-input');
     const gName = nameInput.value.trim();
     const gMembersRaw = membersInput.value.trim();
-    if (!gName || !gMembersRaw || !chatUser) return alert("Заполните поля!");
-    const memberArray = gMembersRaw.split(',').map(function(m) { return m.trim(); }).filter(function(m) { return m !== ''; });
+    if (!gName || !gMembersRaw || !chatUser) {
+        return alert("Заполните поля!");
+    }
+    const memberArray = gMembersRaw.split(',').map(function(m) {
+        return m.trim();
+    }).filter(function(m) {
+        return m !== '';
+    });
     fetch('/api/groups/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creator: chatUser, groupName: gName, members: memberArray })
+        body: JSON.stringify({
+            creator: chatUser,
+            groupName: gName,
+            members: memberArray
+        })
     })
     .then(function(res) { return res.json(); })
     .then(function(data) {
-        if (data.success) { nameInput.value = ''; membersInput.value = ''; closeGroupModal(); loadFriendsAndRequests(); }
+        if (data.success) {
+            nameInput.value = '';
+            membersInput.value = '';
+            closeGroupModal();
+            lastFriendsRenderSig = '';
+            loadFriendsAndRequests();
+        }
     });
 }
 
@@ -265,40 +402,63 @@ function deleteFriend(friendObj, event) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ groupId: friendObj.id })
         }).then(function() {
-            if (isCurrentGroup && currentRoomId === friendObj.id) resetChatArea();
+            if (isCurrentGroup && currentRoomId === friendObj.id) {
+                resetChatArea();
+            }
+            lastFriendsRenderSig = '';
             loadFriendsAndRequests();
         });
         return;
     }
     if (!confirm('Удалить ' + friendObj.name + ' из контактов?')) return;
-    const cleanNames = friendsList.filter(function(f) { return !f.isGroup && f.name.toLowerCase() !== friendObj.name.toLowerCase(); }).map(function(f) { return f.name; });
-    if (!isCurrentGroup && currentPartner && currentPartner.toLowerCase() === friendObj.name.toLowerCase()) resetChatArea();
+    const cleanNames = friendsList.filter(function(f) {
+        return !f.isGroup && f.name.toLowerCase() !== friendObj.name.toLowerCase();
+    }).map(function(f) {
+        return f.name;
+    });
+    if (!isCurrentGroup && currentPartner && currentPartner.toLowerCase() === friendObj.name.toLowerCase()) {
+        resetChatArea();
+    }
     fetch('/api/friends/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: chatUser, friends: cleanNames })
-    }).then(function() { loadFriendsAndRequests(); });
+    }).then(function() {
+        lastFriendsRenderSig = '';
+        loadFriendsAndRequests();
+    });
 }
 
 function resetChatArea() {
-    currentPartner = null; currentRoomId = null; isCurrentGroup = false; cancelReply();
-    lastMessagesCount = -1; renderedMsgIds.clear();
+    currentPartner = null;
+    currentRoomId = null;
+    isCurrentGroup = false;
+    cancelReply();
+    lastMessagesCount = -1;
+    renderedMsgIds.clear();
     document.getElementById('partner-display-name').textContent = "Чат не выбран";
     document.getElementById('chat-status').style.display = "none";
     document.getElementById('text-input').setAttribute('disabled', 'true');
     document.getElementById('text-input').placeholder = "Сообщение...";
     const mDiv = getMessagesDiv();
-    if (mDiv) mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
+    if (mDiv) {
+        mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
+    }
 }
-
 function selectChat(itemObj) {
     chatUser = getActiveChatIdentity();
     const stEl = document.getElementById('chat-status');
     if (itemObj.isGroup) {
-        currentPartner = itemObj.name; currentRoomId = itemObj.id; isCurrentGroup = true;
-        if (stEl) { stEl.textContent = "👥 конференция"; stEl.style.color = "#38bdf8"; }
+        currentPartner = itemObj.name;
+        currentRoomId = itemObj.id;
+        isCurrentGroup = true;
+        if (stEl) {
+            stEl.textContent = "👥 конференция";
+            stEl.style.color = "#38bdf8";
+        }
     } else {
-        currentPartner = itemObj.name; isCurrentGroup = false;
+        currentPartner = itemObj.name;
+        isCurrentGroup = false;
         currentRoomId = makeDirectRoomId(chatUser, currentPartner);
         if (stEl) {
             stEl.textContent = itemObj.online ? "🟢 в сети" : "⚫ не в сети";
@@ -313,68 +473,63 @@ function selectChat(itemObj) {
     cancelReply();
     document.getElementById('text-input').removeAttribute('disabled');
     document.getElementById('text-input').placeholder = "Написать сообщение...";
-    if (window.innerWidth < 768) document.getElementById('app-sidebar').classList.add('hidden');
-    const mDiv = getMessagesDiv();
-    if (mDiv) mDiv.innerHTML = '';
-    markChatAsRead(currentRoomId); fetchMessages(); renderFriends();
-}
-function closeChatMobile() { document.getElementById('app-sidebar').classList.remove('hidden'); }
-
-function markChatAsRead(roomId) {
-    chatUser = getActiveChatIdentity();
-    if (!chatUser || !roomId) return;
-    fetch('/api/messages/read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: chatUser, room: roomId })
-    }).then(function() { loadFriendsAndRequests(); });
-}
-
-function toggleVoiceRecord() {
-    chatUser = getActiveChatIdentity();
-    if (!currentRoomId) return alert("Сначала выберите чат слева!");
-    const btn = document.getElementById('voice-btn');
-    if (audioRecorder && audioRecorder.state === "recording") {
-        audioRecorder.stop(); btn.classList.remove('recording'); btn.textContent = "⏳";
-    } else {
-        navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 16000 }
-        }).then(function(stream) {
-            audioChunks = new Array();
-            let options = { audioBitsPerSecond: 24000 };
-            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) options.mimeType = 'audio/webm;codecs=opus';
-            else if (MediaRecorder.isTypeSupported('audio/mp4')) options.mimeType = 'audio/mp4';
-            audioRecorder = new MediaRecorder(stream, options);
-            audioRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+    if (window.innerWidth  0) audioChunks.push(e.data);
+            };
             audioRecorder.onstop = function() {
                 const mimeUsed = audioRecorder.mimeType || 'audio/webm';
                 const ext = mimeUsed.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
                 const blob = new Blob(audioChunks, { type: mimeUsed });
                 const formData = new FormData();
-                formData.append('sender', chatUser); formData.append('room', currentRoomId); formData.append('type', 'audio'); formData.append('media', blob, 'voice.' + ext);
-                if (quotedMessageId) { formData.append('quoteId', quotedMessageId); formData.append('quoteText', quotedMessageText); formData.append('quoteSender', quotedMessageSender); cancelReply(); }
-                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎙️"; lastMessagesCount = -1; fetchMessages(); }).catch(function() { btn.textContent = "🎙️"; });
+                formData.append('sender', chatUser);
+                formData.append('room', currentRoomId);
+                formData.append('type', 'audio');
+                formData.append('media', blob, 'voice.' + ext);
+                if (quotedMessageId) {
+                    formData.append('quoteId', quotedMessageId);
+                    formData.append('quoteText', quotedMessageText);
+                    formData.append('quoteSender', quotedMessageSender);
+                    cancelReply();
+                }
+                fetch('/api/send', { method: 'POST', body: formData }).then(function() {
+                    btn.textContent = "🎙️";
+                    lastMessagesCount = -1;
+                    fetchMessages();
+                }).catch(function() {
+                    btn.textContent = "🎙️";
+                });
                 stream.getTracks().forEach(function(track) { track.stop(); });
             };
-            audioRecorder.start(400); btn.classList.add('recording'); btn.textContent = "🛑";
-        }).catch(function() { alert("Нет доступа к микрофону!"); });
+            audioRecorder.start(400);
+            btn.classList.add('recording');
+            btn.textContent = "🛑";
+        }).catch(function() {
+            alert("Нет доступа к микрофону!");
+        });
     }
 }
-
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
     const btn = document.getElementById('video-btn');
     const preview = document.getElementById('video-preview');
     if (videoRecorder && videoRecorder.state === "recording") {
-        videoRecorder.stop(); btn.classList.remove('recording'); btn.textContent = "⏳"; preview.style.display = 'none';
-        if (preview.srcObject) { preview.srcObject.getTracks().forEach(function(t) { t.stop(); }); preview.srcObject = null; }
+        videoRecorder.stop();
+        btn.classList.remove('recording');
+        btn.textContent = "⏳";
+        preview.style.display = 'none';
+        if (preview.srcObject) {
+            preview.srcObject.getTracks().forEach(function(t) { t.stop(); });
+            preview.srcObject = null;
+        }
     } else {
         navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 },
             video: { width: { ideal: 180, max: 220 }, height: { ideal: 180, max: 220 }, frameRate: { ideal: 15, max: 18 }, facingMode: "user" }
         }).then(function(stream) {
-            videoChunks = new Array(); videoStreamRef = stream; preview.srcObject = stream; preview.style.display = 'block';
+            videoChunks = new Array();
+            videoStreamRef = stream;
+            preview.srcObject = stream;
+            preview.style.display = 'block';
             let mime = '';
             if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) mime = 'video/mp4;codecs=avc1,mp4a.40.2';
             else if (MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
@@ -383,20 +538,41 @@ function toggleVideoRecord() {
             let recOptions = { videoBitsPerSecond: 150000, audioBitsPerSecond: 24000 };
             if (mime) recOptions.mimeType = mime;
             videoRecorder = new MediaRecorder(stream, recOptions);
-            videoRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) videoChunks.push(e.data); };
+            videoRecorder.ondataavailable = function(e) {
+                if (e.data && e.data.size > 0) videoChunks.push(e.data);
+            };
             videoRecorder.onstop = function() {
                 const blob = new Blob(videoChunks, { type: videoRecorder.mimeType || 'video/mp4' });
                 const fileExt = (videoRecorder.mimeType && videoRecorder.mimeType.indexOf('mp4') !== -1) ? 'mp4' : 'webm';
                 const formData = new FormData();
-                formData.append('sender', chatUser); formData.append('room', currentRoomId); formData.append('type', 'video'); formData.append('media', blob, 'video.' + fileExt);
-                if (quotedMessageId) { formData.append('quoteId', quotedMessageId); formData.append('quoteText', quotedMessageText); formData.append('quoteSender', quotedMessageSender); cancelReply(); }
-                fetch('/api/send', { method: 'POST', body: formData }).then(function() { btn.textContent = "🎥"; lastMessagesCount = -1; fetchMessages(); }).catch(function() { btn.textContent = "🎥"; });
+                formData.append('sender', chatUser);
+                formData.append('room', currentRoomId);
+                formData.append('type', 'video');
+                formData.append('media', blob, 'video.' + fileExt);
+                if (quotedMessageId) {
+                    formData.append('quoteId', quotedMessageId);
+                    formData.append('quoteText', quotedMessageText);
+                    formData.append('quoteSender', quotedMessageSender);
+                    cancelReply();
+                }
+                fetch('/api/send', { method: 'POST', body: formData }).then(function() {
+                    btn.textContent = "🎥";
+                    lastMessagesCount = -1;
+                    fetchMessages();
+                }).catch(function() {
+                    btn.textContent = "🎥";
+                });
                 if (videoStreamRef) videoStreamRef.getTracks().forEach(function(t) { t.stop(); });
             };
-            videoRecorder.start(400); btn.classList.add('recording'); btn.textContent = "🛑";
-        }).catch(function() { alert("Нет доступа к камере!"); });
+            videoRecorder.start(400);
+            btn.classList.add('recording');
+            btn.textContent = "🛑";
+        }).catch(function() {
+            alert("Нет доступа к камере!");
+        });
     }
 }
+
 function uploadAnyFile(inputElement) {
     chatUser = getActiveChatIdentity();
     if (!inputElement.files || inputElement.files.length === 0 || !chatUser || !currentRoomId) return;
@@ -439,7 +615,6 @@ function sendMessage() {
         fetchMessages();
     });
 }
-
 function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     const container = rowElement.querySelector('.swipe-container');
     const leftIndicator = rowElement.querySelector('.left-indicator');
@@ -449,20 +624,29 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     if (msgType === 'audio') displayStr = "🎙️ Голосовое сообщение";
     if (msgType === 'video') displayStr = "🎥 Видео-кружок";
     if (msgType === 'gif') displayStr = "🎬 GIF-анимация";
-    if (msgType === 'file') { try { displayStr = '📎 Файл: ' + JSON.parse(rawText).name; } catch(e){} }
+    if (msgType === 'file') {
+        try {
+            displayStr = '📎 Файл: ' + JSON.parse(rawText).name;
+        } catch (e) {}
+    }
 
     container.addEventListener('touchstart', function(e) {
         const touch = e.touches.item(0);
-        startX = touch.clientX; startY = touch.clientY;
-        isSwiping = true; isHorizontal = false;
+        startX = touch.clientX;
+        startY = touch.clientY;
+        isSwiping = true;
+        isHorizontal = false;
         container.style.transition = 'none';
     }, { passive: true });
 
     container.addEventListener('touchmove', function(e) {
         if (!isSwiping) return;
         const touch = e.touches.item(0);
-        const diffX = touch.clientX - startX, diffY = touch.clientY - startY;
-        if (!isHorizontal && Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 8) isHorizontal = true;
+        const diffX = touch.clientX - startX;
+        const diffY = touch.clientY - startY;
+        if (!isHorizontal && Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 8) {
+            isHorizontal = true;
+        }
         if (isHorizontal) {
             if (e.cancelable) e.preventDefault();
             currentX = Math.max(-80, Math.min(80, diffX * 0.6));
@@ -476,14 +660,21 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
         isSwiping = false;
         container.style.transition = 'transform 0.2s cubic-bezier(0.1, 0.8, 0.3, 1)';
         container.style.transform = 'translateX(0px)';
-        leftIndicator.style.opacity = '0'; rightIndicator.style.opacity = '0';
-        if (currentX > 50) handleQuoteTrigger(msgId, displayStr, sender);
-        else if (currentX < -50) handleForwardTrigger(msgId, rawText, msgType, sender);
+        leftIndicator.style.opacity = '0';
+        rightIndicator.style.opacity = '0';
+        if (currentX > 50) {
+            handleQuoteTrigger(msgId, displayStr, sender);
+        } else if (currentX < -50) {
+            handleForwardTrigger(msgId, rawText, msgType, sender);
+        }
         currentX = 0;
     });
 }
+
 function handleQuoteTrigger(id, text, sender) {
-    quotedMessageId = id; quotedMessageText = text; quotedMessageSender = sender;
+    quotedMessageId = id;
+    quotedMessageText = text;
+    quotedMessageSender = sender;
     const bar = document.getElementById('reply-bar');
     const textEl = document.getElementById('reply-bar-text');
     textEl.textContent = 'Цитата от ' + sender + ': ' + text;
@@ -492,13 +683,18 @@ function handleQuoteTrigger(id, text, sender) {
 }
 
 function cancelReply() {
-    quotedMessageId = null; quotedMessageText = null; quotedMessageSender = null;
+    quotedMessageId = null;
+    quotedMessageText = null;
+    quotedMessageSender = null;
     const bar = document.getElementById('reply-bar');
     if (bar) bar.style.display = 'none';
 }
 
 function handleForwardTrigger(id, text, type, sender) {
-    activeMessageId = id; activeMessageText = text; activeMessageType = type; activeMessageOriginalSender = sender;
+    activeMessageId = id;
+    activeMessageText = text;
+    activeMessageType = type;
+    activeMessageOriginalSender = sender;
     const modal = document.getElementById('forward-modal');
     const listContainer = document.getElementById('modal-contacts-list');
     listContainer.innerHTML = '';
@@ -515,7 +711,6 @@ function handleForwardTrigger(id, text, type, sender) {
     }
     modal.style.display = 'flex';
 }
-
 function closeForwardModal() {
     document.getElementById('forward-modal').style.display = 'none';
 }
@@ -528,13 +723,27 @@ function executeForward(targetObj) {
         let fileUrl = activeMessageType === 'file' ? JSON.parse(activeMessageText).path : activeMessageText;
         fetch(fileUrl).then(function(res) { return res.blob(); }).then(function(blob) {
             const formData = new FormData();
-            formData.append('sender', chatUser); formData.append('room', targetRoomId); formData.append('type', activeMessageType); formData.append('forwardedFrom', originalAuthor); formData.append('media', blob, 'media_file');
-            fetch('/api/send', { method: 'POST', body: formData }).then(function() { closeForwardModal(); loadFriendsAndRequests(); });
+            formData.append('sender', chatUser);
+            formData.append('room', targetRoomId);
+            formData.append('type', activeMessageType);
+            formData.append('forwardedFrom', originalAuthor);
+            formData.append('media', blob, 'media_file');
+            fetch('/api/send', { method: 'POST', body: formData }).then(function() {
+                closeForwardModal();
+                loadFriendsAndRequests();
+            });
         });
     } else {
         const formData = new FormData();
-        formData.append('sender', chatUser); formData.append('room', targetRoomId); formData.append('text', activeMessageText); formData.append('type', activeMessageType || 'text'); formData.append('forwardedFrom', originalAuthor);
-        fetch('/api/send', { method: 'POST', body: formData }).then(function() { closeForwardModal(); loadFriendsAndRequests(); });
+        formData.append('sender', chatUser);
+        formData.append('room', targetRoomId);
+        formData.append('text', activeMessageText);
+        formData.append('type', activeMessageType || 'text');
+        formData.append('forwardedFrom', originalAuthor);
+        fetch('/api/send', { method: 'POST', body: formData }).then(function() {
+            closeForwardModal();
+            loadFriendsAndRequests();
+        });
     }
 }
 
@@ -556,13 +765,15 @@ function inlineDeleteMessage(msgId) {
 function fetchMessages() {
     chatUser = getActiveChatIdentity();
     const mDiv = getMessagesDiv();
-    if (!chatUser || !currentRoomId || !mDiv) return;
+    if (!chatUser || !currentRoomId || !mDiv || isFetchingMessages) return;
+    isFetchingMessages = true;
     const modal = document.getElementById('messenger-modal');
     const isModalOpen = modal && modal.style.display === 'flex';
 
     fetch('/api/messages?room=' + encodeURIComponent(currentRoomId) + '&user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
     .then(function(res) { return res.json(); })
     .then(function(resp) {
+        isFetchingMessages = false;
         const data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
         const partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
         if (!isCurrentGroup && currentPartner) {
@@ -595,7 +806,11 @@ function fetchMessages() {
         data.forEach(function(msg) {
             const isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
             if (!isMy && !msg.read) hasUnreadIncoming = true;
-            const checkIcon = isMy ? (msg.read ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;" title="Прочитано">✓✓</span>' : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;" title="Доставлено">✓</span>') : '';
+            const checkIcon = isMy
+                ? (msg.read
+                    ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;" title="Прочитано">✓✓</span>'
+                    : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;" title="Доставлено">✓</span>')
+                : '';
             if (renderedMsgIds.has(msg.id)) {
                 if (isMy) {
                     const existingRow = mDiv.querySelector('.message-row[data-msg-id="' + msg.id + '"]');
@@ -607,7 +822,8 @@ function fetchMessages() {
                 }
                 return;
             }
-            renderedMsgIds.add(msg.id); addedNew = true;
+            renderedMsgIds.add(msg.id);
+            addedNew = true;
             const row = document.createElement('div');
             row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
             row.setAttribute('data-msg-id', msg.id);
@@ -626,10 +842,16 @@ function fetchMessages() {
                 contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF от ' + msg.sender + '\')">';
             } else if (msg.type === 'file') {
                 try {
-                    const fileObj = JSON.parse(msg.text); const ext = fileObj.name.split('.').pop().toLowerCase();
-                    if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото: ' + fileObj.name + '\')">';
-                    else contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
-                } catch(e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
+                    const fileObj = JSON.parse(msg.text);
+                    const ext = fileObj.name.split('.').pop().toLowerCase();
+                    if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) {
+                        contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото: ' + fileObj.name + '\')">';
+                    } else {
+                        contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
+                    }
+                } catch (e) {
+                    contentHTML = '<div class="msg-text">Поврежденный файл</div>';
+                }
             } else {
                 contentHTML = '<div class="msg-text">' + msg.text + '</div>';
             }
@@ -642,15 +864,22 @@ function fetchMessages() {
         if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) {
             fetch('/api/messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: chatUser, room: currentRoomId }) });
         }
-    }).catch(function() {});
+    }).catch(function() {
+        isFetchingMessages = false;
+    });
 }
 
 function playVideoWithSound(v) {
     document.querySelectorAll('#messages video.video-round').forEach(function(other) {
         if (other !== v) { other.muted = true; other.pause(); }
     });
-    if (!v.paused && !v.muted) { v.muted = true; v.pause(); }
-    else { v.muted = false; v.loop = false; v.currentTime = 0; v.play().catch(function() {}); v.onended = function() { v.muted = true; v.pause(); v.currentTime = 0; }; }
+    if (!v.paused && !v.muted) {
+        v.muted = true; v.pause();
+    } else {
+        v.muted = false; v.loop = false; v.currentTime = 0;
+        v.play().catch(function() {});
+        v.onended = function() { v.muted = true; v.pause(); v.currentTime = 0; };
+    }
 }
 
 function sendFriendRequest() {
@@ -666,8 +895,13 @@ function sendFriendRequest() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: chatUser, to: targetName })
     }).then(function(res) { return res.json(); }).then(function(data) {
-        if (data && data.success) { input.value = ''; alert('✅ Заявка в друзья отправлена позывному: ' + targetName); loadFriendsAndRequests(); }
-        else alert('❌ ' + (data && data.message ? data.message : 'Ошибка отправки заявки'));
+        if (data && data.success) {
+            input.value = '';
+            alert('✅ Заявка в друзья отправлена позывному: ' + targetName);
+            loadFriendsAndRequests();
+        } else {
+            alert('❌ ' + (data && data.message ? data.message : 'Ошибка отправки заявки'));
+        }
     }).catch(function() { alert('❌ Ошибка связи с сервером'); });
 }
 
@@ -678,7 +912,11 @@ function handleRequest(fromUser, action) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: chatUser, from: fromUser, action: action })
-    }).then(function() { loadFriendsAndRequests(); }).catch(function() {});
+    }).then(function() {
+        lastRequestsRenderSig = '';
+        lastFriendsRenderSig = '';
+        loadFriendsAndRequests();
+    }).catch(function() {});
 }
 
 function updateTotalUnreadBadge() {
@@ -687,6 +925,10 @@ function updateTotalUnreadBadge() {
     let total = 0;
     if (Array.isArray(friendsList)) friendsList.forEach(function(f) { if (f && f.unread > 0) total += f.unread; });
     if (Array.isArray(friendRequests)) total += friendRequests.length;
-    if (total > 0) { badge.style.display = 'inline-block'; badge.innerText = total; }
-    else badge.style.display = 'none';
+    if (total > 0) {
+        badge.style.display = 'inline-block';
+        badge.innerText = total;
+    } else {
+        badge.style.display = 'none';
+    }
 }
