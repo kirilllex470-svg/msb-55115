@@ -1067,22 +1067,36 @@ function applyPermissionsUI() {
     const canArchive = isAdmin || (myPermissions && myPermissions.archive);
     const canTable = isAdmin || (myPermissions && myPermissions.table);
 
+    // 1. Khối chứa các danh sách thả xuống (списки)
     const gridEl = document.getElementById('dynamic-inputs');
-    const sendBtn = document.querySelector('.send-btn');
+    if (gridEl) gridEl.style.display = canRow ? 'grid' : 'none';
+
+    // 2. Ẩn toàn bộ nút "ЗАПИСАТЬ В ЖУРНАЛ"
+    document.querySelectorAll('.send-btn, #submit-row-btn, #send-row-btn, button[onclick*="submitRow"]').forEach(function(btn) {
+        btn.style.display = canRow ? 'block' : 'none';
+    });
+
+    // Quét thêm theo nội dung chữ trên nút để đảm bảo không bị sót giao diện
+    document.querySelectorAll('button').forEach(function(btn) {
+        if (btn.innerText && btn.innerText.includes('ЗАПИСАТЬ В ЖУРНАЛ')) {
+            btn.style.display = canRow ? 'block' : 'none';
+        }
+    });
+
+    // 3. Các phân quyền khác giữ nguyên
     const streamBtn = document.getElementById('stream-main-btn');
     const mapsBtn = document.getElementById('maps-main-btn');
     const archBtn = document.querySelector('.archive-main-btn');
     const notifArchBtn = document.getElementById('notif-archive-btn');
     const tableSection = document.getElementById('journal-table-section');
 
-    if (gridEl) gridEl.style.display = canRow ? 'grid' : 'none';
-    if (sendBtn) sendBtn.style.display = canRow ? 'block' : 'none';
     if (streamBtn) streamBtn.style.display = canStream ? 'block' : 'none';
     if (mapsBtn) mapsBtn.style.display = canMaps ? 'block' : 'none';
     if (archBtn) archBtn.style.display = canArchive ? 'block' : 'none';
     if (notifArchBtn) notifArchBtn.style.display = canArchive ? 'inline-block' : 'none';
     if (tableSection) tableSection.style.display = canTable ? 'block' : 'none';
 }
+
 
 function applyUserUI() {
     document.getElementById('login-overlay').style.display = 'none';
