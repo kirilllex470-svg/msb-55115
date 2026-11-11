@@ -1,3 +1,118 @@
+// --- МОДУЛЬ НАДЁЖНОЙ ОТПРАВКИ (OUTBOX QUEUE ДЛЯ ПЛОХОЙ СВЯЗИ) ---
+const OUTBOX_KEY = 'msb_outbox_queue_v1';
+let isQueueProcessing = false;
+
+function getOutbox() {
+    try {
+        return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveOutbox(queue) {
+    try {
+        localStorage.setItem(OUTBOX_KEY, JSON.stringify(queue));
+    } catch (e) {}
+}
+
+function enqueueMessage(payload) {
+    const queue = getOutbox();
+    const task = {
+        id: payload.localId || ('local_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+        sender: payload.sender,
+        room: payload.room,
+        text: payload.text || '',
+        type: payload.type || 'text',
+        quoteId: payload.quoteId || null,
+        quoteText: payload.quoteText || null,
+        quoteSender: payload.quoteSender || null,
+        forwardedFrom: payload.forwardedFrom || null,
+        mediaBase64: payload.mediaBase64 || null,
+        mediaName: payload.mediaName || 'file.bin',
+        attempts: 0,
+        createdAt: Date.now()
+    };
+    queue.push(task);
+    saveOutbox(queue);
+    triggerQueueProcess();
+    return task;
+}
+
+async function triggerQueueProcess() {
+    if (isQueueProcessing) return;
+    const queue = getOutbox();
+    if (queue.length === 0) return;
+
+    isQueueProcessing = true;
+
+    while (getOutbox().length > 0) {
+        const curQueue = getOutbox();
+        const task = curQueue[0];
+
+        try {
+            await sendWithTimeout(task, 15000);
+            const updated = getOutbox();
+            updated.shift();
+            saveOutbox(updated);
+
+            if (typeof fetchMessages === 'function') {
+                lastMessagesCount = -1;
+                fetchMessages();
+            }
+        } catch (err) {
+            task.attempts = (task.attempts || 0) + 1;
+            saveOutbox(curQueue);
+            await new Promise(function(res) { setTimeout(res, 3000); });
+            break;
+        }
+    }
+
+    isQueueProcessing = false;
+}
+
+function sendWithTimeout(task, timeoutMs) {
+    return new Promise(async function(resolve, reject) {
+        const controller = new AbortController();
+        const timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+
+        try {
+            const formData = new FormData();
+            formData.append('sender', task.sender);
+            formData.append('room', task.room);
+            formData.append('type', task.type);
+            if (task.text) formData.append('text', task.text);
+            if (task.quoteId) {
+                formData.append('quoteId', task.quoteId);
+                formData.append('quoteText', task.quoteText);
+                formData.append('quoteSender', task.quoteSender);
+            }
+            if (task.forwardedFrom) formData.append('forwardedFrom', task.forwardedFrom);
+
+            if (task.mediaBase64) {
+                const blob = await (await fetch(task.mediaBase64)).blob();
+                formData.append('media', blob, task.mediaName);
+            }
+            const res = await fetch('/api/send', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+            });
+
+            clearTimeout(timer);
+            if (res.ok) resolve(true);
+            else reject(new Error('HTTP Error ' + res.status));
+        } catch (e) {
+            clearTimeout(timer);
+            reject(e);
+        }
+    });
+}
+
+window.addEventListener('online', triggerQueueProcess);
+setInterval(triggerQueueProcess, 5000);
+
+// --- ОСНОВНЫЕ ПЕРЕМЕННЫЕ И СОСТОЯНИЕ МЕССЕНДЖЕРА ---
 var chatUser = null;
 var currentPartner = null;
 var currentRoomId = null;
@@ -25,10 +140,6 @@ var quotedMessageSender = null;
 var msgImageZoom = 1;
 var currentGifCategory = 'military';
 
-// --- СИСТЕМА ЗАЩИТЫ ОТ СБОЕВ СЕТИ, ДУБЛИРОВАНИЯ И АВТОПОВТОРА МСБ-55115 ---
-var isSendingPayload = false;
-var pendingRetryQueue = new Array();
-
 function getMessagesDiv() {
     return document.getElementById('messages');
 }
@@ -51,121 +162,6 @@ function makeDirectRoomId(u1, u2) {
     var pair = sorted.join(',');
     return pair + '_' + pair;
 }
-
-async function checkServerConnection() {
-    if (!navigator.onLine) return false;
-    try {
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 2500);
-        var res = await fetch('/api/user/me?user=' + encodeURIComponent(chatUser || '') + '&t=' + Date.now(), {
-            method: 'GET',
-            cache: 'no-store',
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        return res.ok;
-    } catch (e) {
-        return false;
-    }
-}
-
-function showNetworkErrorBanner() {
-    var mDiv = getMessagesDiv();
-    if (!mDiv) return;
-    var oldBanner = document.getElementById('msb-net-error-banner');
-    if (oldBanner) oldBanner.remove();
-
-    var banner = document.createElement('div');
-    banner.id = 'msb-net-error-banner';
-    banner.style.cssText = 'background: rgba(239, 68, 68, 0.22); border: 1.5px solid #ef4444; border-left: 5px solid #ef4444; color: #fca5a5; padding: 10px 14px; border-radius: 8px; font-size: 13px; text-align: center; margin: 10px 0; font-weight: bold; animation: pulseLive 1.5s infinite; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);';
-    banner.innerHTML = '⚠️ Подождите пока наладится связь или наладится интеренет,передача данных отсутствует МСБ55115';
-    mDiv.appendChild(banner);
-    mDiv.scrollTop = mDiv.scrollHeight;
-}
-
-function clearNetworkErrorBanner() {
-    var oldBanner = document.getElementById('msb-net-error-banner');
-    if (oldBanner) oldBanner.remove();
-}
-async function executeSendFormData(formData, onSuccessCallback, onErrorCallback) {
-    if (isSendingPayload) return false;
-
-    var isOnline = await checkServerConnection();
-    if (!isOnline) {
-        showNetworkErrorBanner();
-        if (onErrorCallback) onErrorCallback();
-        return false;
-    }
-
-    clearNetworkErrorBanner();
-    isSendingPayload = true;
-
-    if (!formData.has('clientMsgId')) {
-        formData.append('clientMsgId', Date.now() + '_' + Math.random().toString(36).substring(2, 9));
-    }
-
-    var controller = new AbortController();
-    var sendTimer = setTimeout(function() { controller.abort(); }, 6000);
-
-    fetch('/api/send', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal
-    })
-    .then(function(res) {
-        clearTimeout(sendTimer);
-        if (!res.ok) throw new Error('Send failed');
-        if (onSuccessCallback) onSuccessCallback();
-        lastMessagesCount = -1;
-        fetchMessages();
-    })
-    .catch(function() {
-        clearTimeout(sendTimer);
-        showNetworkErrorBanner();
-        pendingRetryQueue.push(formData);
-        if (onErrorCallback) onErrorCallback();
-    })
-    .finally(function() {
-        isSendingPayload = false;
-    });
-
-    return true;
-}
-
-async function flushRetryQueue() {
-    if (pendingRetryQueue.length === 0) return;
-    var isOnline = await checkServerConnection();
-    if (!isOnline) return;
-
-    clearNetworkErrorBanner();
-    while (pendingRetryQueue.length > 0) {
-        var queuedFormData = pendingRetryQueue.shift();
-        try {
-            await fetch('/api/send', { method: 'POST', body: queuedFormData });
-        } catch (e) {
-            pendingRetryQueue.unshift(queuedFormData);
-            showNetworkErrorBanner();
-            break;
-        }
-    }
-    lastMessagesCount = -1;
-    fetchMessages();
-}
-
-window.addEventListener('online', function() {
-    clearNetworkErrorBanner();
-    flushRetryQueue();
-    if (currentRoomId) {
-        fetchMessages();
-        markChatAsRead(currentRoomId);
-    }
-});
-
-setInterval(function() {
-    if (pendingRetryQueue.length > 0) {
-        flushRetryQueue();
-    }
-}, 4000);
 
 function syncMessengerAuth() {
     chatUser = getActiveChatIdentity();
@@ -311,6 +307,7 @@ function uploadMyAvatar(inputEl) {
     };
     reader.readAsDataURL(file);
 }
+
 document.addEventListener('DOMContentLoaded', function() {
     var tInput = document.getElementById('text-input');
     var fInput = document.getElementById('new-friend-name');
@@ -519,16 +516,12 @@ function resetChatArea() {
     currentRoomId = null;
     isCurrentGroup = false;
     cancelReply();
-    clearNetworkErrorBanner();
     lastMessagesCount = -1;
     renderedMsgIds.clear();
     document.getElementById('partner-display-name').textContent = "Чат не выбран";
     document.getElementById('chat-status').style.display = "none";
-    var tInput = document.getElementById('text-input');
-    if (tInput) {
-        tInput.setAttribute('disabled', 'true');
-        tInput.placeholder = "Сообщение...";
-    }
+    document.getElementById('text-input').setAttribute('disabled', 'true');
+    document.getElementById('text-input').placeholder = "Сообщение...";
     var mDiv = getMessagesDiv();
     if (mDiv) {
         mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
@@ -561,7 +554,6 @@ function selectChat(itemObj) {
     lastMessagesCount = -1;
     renderedMsgIds.clear();
     cancelReply();
-    clearNetworkErrorBanner();
     var tInput = document.getElementById('text-input');
     if (tInput) {
         tInput.removeAttribute('disabled');
@@ -593,41 +585,6 @@ function markChatAsRead(roomId) {
     });
 }
 
-async function sendMessage() {
-    chatUser = getActiveChatIdentity();
-    var textInput = document.getElementById('text-input');
-    var sendBtn = document.getElementById('send-btn');
-    if (!textInput) return;
-    var text = textInput.value.trim();
-    if (text === '' || !chatUser || !currentRoomId) return;
-
-    textInput.disabled = true;
-    if (sendBtn) sendBtn.disabled = true;
-
-    var formData = new FormData();
-    formData.append('sender', chatUser);
-    formData.append('room', currentRoomId);
-    formData.append('text', text);
-    formData.append('type', 'text');
-
-    if (quotedMessageId) {
-        formData.append('quoteId', quotedMessageId);
-        formData.append('quoteText', quotedMessageText);
-        formData.append('quoteSender', quotedMessageSender);
-        cancelReply();
-    }
-
-    await executeSendFormData(formData, function() {
-        textInput.value = '';
-    }, function() {
-        // Ошибка или обрыв: текст сохраняется в поле ввода для пользователя
-    });
-
-    textInput.disabled = false;
-    if (sendBtn) sendBtn.disabled = false;
-    textInput.focus();
-}
-
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -641,7 +598,7 @@ function toggleVoiceRecord() {
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 16000 }
         }).then(function(stream) {
             audioChunks = new Array();
-            var options = { audioBitsPerSecond: 24000 };
+            var options = { audioBitsPerSecond: 16000 };
             if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) options.mimeType = 'audio/webm;codecs=opus';
             else if (MediaRecorder.isTypeSupported('audio/mp4')) options.mimeType = 'audio/mp4';
             audioRecorder = new MediaRecorder(stream, options);
@@ -650,24 +607,23 @@ function toggleVoiceRecord() {
                 var mimeUsed = audioRecorder.mimeType || 'audio/webm';
                 var ext = mimeUsed.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
                 var blob = new Blob(audioChunks, { type: mimeUsed });
-                var formData = new FormData();
-                formData.append('sender', chatUser);
-                formData.append('room', currentRoomId);
-                formData.append('type', 'audio');
-                formData.append('media', blob, 'voice.' + ext);
-                if (quotedMessageId) {
-                    formData.append('quoteId', quotedMessageId);
-                    formData.append('quoteText', quotedMessageText);
-                    formData.append('quoteSender', quotedMessageSender);
+                var reader = new FileReader();
+                reader.onloadend = function() {
+                    var base64data = reader.result;
+                    enqueueMessage({
+                        sender: chatUser,
+                        room: currentRoomId,
+                        type: 'audio',
+                        mediaBase64: base64data,
+                        mediaName: 'voice.' + ext,
+                        quoteId: quotedMessageId,
+                        quoteText: quotedMessageText,
+                        quoteSender: quotedMessageSender
+                    });
                     cancelReply();
-                }
-
-                executeSendFormData(formData, function() {
                     btn.textContent = "🎙️";
-                }, function() {
-                    btn.textContent = "🎙️";
-                });
-
+                };
+                reader.readAsDataURL(blob);
                 stream.getTracks().forEach(function(track) { track.stop(); });
             };
             audioRecorder.start(400);
@@ -676,6 +632,7 @@ function toggleVoiceRecord() {
         }).catch(function() { alert("Нет доступа к микрофону!"); });
     }
 }
+
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -722,13 +679,11 @@ function toggleVideoRecord() {
                     formData.append('quoteSender', quotedMessageSender);
                     cancelReply();
                 }
-
-                executeSendFormData(formData, function() {
+                fetch('/api/send', { method: 'POST', body: formData }).then(function() {
                     btn.textContent = "🎥";
-                }, function() {
-                    btn.textContent = "🎥";
-                });
-
+                    lastMessagesCount = -1;
+                    fetchMessages();
+                }).catch(function() { btn.textContent = "🎥"; });
                 if (videoStreamRef) videoStreamRef.getTracks().forEach(function(t) { t.stop(); });
             };
             videoRecorder.start(400);
@@ -753,9 +708,44 @@ function uploadAnyFile(inputElement) {
         formData.append('quoteSender', quotedMessageSender);
         cancelReply();
     }
-    executeSendFormData(formData, function() {
-        inputElement.value = '';
-    });
+    fetch('/api/send', { method: 'POST', body: formData })
+        .then(function() { inputElement.value = ''; lastMessagesCount = -1; fetchMessages(); })
+        .catch(function() { alert("Ошибка отправки файла!"); });
+}
+
+function sendMessage() {
+    chatUser = getActiveChatIdentity();
+    var textInput = document.getElementById('text-input');
+    if (!textInput) return;
+    var text = textInput.value.trim();
+    if (text === '' || !chatUser || !currentRoomId) return;
+
+    var payload = {
+        sender: chatUser,
+        room: currentRoomId,
+        text: text,
+        type: 'text',
+        quoteId: quotedMessageId,
+        quoteText: quotedMessageText,
+        quoteSender: quotedMessageSender
+    };
+
+    textInput.value = '';
+    cancelReply();
+
+    enqueueMessage(payload);
+
+    var mDiv = getMessagesDiv();
+    if (mDiv) {
+        var tempRow = document.createElement('div');
+        tempRow.className = 'message-row my-msg';
+        tempRow.innerHTML = '<div class="swipe-container"><div class="bubble">' +
+            '<div class="msg-text">' + text + '</div>' +
+            '<div class="msg-time">⏳ В очереди...</div>' +
+            '</div></div>';
+        mDiv.appendChild(tempRow);
+        mDiv.scrollTop = mDiv.scrollHeight;
+    }
 }
 function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     var container = rowElement.querySelector('.swipe-container');
@@ -870,7 +860,7 @@ function executeForward(targetObj) {
             formData.append('type', activeMessageType);
             formData.append('forwardedFrom', originalAuthor);
             formData.append('media', blob, 'media_file');
-            executeSendFormData(formData, function() {
+            fetch('/api/send', { method: 'POST', body: formData }).then(function() {
                 closeForwardModal();
                 loadFriendsAndRequests();
             });
@@ -882,7 +872,7 @@ function executeForward(targetObj) {
         formData.append('text', activeMessageText);
         formData.append('type', activeMessageType || 'text');
         formData.append('forwardedFrom', originalAuthor);
-        executeSendFormData(formData, function() {
+        fetch('/api/send', { method: 'POST', body: formData }).then(function() {
             closeForwardModal();
             loadFriendsAndRequests();
         });
@@ -964,7 +954,40 @@ function fetchMessages() {
             }
             renderedMsgIds.add(msg.id);
             addedNew = true;
-            renderSingleRow(mDiv, msg, isMy, checkIcon);
+            var row = document.createElement('div');
+            row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
+            row.setAttribute('data-msg-id', msg.id);
+            row.innerHTML = '<div class="swipe-indicator left-indicator">💬</div><div class="swipe-container"><div class="bubble"></div></div><div class="swipe-indicator right-indicator">↪️</div>';
+            var bubble = row.querySelector('.bubble');
+            var quoteHTML = (msg.quoteId && msg.quoteText) ? ('<div class="msg-quote-block"><div class="msg-quote-author">' + (msg.quoteSender || 'Система') + '</div>' + msg.quoteText + '</div>') : '';
+            var forwardHTML = msg.forwardedFrom ? ('<div class="msg-forwarded-label">↪ Переслано от: ' + msg.forwardedFrom + '</div>') : '';
+            var authorHTML = (isCurrentGroup && !isMy) ? ('<div class="msg-author">' + msg.sender + '</div>') : '';
+            var delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
+            var contentHTML = '';
+            if (msg.type === 'audio') {
+                contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="metadata" style="display:block; max-width:100%;"></audio>';
+            } else if (msg.type === 'video') {
+                contentHTML = '<video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" style="display:block;" onclick="playVideoWithSound(this)"></video>';
+            } else if (msg.type === 'gif') {
+                contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF от ' + msg.sender + '\')">';
+            } else if (msg.type === 'file') {
+                try {
+                    var fileObj = JSON.parse(msg.text);
+                    var ext = fileObj.name.split('.').pop().toLowerCase();
+                    if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) {
+                        contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото: ' + fileObj.name + '\')">';
+                    } else {
+                        contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
+                    }
+                } catch (e) {
+                    contentHTML = '<div class="msg-text">Поврежденный файл</div>';
+                }
+            } else {
+                contentHTML = '<div class="msg-text">' + msg.text + '</div>';
+            }
+            bubble.innerHTML = delBtnHTML + quoteHTML + forwardHTML + authorHTML + contentHTML + '<div class="msg-time">' + msg.time + checkIcon + '</div>';
+            mDiv.appendChild(row);
+            setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
         });
         lastMessagesCount = data.length;
         if (addedNew) setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 50);
@@ -972,42 +995,6 @@ function fetchMessages() {
             fetch('/api/messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: chatUser, room: currentRoomId }) });
         }
     }).catch(function() {});
-}
-function renderSingleRow(mDiv, msg, isMy, checkIcon) {
-    var row = document.createElement('div');
-    row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
-    row.setAttribute('data-msg-id', msg.id);
-    row.innerHTML = '<div class="swipe-indicator left-indicator">💬</div><div class="swipe-container"><div class="bubble"></div></div><div class="swipe-indicator right-indicator">↪️</div>';
-    var bubble = row.querySelector('.bubble');
-    var quoteHTML = (msg.quoteId && msg.quoteText) ? ('<div class="msg-quote-block"><div class="msg-quote-author">' + (msg.quoteSender || 'Система') + '</div>' + msg.quoteText + '</div>') : '';
-    var forwardHTML = msg.forwardedFrom ? ('<div class="msg-forwarded-label">↪ Переслано от: ' + msg.forwardedFrom + '</div>') : '';
-    var authorHTML = (isCurrentGroup && !isMy) ? ('<div class="msg-author">' + msg.sender + '</div>') : '';
-    var delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
-    var contentHTML = '';
-    if (msg.type === 'audio') {
-        contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="metadata" style="display:block; max-width:100%;"></audio>';
-    } else if (msg.type === 'video') {
-        contentHTML = '<video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" style="display:block;" onclick="playVideoWithSound(this)"></video>';
-    } else if (msg.type === 'gif') {
-        contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF от ' + msg.sender + '\')">';
-    } else if (msg.type === 'file') {
-        try {
-            var fileObj = JSON.parse(msg.text);
-            var ext = fileObj.name.split('.').pop().toLowerCase();
-            if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) {
-                contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото: ' + fileObj.name + '\')">';
-            } else {
-                contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
-            }
-        } catch (e) {
-            contentHTML = '<div class="msg-text">Поврежденный файл</div>';
-        }
-    } else {
-        contentHTML = '<div class="msg-text">' + msg.text + '</div>';
-    }
-    bubble.innerHTML = delBtnHTML + quoteHTML + forwardHTML + authorHTML + contentHTML + '<div class="msg-time">' + msg.time + checkIcon + '</div>';
-    mDiv.appendChild(row);
-    setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
 }
 
 function playVideoWithSound(v) {
@@ -1055,6 +1042,7 @@ function handleRequest(fromUser, action) {
         body: JSON.stringify({ user: chatUser, from: fromUser, action: action })
     }).then(function() { loadFriendsAndRequests(); }).catch(function() {});
 }
+
 function updateTotalUnreadBadge() {
     var badge = document.getElementById('msg-unread-total');
     if (!badge) return;
@@ -1068,7 +1056,6 @@ function updateTotalUnreadBadge() {
         badge.style.display = 'none';
     }
 }
-
 // Экспорт всех необходимых функций в глобальную область window
 window.openMessengerWindow = openMessengerWindow;
 window.closeMessengerWindow = closeMessengerWindow;
