@@ -1421,13 +1421,49 @@ function clearHistoryAdmin() {
     }
 }
 
+function sendLocalNotification(target, text, sender, notifId) {
+    const fromWho = sender || 'АДМИН';
+    const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
+    const body = fromWho + ': ' + text;
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(function(reg) {
+            reg.showNotification(title, {
+                body: body,
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                vibrate: Array.of(800, 200, 800, 200, 1000),
+                silent: false,
+                requireInteraction: true,
+                renotify: true,
+                tag: 'msb-alert-' + (notifId || Date.now())
+            }).catch(function() {});
+        });
+    }
+}
+
+function isNotificationVisibleForMe(notif) {
+    if (!notif) return false;
+    if (notif.target === "ВСЕМ") return true;
+    if (currentUser === ADMIN_NAME) return true;
+    const tLow = String(notif.target || '').trim().toLowerCase();
+    const sLow = String(notif.sender || '').trim().toLowerCase();
+    const myCallLow = String(currentCallsign || '').trim().toLowerCase();
+    const myUserLow = String(currentUser || '').trim().toLowerCase();
+    if (myCallLow && (tLow === myCallLow || sLow === myCallLow || sLow.indexOf('(' + myCallLow + ')') !== -1)) return true;
+    if (myUserLow && (tLow === myUserLow || sLow === myUserLow)) return true;
+    return false;
+}
+
 function isUnreadForMe(a) {
-    const me = String(currentCallsign || currentUser || 'Просмотр').trim().toLowerCase();
+    const myCall = String(currentCallsign || '').trim().toLowerCase();
+    const myUnit = String(currentUser || '').trim().toLowerCase();
     const sLow = String(a.sender || '').trim().toLowerCase();
-    if (me && (sLow === me || sLow.includes('(' + me + ')'))) return false;
+    if (myCall && (sLow === myCall || sLow.indexOf('(' + myCall + ')') !== -1)) return false;
+    if (!myCall && myUnit && sLow === myUnit) return false;
     if (Array.isArray(a.readList)) {
         const alreadyRead = a.readList.some(function(r) {
-            return String(r || '').trim().toLowerCase() === me;
+            const rLow = String(r || '').trim().toLowerCase();
+            return (myCall && rLow === myCall) || (myUnit && rLow === myUnit);
         });
         if (alreadyRead) return false;
     }
@@ -1445,10 +1481,10 @@ function checkAndShowAlerts(isNew) {
             alertObj = q.at(0);
         }
     }
-    if (!targetToShow && currentUser === ADMIN_NAME) {
-        const q = getAlertsQueue(ADMIN_NAME).filter(isUnreadForMe);
+    if (!targetToShow && currentUser) {
+        const q = getAlertsQueue(currentUser).filter(isUnreadForMe);
         if (q.length > 0) {
-            targetToShow = ADMIN_NAME;
+            targetToShow = currentUser;
             alertObj = q.at(0);
         }
     }
@@ -1464,7 +1500,7 @@ function checkAndShowAlerts(isNew) {
     }
 }
 
-function showAlert(target, text, sender, notifId) {
+function showAlert(target, text, sender, notifId, isNew) {
     currentAlertId = notifId || null;
     currentAlertTarget = target;
     currentAlertText = text;
@@ -1473,6 +1509,9 @@ function showAlert(target, text, sender, notifId) {
     document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
     document.getElementById('alert-text').innerText = text;
     document.getElementById('alert-modal').style.display = 'flex';
+    if (isNew || document.visibilityState === 'hidden') {
+        sendLocalNotification(target, text, currentAlertSender, currentAlertId);
+    }
     if (!titleInterval) {
         let flag = false;
         titleInterval = setInterval(function() {
@@ -1483,6 +1522,7 @@ function showAlert(target, text, sender, notifId) {
     playBeep();
     if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
 }
+
 
 function stopAlertVisuals() {
     document.getElementById('alert-modal').style.display = 'none';
