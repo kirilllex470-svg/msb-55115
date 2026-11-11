@@ -1547,7 +1547,7 @@ function confirmAlert() {
     if (targetToClear && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
     }
-    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
+          const isFromMessenger = alertTextCopy.indexOf('👥') === 0 || alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
     if (isFromMessenger && typeof openMessengerWindow === 'function') {
         openMessengerWindow(alertSenderCopy);
         return;
