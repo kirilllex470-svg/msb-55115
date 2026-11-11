@@ -992,15 +992,6 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
     if (!Array.isArray(roomsDB[room])) {
         roomsDB[room] = new Array();
     }
-
-    // === НАЧАЛО ВСТАВКИ: ЗАЩИТА ОТ ДУБЛИКАТОВ ===
-    const clientMsgId = fields.clientMsgId || null;
-    if (clientMsgId && roomsDB[room].some(function(m) { return m.clientMsgId === clientMsgId; })) {
-        res.writeHead(200);
-        return res.end('OK');
-    }
-    // === КОНЕЦ ВСТАВКИ ===
-
     roomsDB[room].push({
         id: crypto.randomBytes(8).toString('hex'),
         clientMsgId: clientMsgId, // <-- ДОБАВИТЬ ЭТУ СТРОЧКУ СЮДА
