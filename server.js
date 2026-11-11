@@ -994,20 +994,6 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
     }
     roomsDB[room].push({
         id: crypto.randomBytes(8).toString('hex'),
-        clientMsgId: clientMsgId, // <-- ДОБАВИТЬ ЭТУ СТРОЧКУ СЮДА
-        sender: sender,
-        text: finalContent,
-        type: type,
-        time: timeStr,
-        timestamp: Date.now(),
-        forwardedFrom: fields.forwardedFrom || null,
-        quoteId: fields.quoteId || null,
-        quoteText: fields.quoteText || null,
-        quoteSender: fields.quoteSender || null
-    });
-
-    roomsDB[room].push({
-        id: crypto.randomBytes(8).toString('hex'),
         sender: sender,
         text: finalContent,
         type: type,
