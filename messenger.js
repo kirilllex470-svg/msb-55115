@@ -365,11 +365,11 @@ function deleteFriend(friendObj, event) {
     chatUser = getActiveChatIdentity();
     if (event) event.stopPropagation();
     if (friendObj.isGroup) {
-        if (!confirm('Удалить конференцию "' + friendObj.name + '" для всех участников?')) return;
+        if (!confirm('Покинуть и удалить конференцию "' + friendObj.name + '" у себя из списка?')) return;
         fetch('/api/groups/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId: friendObj.id })
+            body: JSON.stringify({ groupId: friendObj.id, user: chatUser })
         }).then(function() {
             if (isCurrentGroup && currentRoomId === friendObj.id) {
                 resetChatArea();
@@ -395,6 +395,7 @@ function deleteFriend(friendObj, event) {
         loadFriendsAndRequests();
     });
 }
+
 
 function resetChatArea() {
     currentPartner = null;
