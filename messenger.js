@@ -1069,6 +1069,7 @@ function updateTotalUnreadBadge() {
     }
 }
 // === НАДЁЖНАЯ ДОСТАВКА НА СЕТИ 2G / EDGE ("E") ===
+// === НАДЁЖНАЯ ДОСТАВКА С ОТОБРАЖЕНИЕМ В ЧАТЕ ("ОЖИДАЕТ СЕТИ") ===
 var msbEdgeQueue = new Array();
 var msbIsSending = false;
 
@@ -1085,7 +1086,68 @@ function saveEdgeQueue() {
     } catch (e) {}
 }
 
+function escapeEdgeHtml(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+// Отрисовка неотправленных сообщений прямо внизу чата (без дублей!)
+function renderPendingBubbles() {
+    var mDiv = getMessagesDiv();
+    if (!mDiv || !currentRoomId) return;
+
+    var myPending = msbEdgeQueue.filter(function(item) {
+        return item && item.room === currentRoomId;
+    });
+
+    // Удаляем из DOM те временные пузырьки, которые УЖЕ ушли на сервер
+    mDiv.querySelectorAll('.msb-pending-row').forEach(function(el) {
+        var lid = el.getAttribute('data-lid');
+        var stillInQueue = myPending.some(function(p) { return p.lid === lid; });
+        if (!stillInQueue) el.remove();
+    });
+
+    if (myPending.length === 0) return;
+
+    // Убираем заглушку "История сообщений пуста", если есть сообщение в очереди
+    var placeholder = mDiv.querySelector('.chat-placeholder');
+    if (placeholder) placeholder.remove();
+
+    var added = false;
+    myPending.forEach(function(p) {
+        var existing = mDiv.querySelector('.msb-pending-row[data-lid="' + p.lid + '"]');
+        if (!existing) {
+            var row = document.createElement('div');
+            row.className = 'message-row my-msg msb-pending-row';
+            row.setAttribute('data-lid', p.lid);
+            var quoteHTML = (p.quoteId && p.quoteText)
+                ? ('<div class="msg-quote-block"><div class="msg-quote-author">' + escapeEdgeHtml(p.quoteSender || 'Система') + '</div>' + escapeEdgeHtml(p.quoteText) + '</div>')
+                : '';
+            row.innerHTML =
+                '<div class="swipe-container">' +
+                    '<div class="bubble" style="opacity:0.85; border-style:dashed !important;">' +
+                        quoteHTML +
+                        '<div class="msg-text">' + escapeEdgeHtml(p.text) + '</div>' +
+                        '<div class="msg-time" style="color:#facc15; font-weight:bold;">🕒 Ожидаем сети и подключения к серверу МСБ55115...</div>' +
+                    '</div>' +
+                '</div>';
+            mDiv.appendChild(row);
+            added = true;
+        } else {
+            // Всегда держим ожидающие отправки сообщения строго в самом низу под серверными
+            mDiv.appendChild(existing);
+        }
+    });
+
+    if (added) {
+        mDiv.scrollTop = mDiv.scrollHeight;
+    }
+}
+
 function flushEdgeQueue() {
+    renderPendingBubbles();
     if (msbIsSending || msbEdgeQueue.length === 0) return;
     var item = msbEdgeQueue.at(0);
     if (!item) return;
@@ -1109,16 +1171,25 @@ function flushEdgeQueue() {
         .then(function(res) {
             clearTimeout(timer);
             if (!res.ok) throw new Error('err');
+
+            // 1. Убираем из очереди
             msbEdgeQueue.shift();
             saveEdgeQueue();
+
+            // 2. Мгновенно стираем временный пузырёк, чтобы не было дубля!
+            var tempEl = document.querySelector('.msb-pending-row[data-lid="' + item.lid + '"]');
+            if (tempEl) tempEl.remove();
+
             msbIsSending = false;
             lastMessagesCount = -1;
             fetchMessages();
+
             if (msbEdgeQueue.length > 0) setTimeout(flushEdgeQueue, 300);
         })
         .catch(function() {
             clearTimeout(timer);
             msbIsSending = false;
+            renderPendingBubbles();
         });
 }
 
@@ -1130,6 +1201,7 @@ sendMessage = function() {
     if (text === '' || !chatUser || !currentRoomId) return;
 
     msbEdgeQueue.push({
+        lid: 'p_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
         sender: chatUser,
         room: currentRoomId,
         text: text,
@@ -1141,12 +1213,26 @@ sendMessage = function() {
 
     textInput.value = '';
     cancelReply();
+
+    // Сразу показываем сообщение в чате со статусом "🕒 Ожидает сети..."
+    renderPendingBubbles();
     flushEdgeQueue();
 };
 window.sendMessage = sendMessage;
 
+// Поддерживаем отображение пузырьков при переключении чатов и обновлении
+var origSelectChatEdge = selectChat;
+selectChat = function(itemObj) {
+    origSelectChatEdge(itemObj);
+    setTimeout(renderPendingBubbles, 60);
+};
+window.selectChat = selectChat;
+
 window.addEventListener('online', flushEdgeQueue);
-setInterval(flushEdgeQueue, 5000);
+setInterval(function() {
+    renderPendingBubbles();
+    flushEdgeQueue();
+}, 3500);
 
 // Экспорт всех необходимых функций в глобальную область window
 window.openMessengerWindow = openMessengerWindow;
