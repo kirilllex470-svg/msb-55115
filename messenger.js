@@ -1,4 +1,4 @@
-// --- МОДУЛЬ ДОСТАВКИ ДЛЯ СЕТИ 2G / EDGE ("E") ---
+// === ОКНО 1 ИЗ 12 ===
 const OUTBOX_KEY = 'msb_outbox_edge_v3';
 let isSendingNow = false;
 
@@ -88,6 +88,7 @@ function sendTaskToServer(task, timeoutMs) {
             formData.append('sender', task.sender);
             formData.append('room', task.room);
             formData.append('type', task.type);
+// === ОКНО 2 ИЗ 12 ===
             if (task.text) formData.append('text', task.text);
             if (task.quoteId) {
                 formData.append('quoteId', task.quoteId);
@@ -126,7 +127,6 @@ setInterval(function() {
     }
 }, 5000);
 
-// --- ОСНОВНЫЕ ПЕРЕМЕННЫЕ МЕССЕНДЖЕРА ---
 var chatUser = null;
 var currentPartner = null;
 var currentRoomId = null;
@@ -176,6 +176,7 @@ function makeDirectRoomId(u1, u2) {
     var pair = sorted.join(',');
     return pair + '_' + pair;
 }
+// === ОКНО 3 ИЗ 12 ===
 function syncMessengerAuth() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
@@ -272,6 +273,7 @@ function openMessengerWindow(targetPartnerName) {
     fetchMessages();
     loadFriendsAndRequests();
 }
+// === ОКНО 4 ИЗ 12 ===
 function closeMessengerWindow() {
     var modal = document.getElementById('messenger-modal');
     if (modal) {
@@ -366,6 +368,7 @@ function loadFriendsAndRequests() {
                 updateTotalUnreadBadge();
             }
         }).catch(function() {});
+// === ОКНО 5 ИЗ 12 ===
     fetch('/api/friends/requests?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
@@ -454,6 +457,7 @@ function renderFriends() {
         box.appendChild(item);
     });
 }
+// === ОКНО 6 ИЗ 12 ===
 function openCreateGroupModal() {
     document.getElementById('group-modal').style.display = 'flex';
 }
@@ -542,6 +546,7 @@ function resetChatArea() {
     document.getElementById('chat-status').style.display = "none";
     document.getElementById('text-input').setAttribute('disabled', 'true');
     document.getElementById('text-input').placeholder = "Сообщение...";
+// === ОКНО 7 ИЗ 12 ===
     var mDiv = getMessagesDiv();
     if (mDiv) {
         mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
@@ -587,6 +592,7 @@ function selectChat(itemObj) {
                 var blob = new Blob(audioChunks, { type: mimeUsed });
                 var qId = quotedMessageId, qTxt = quotedMessageText, qSnd = quotedMessageSender;
                 cancelReply();
+// === ОКНО 8 ИЗ 12 ===
                 var reader = new FileReader();
                 reader.onloadend = function() {
                     enqueueMessage({
@@ -677,6 +683,7 @@ function uploadAnyFile(inputElement) {
     if (!inputElement.files || inputElement.files.length === 0 || !chatUser || !currentRoomId) return;
     var file = inputElement.files.item(0);
     inputElement.value = '';
+// === ОКНО 9 ИЗ 12 ===
     var qId = quotedMessageId, qTxt = quotedMessageText, qSnd = quotedMessageSender;
     cancelReply();
 
@@ -764,6 +771,7 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
         isHorizontal = false;
         container.style.transition = 'none';
     }, { passive: true });
+// === ОКНО 10 ИЗ 12 ===
     container.addEventListener('touchmove', function(e) {
         if (!isSwiping) return;
         var touch = e.touches.item(0);
@@ -866,6 +874,7 @@ function executeForward(targetObj) {
         closeForwardModal();
     }
 }
+// === ОКНО 11 ИЗ 12 ===
 function inlineDeleteMessage(msgId) {
     if (!confirm("Удалить это сообщение?")) return;
     fetch('/api/messages/delete', {
@@ -950,6 +959,7 @@ function fetchMessages() {
             var forwardHTML = msg.forwardedFrom ? ('<div class="msg-forwarded-label">↪ Переслано от: ' + msg.forwardedFrom + '</div>') : '';
             var authorHTML = (isCurrentGroup && !isMy) ? ('<div class="msg-author">' + msg.sender + '</div>') : '';
             var delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
+// === ОКНО 12 ИЗ 12 ===
             var contentHTML = '';
             if (msg.type === 'audio') {
                 contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="metadata" style="display:block; max-width:100%;"></audio>';
