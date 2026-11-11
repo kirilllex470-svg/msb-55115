@@ -1164,10 +1164,9 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         if (cLow && (sLow === cLow || sLow.includes('(' + cLow + ')'))) continue;
 
         const matchCallsign = cLow && cLow === tLow;
-        const matchUnit = isUnitTarget && !cLow && uLow === tLow;
-        const matchAdminUnit = (tLow === 'админ' && uLow === 'админ');
+        const matchUnit = isUnitTarget && uLow === tLow;
 
-        if (target === 'ВСЕМ' || matchCallsign || matchUnit || matchAdminUnit) {
+        if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
             webpush.sendNotification(item.sub, payload, pushOptions).catch(function(err) {
                 if (err.statusCode === 410 || err.statusCode === 404) {
                     pushSubscriptions.splice(i, 1);
@@ -1177,6 +1176,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     }
 }
+
 
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
