@@ -70,10 +70,20 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', monos
 .cal-day.selected { background: #f59e0b !important; color: #090d16 !important; border-color: #fbbf24 !important; font-weight: 900; }
 .cal-dot { font-size: 10px; color: #4ade80; font-family: monospace; line-height: 1; margin-top: 2px; }
 
-#alert-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(185, 28, 28, 0.98); z-index: 210000; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 15px; box-sizing: border-box; }
-.alert-content { background: white; color: #b91c1c; padding: 30px; border-radius: 20px; width: 100%; max-width: 600px; box-shadow: 0 0 50px rgba(0,0,0,0.5); animation: shake 0.5s infinite; box-sizing: border-box; }
-@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-.alert-btn { margin-top: 20px; width: 100%; padding: 18px; font-size: 20px; background: #b91c1c; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+#alert-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, rgba(9, 13, 22, 0.45) 0%, rgba(9, 13, 22, 0.78) 100%); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 210000; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 16px; box-sizing: border-box; }
+.alert-content { background: linear-gradient(180deg, var(--panel) 0%, rgba(15, 23, 42, 0.68) 100%); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: var(--text) !important; padding: 24px 22px 20px 22px; border-radius: 22px; border: 1.5px solid var(--accent); width: 100%; max-width: 460px; max-height: 50vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 28px rgba(59, 130, 246, 0.22), inset 0 1px 2px rgba(255, 255, 255, 0.18); animation: alertPopIn 0.28s cubic-bezier(0.22, 1, 0.36, 1); box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
+.alert-content h1, .alert-content h2, .alert-content h3, #alert-target-label { color: var(--accent) !important; font-size: 16px !important; margin: 0 0 10px 0 !important; letter-spacing: 0.5px; }
+#alert-text { color: var(--text) !important; font-size: 17px !important; line-height: 1.45 !important; margin: 8px 0 16px 0 !important; padding: 12px 14px; background: rgba(0, 0, 0, 0.28); border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.08); word-break: break-word; }
+@keyframes alertPopIn { 0% { opacity: 0; transform: translateY(18px) scale(0.95); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+.alert-btn { margin-top: 8px; width: 100%; padding: 14px; font-size: 16px; background: linear-gradient(135deg, var(--accent), rgba(255, 255, 255, 0.12)); background-color: var(--accent); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 14px; cursor: pointer; font-weight: 800; letter-spacing: 0.5px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); transition: transform 0.2s ease, filter 0.2s ease; }
+.alert-btn:hover { transform: translateY(-2px); filter: brightness(1.12); }
+body.theme-military .alert-content { background: linear-gradient(180deg, rgba(22, 38, 28, 0.94) 0%, rgba(6, 19, 12, 0.65) 100%); border-color: #22c55e; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 28px rgba(34, 197, 94, 0.25); }
+body.theme-military .alert-btn { background: linear-gradient(135deg, #16a34a, #15803d); border-color: #4ade80; }
+body.theme-rocket .alert-content { background: linear-gradient(180deg, rgba(43, 22, 18, 0.94) 0%, rgba(20, 7, 5, 0.65) 100%); border-color: #f97316; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 28px rgba(249, 115, 22, 0.25); }
+body.theme-rocket .alert-btn { background: linear-gradient(135deg, #ea580c, #c2410c); border-color: #fb923c; }
+body.theme-cosmic .alert-content { background: linear-gradient(180deg, rgba(19, 15, 46, 0.94) 0%, rgba(5, 3, 18, 0.65) 100%); border-color: #8b5cf6; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 28px rgba(139, 92, 246, 0.28); }
+body.theme-cosmic .alert-btn { background: linear-gradient(135deg, #7c3aed, #4f46e5); border-color: #c084fc; }
+
 
 .notifications-window { width: 100%; max-width: 1400px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
 .notifications-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
