@@ -238,23 +238,18 @@ const SW_CODE = [
     "self.addEventListener('install', function(e) { self.skipWaiting(); });",
     "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
     "self.addEventListener('push', function(event) {",
-    "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!', tag: 'msb-alert-default' };",
+    "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!', tag: 'msb-alert' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
-    "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
-    "        for (var i = 0; i < clientList.length; i++) {",
-    "            if (clientList[i].visibilityState === 'visible') return;",
-    "        }",
-    "        return self.registration.showNotification(data.title, {",
-    "            body: data.body,",
-    "            icon: '/icon-192.png',",
-    "            badge: '/icon-192.png',",
-    "            vibrate: [400, 100, 400, 100, 400, 200, 600],",
-    "            silent: false,",
-    "            requireInteraction: true,",
-    "            renotify: true,",
-    "            tag: data.tag || ('msb-alert-' + Date.now()),",
-    "            data: { url: '/' }",
-    "        });",
+    "    event.waitUntil(self.registration.showNotification(data.title, {",
+    "        body: data.body,",
+    "        icon: '/icon-192.png',",
+    "        badge: '/icon-192.png',",
+    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
+    "        silent: false,",
+    "        requireInteraction: true,",
+    "        renotify: true,",
+    "        tag: data.tag || 'msb-alert',",
+    "        data: { url: '/' }",
     "    }));",
     "});",
     "self.addEventListener('notificationclick', function(event) {",
@@ -268,6 +263,7 @@ const SW_CODE = [
     "    }));",
     "});"
 ].join('\n');
+
 function readBodyJSON(req, cb) {
     let body = '';
     req.on('data', function(chunk) {
