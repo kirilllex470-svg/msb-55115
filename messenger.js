@@ -546,6 +546,7 @@ function resetChatArea() {
     document.getElementById('chat-status').style.display = "none";
     document.getElementById('text-input').setAttribute('disabled', 'true');
     document.getElementById('text-input').placeholder = "Сообщение...";
+// === ОКНО 7 ИЗ 12 ===
     var mDiv = getMessagesDiv();
     if (mDiv) {
         mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
@@ -591,6 +592,7 @@ function selectChat(itemObj) {
                 var blob = new Blob(audioChunks, { type: mimeUsed });
                 var qId = quotedMessageId, qTxt = quotedMessageText, qSnd = quotedMessageSender;
                 cancelReply();
+// === ОКНО 8 ИЗ 12 ===
                 var reader = new FileReader();
                 reader.onloadend = function() {
                     enqueueMessage({
@@ -614,7 +616,6 @@ function selectChat(itemObj) {
         }).catch(function() { alert("Нет доступа к микрофону!"); });
     }
 }
-
 
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
