@@ -28,43 +28,6 @@ var currentGifCategory = 'military';
 var msbOutboxQueue = new Array();
 var msbIsFlushing = false;
 
-// === WebRTC ПЕРЕМЕННЫЕ ДЛЯ ГОЛОСОВОЙ СВЯЗИ ===
-var rtcPeer = null;
-var localCallStream = null;
-var callPartner = null;
-var callTimerInterval = null;
-var callSeconds = 0;
-var isCallInitiator = false;
-var isMicMuted = false;
-var isSpeakerOn = true;
-var ringtoneInterval = null;
-
-var RTC_CONFIG = {
-    iceServers: [
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:://google.com' },
-        {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        }
-    ],
-    iceCandidatePoolSize: 10
-};
-
 try {
     var savedTextQ = localStorage.getItem('msb_edge_q');
     if (savedTextQ) {
@@ -99,13 +62,13 @@ function makeDirectRoomId(u1, u2) {
     var pair = sorted.join(',');
     return pair + '_' + pair;
 }
-
 function escapeEdgeHtml(str) {
     return String(str || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
+
 function saveTextOutboxToStorage() {
     try {
         var onlyText = msbOutboxQueue.filter(function(item) {
@@ -124,7 +87,7 @@ function showNetworkErrorBanner() {
     var banner = document.createElement('div');
     banner.id = 'msb-net-error-banner';
     banner.style.cssText = 'background:rgba(239,68,68,0.22);border:1.5px solid #ef4444;border-left:5px solid #ef4444;color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:13px;text-align:center;margin:10px 0;font-weight:bold;';
-    banner.innerHTML = '⚠️ Медленная сеть: сообщения, голосовые и кружки сохраняются в очереди и дойдут автоматически';
+    banner.innerHTML = '⚠️ Слабая связь: сообщения, голосовые и кружки в очереди и дойдут автоматически';
     mDiv.appendChild(banner);
     mDiv.scrollTop = mDiv.scrollHeight;
 }
@@ -143,7 +106,7 @@ function ensureCleanMessengerTopbar() {
             return;
         }
         var txt = child.textContent || '';
-        if (txt.indexOf('В ЖУРНАЛ') !== -1 || txt.indexOf('МЕССЕНДЖЕР') !== -1 || txt.indexOf('Темы') !== -1) {
+        if (txt.indexOf('В ЖУРНАЛ') !== -1 || txt.indexOf('МЕССЕНДЖЕР') !== -1) {
             child.style.display = 'none';
         }
     });
@@ -165,16 +128,15 @@ function ensureCleanMessengerTopbar() {
         '</button>' +
         '<div class="msb-profile-pill">' +
             'МСБ-55115</div>' +
-            '<div class="msb-profile-meta">' +
+             '<div class="msb-profile-meta">' +
                 '<span id="msg-my-name" class="msb-profile-callsign">Боец</span>' +
-                '<label for="msb-top-avatar-file" class="msb-avatar-edit-link">📷 Сменить фото</label>' +
+                '<label for="msb-top-avatar-file" class="msb-avatar-edit-link">📷 Сменить аватарку</label>' +
                 '<input type="file" id="msb-top-avatar-file" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">' +
             '</div>' +
         '</div>';
 
     modal.insertBefore(topbar, modal.firstChild);
 }
-
 function handleUnifiedMessengerBack() {
     var sidebar = document.getElementById('app-sidebar');
     if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('hidden')) {
@@ -184,432 +146,6 @@ function handleUnifiedMessengerBack() {
     closeMessengerWindow();
 }
 window.handleUnifiedMessengerBack = handleUnifiedMessengerBack;
-// === ЗВУКИ ГУДКОВ И ОКНО ВЫЗОВА ===
-function startRingtoneTone(isOutgoing) {
-    stopRingtoneTone();
-    try {
-        var AudioClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioClass) return;
-        var actx = new AudioClass();
-        if (actx.state === 'suspended') actx.resume();
-
-        var playBeep = function() {
-            try {
-                var osc = actx.createOscillator();
-                var gain = actx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(isOutgoing ? 425 : 480, actx.currentTime);
-                gain.gain.setValueAtTime(0.001, actx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.25, actx.currentTime + 0.05);
-                gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + (isOutgoing ? 1.0 : 0.8));
-                osc.connect(gain);
-                gain.connect(actx.destination);
-                osc.start();
-                osc.stop(actx.currentTime + (isOutgoing ? 1.05 : 0.85));
-            } catch(e) {}
-        };
-
-        playBeep();
-        ringtoneInterval = setInterval(playBeep, isOutgoing ? 3500 : 2500);
-    } catch(e) {}
-}
-
-function stopRingtoneTone() {
-    if (ringtoneInterval) {
-        clearInterval(ringtoneInterval);
-        ringtoneInterval = null;
-    }
-}
-
-function ensureCallModal() {
-    if (document.getElementById('msb-call-overlay')) return;
-    var overlay = document.createElement('div');
-    overlay.id = 'msb-call-overlay';
-    overlay.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(9,13,22,0.94);z-index:220000;flex-direction:column;justify-content:center;align-items:center;padding:20px;box-sizing:border-box;backdrop-filter:blur(12px);';
-    overlay.innerHTML =
-        '<div style="background:#1e293b;border:2px solid #22c55e;border-radius:24px;padding:30px 20px;width:100%;max-width:390px;text-align:center;box-shadow:0 0 50px rgba(34,197,94,0.35);box-sizing:border-box;">' +
-            '<div style="font-size:52px;margin-bottom:10px;" id="msb-call-icon">📞</div>' +
-            '<div style="font-size:21px;font-weight:900;color:#f8fafc;" id="msb-call-title">Голосовой вызов</div>' +
-            '<div style="font-size:14px;color:#94a3b8;margin-top:6px;font-family:monospace;" id="msb-call-status">Подключение...</div>' +
-            '<div style="font-size:20px;font-weight:bold;color:#4ade80;margin:16px 0 10px 0;display:none;font-family:monospace;" id="msb-call-timer">00:00</div>' +
-            '<div id="msb-call-controls-row" style="display:none;gap:10px;justify-content:center;margin:16px 0;">' +
-                '<button type="button" id="msb-mic-toggle-btn" onclick="toggleCallMicrophone()" style="padding:10px 14px;background:#334155;border:1px solid #64748b;color:#f8fafc;border-radius:12px;font-weight:bold;font-size:13px;cursor:pointer;">' +
-                    '<span id="msb-mic-icon">🎤</span> <span id="msb-mic-text">Микрофон: ВКЛ</span>' +
-                '</button>' +
-                '<button type="button" id="msb-speaker-toggle-btn" onclick="toggleCallSpeaker()" style="padding:10px 14px;background:#0284c7;border:1px solid #38bdf8;color:#f8fafc;border-radius:12px;font-weight:bold;font-size:13px;cursor:pointer;">' +
-                    '<span id="msb-speaker-icon">🔊</span> <span id="msb-speaker-text">Громкая</span>' +
-                '</button>' +
-            '</div>' +
-            '<div style="display:flex;gap:12px;justify-content:center;margin-top:16px;">' +
-                '<button type="button" id="msb-call-accept-btn" onclick="acceptIncomingCall()" style="display:none;padding:14px 26px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;">' +
-                    '✅ Ответить' +
-                '</button>' +
-                '<button type="button" id="msb-call-hangup-btn" onclick="hangupCall(true)" style="padding:14px 26px;background:#dc2626;color:#fff;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;">' +
-                    '🛑 Сброс' +
-                '</button>' +
-            '</div>' +
-            '<audio id="msb-remote-audio" autoplay playsinline style="display:none;"></audio>' +
-        '</div>';
-    document.body.appendChild(overlay);
-}
-
-function sendCallSignal(type, payload) {
-    if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
-        payload.type = type;
-        payload.from = getActiveChatIdentity();
-        payload.target = callPartner;
-        ws.send(JSON.stringify(payload));
-    }
-}
-function toggleCallMicrophone() {
-    if (!localCallStream) return;
-    var audioTracks = localCallStream.getAudioTracks();
-    if (audioTracks.length === 0) return;
-    
-    isMicMuted = !isMicMuted;
-    audioTracks.forEach(function(track) {
-        track.enabled = !isMicMuted;
-    });
-
-    var micBtn = document.getElementById('msb-mic-toggle-btn');
-    var micIcon = document.getElementById('msb-mic-icon');
-    var micText = document.getElementById('msb-mic-text');
-    if (micBtn && micIcon && micText) {
-        if (isMicMuted) {
-            micBtn.style.background = '#dc2626';
-            micIcon.innerText = '🔇';
-            micText.innerText = 'Микрофон: ВЫКЛ';
-        } else {
-            micBtn.style.background = '#334155';
-            micIcon.innerText = '🎤';
-            micText.innerText = 'Микрофон: ВКЛ';
-        }
-    }
-}
-window.toggleCallMicrophone = toggleCallMicrophone;
-
-function toggleCallSpeaker() {
-    var remoteAudio = document.getElementById('msb-remote-audio');
-    if (!remoteAudio) return;
-    isSpeakerOn = !isSpeakerOn;
-
-    var spkBtn = document.getElementById('msb-speaker-toggle-btn');
-    var spkIcon = document.getElementById('msb-speaker-icon');
-    var spkText = document.getElementById('msb-speaker-text');
-
-    if (remoteAudio.setSinkId && typeof remoteAudio.setSinkId === 'function') {
-        navigator.mediaDevices.enumerateDevices().then(function(devices) {
-            var audioOutputs = devices.filter(function(d) { return d.kind === 'audiooutput'; });
-            if (audioOutputs.length > 1) {
-                var targetDev = isSpeakerOn ? audioOutputs[audioOutputs.length - 1] : audioOutputs;
-                remoteAudio.setSinkId(targetDev.deviceId).catch(function(){});
-            }
-        }).catch(function(){});
-    }
-
-    if (spkBtn && spkIcon && spkText) {
-        if (isSpeakerOn) {
-            spkBtn.style.background = '#0284c7';
-            spkIcon.innerText = '🔊';
-            spkText.innerText = 'Громкая: ВКЛ';
-            remoteAudio.volume = 1.0;
-        } else {
-            spkBtn.style.background = '#475569';
-            spkIcon.innerText = '🔈';
-            spkText.innerText = 'Динамик уха';
-            remoteAudio.volume = 0.55;
-        }
-    }
-}
-window.toggleCallSpeaker = toggleCallSpeaker;
-
-async function triggerCallInDev(callType, targetName) {
-    ensureCallModal();
-    chatUser = getActiveChatIdentity();
-    callPartner = targetName || currentPartner;
-    if (!callPartner) return alert('Сначала выберите собеседника слева!');
-    if (!chatUser) return alert('Войдите в систему!');
-
-    isCallInitiator = true;
-    isMicMuted = false;
-    isSpeakerOn = true;
-
-    var overlay = document.getElementById('msb-call-overlay');
-    var titleEl = document.getElementById('msb-call-title');
-    var statEl = document.getElementById('msb-call-status');
-    var acceptBtn = document.getElementById('msb-call-accept-btn');
-    var timerEl = document.getElementById('msb-call-timer');
-    var cRow = document.getElementById('msb-call-controls-row');
-
-    if (overlay) overlay.style.display = 'flex';
-    if (titleEl) titleEl.innerText = '📞 ' + callPartner;
-    if (statEl) statEl.innerText = 'Гудки... Ожидание ответа абонента';
-    if (acceptBtn) acceptBtn.style.display = 'none';
-    if (timerEl) timerEl.style.display = 'none';
-    if (cRow) cRow.style.display = 'none';
-
-    try {
-        localCallStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        });
-        startRingtoneTone(true);
-        sendCallSignal('call_invite', {});
-    } catch (e) {
-        alert('Нет доступа к микрофону! Разрешите микрофон в браузере.');
-        hangupCall(false);
-    }
-}
-window.triggerCallInDev = triggerCallInDev;
-function handleCallSignal(msg) {
-    ensureCallModal();
-    if (msg.type === 'call_invite') {
-        callPartner = msg.from;
-        isCallInitiator = false;
-        isMicMuted = false;
-        isSpeakerOn = true;
-
-        var overlay = document.getElementById('msb-call-overlay');
-        var titleEl = document.getElementById('msb-call-title');
-        var statEl = document.getElementById('msb-call-status');
-        var acceptBtn = document.getElementById('msb-call-accept-btn');
-        var timerEl = document.getElementById('msb-call-timer');
-        var cRow = document.getElementById('msb-call-controls-row');
-
-        if (overlay) overlay.style.display = 'flex';
-        if (titleEl) titleEl.innerText = '📲 Входящий вызов: ' + msg.from;
-        if (statEl) statEl.innerText = 'Боец вызывает вас по защищённой линии...';
-        if (acceptBtn) acceptBtn.style.display = 'inline-block';
-        if (timerEl) timerEl.style.display = 'none';
-        if (cRow) cRow.style.display = 'none';
-
-        startRingtoneTone(false);
-    }
-
-    if (msg.type === 'call_accepted') {
-        stopRingtoneTone();
-        var statEl = document.getElementById('msb-call-status');
-        if (statEl) statEl.innerText = 'Соединение... Установка связи';
-        initiateWebRTCOffer();
-    }
-
-    if (msg.type === 'call_offer') {
-        stopRingtoneTone();
-        handleWebRTCOffer(msg.sdp);
-    }
-
-    if (msg.type === 'call_answer') {
-        stopRingtoneTone();
-        if (rtcPeer) {
-            rtcPeer.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(function(){});
-        }
-    }
-
-    if (msg.type === 'call_ice') {
-        if (rtcPeer && msg.candidate) {
-            rtcPeer.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function(){});
-        }
-    }
-
-    if (msg.type === 'call_hangup') {
-        stopRingtoneTone();
-        hangupCall(false);
-    }
-}
-window.handleCallSignal = handleCallSignal;
-
-async function acceptIncomingCall() {
-    try {
-        stopRingtoneTone();
-        var acceptBtn = document.getElementById('msb-call-accept-btn');
-        var statEl = document.getElementById('msb-call-status');
-        if (acceptBtn) acceptBtn.style.display = 'none';
-        if (statEl) statEl.innerText = 'Активация микрофона и подключение...';
-
-        if (!localCallStream) {
-            localCallStream = await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            });
-        }
-        if (statEl) statEl.innerText = 'Вызов принят. Подключение канала...';
-        sendCallSignal('call_accepted', {});
-    } catch (e) {
-        alert('Нет доступа к микрофону!');
-        hangupCall(true);
-    }
-}
-window.acceptIncomingCall = acceptIncomingCall;
-function createPeerConnection() {
-    if (rtcPeer) {
-        try { rtcPeer.close(); } catch(e){}
-        rtcPeer = null;
-    }
-    rtcPeer = new RTCPeerConnection(RTC_CONFIG);
-
-    if (localCallStream) {
-        localCallStream.getAudioTracks().forEach(function(track) {
-            rtcPeer.addTrack(track, localCallStream);
-        });
-    }
-
-    rtcPeer.onicecandidate = function(event) {
-        if (event.candidate) {
-            sendCallSignal('call_ice', { candidate: event.candidate });
-        }
-    };
-
-    rtcPeer.oniceconnectionstatechange = function() {
-        var statEl = document.getElementById('msb-call-status');
-        if (statEl && rtcPeer) {
-            if (rtcPeer.iceConnectionState === 'connected' || rtcPeer.iceConnectionState === 'completed') {
-                statEl.innerText = '🟢 Связь установлена (Голос активен)';
-            } else if (rtcPeer.iceConnectionState === 'failed') {
-                statEl.innerText = '🔴 Переподключение канала...';
-                rtcPeer.restartIce();
-            }
-        }
-    };
-
-    rtcPeer.ontrack = function(event) {
-        var remoteAudio = document.getElementById('msb-remote-audio');
-        if (!remoteAudio) {
-            remoteAudio = document.createElement('audio');
-            remoteAudio.id = 'msb-remote-audio';
-            remoteAudio.autoplay = true;
-            document.body.appendChild(remoteAudio);
-        }
-
-        if (event.streams && event.streams[0]) {
-            remoteAudio.srcObject = event.streams[0];
-        } else {
-            var inboundStream = new MediaStream();
-            inboundStream.addTrack(event.track);
-            remoteAudio.srcObject = inboundStream;
-        }
-
-        remoteAudio.muted = false;
-        remoteAudio.volume = 1.0;
-
-        var playPromise = remoteAudio.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(function() {
-                window.addEventListener('click', function unlockAudio() {
-                    remoteAudio.play();
-                    window.removeEventListener('click', unlockAudio);
-                }, { once: true });
-            });
-        }
-        startCallTimer();
-    };
-}
-
-async function initiateWebRTCOffer() {
-    createPeerConnection();
-    try {
-        var offer = await rtcPeer.createOffer({
-            offerToReceiveAudio: true,
-            voiceActivityDetection: true
-        });
-        await rtcPeer.setLocalDescription(offer);
-        sendCallSignal('call_offer', { sdp: offer });
-    } catch (e) {
-        hangupCall(true);
-    }
-}
-
-async function handleWebRTCOffer(remoteSdp) {
-    createPeerConnection();
-    try {
-        await rtcPeer.setRemoteDescription(new RTCSessionDescription(remoteSdp));
-        var answer = await rtcPeer.createAnswer({
-            offerToReceiveAudio: true,
-            voiceActivityDetection: true
-        });
-        await rtcPeer.setLocalDescription(answer);
-        sendCallSignal('call_answer', { sdp: answer });
-    } catch (e) {
-        hangupCall(true);
-    }
-}
-function startCallTimer() {
-    stopRingtoneTone();
-    var statEl = document.getElementById('msb-call-status');
-    var timerEl = document.getElementById('msb-call-timer');
-    var cRow = document.getElementById('msb-call-controls-row');
-    if (statEl) statEl.innerText = 'Разговор по защищённой линии';
-    if (timerEl) timerEl.style.display = 'block';
-    if (cRow) cRow.style.display = 'flex';
-
-    callSeconds = 0;
-    if (callTimerInterval) clearInterval(callTimerInterval);
-    callTimerInterval = setInterval(function() {
-        callSeconds++;
-        var m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
-        var s = String(callSeconds % 60).padStart(2, '0');
-        if (timerEl) timerEl.innerText = m + ':' + s;
-    }, 1000);
-}
-
-function hangupCall(sendNotify) {
-    try {
-        stopRingtoneTone();
-        var overlay = document.getElementById('msb-call-overlay');
-        var cRow = document.getElementById('msb-call-controls-row');
-        var timerEl = document.getElementById('msb-call-timer');
-        if (overlay) overlay.style.display = 'none';
-        if (cRow) cRow.style.display = 'none';
-        if (timerEl) {
-            timerEl.style.display = 'none';
-            timerEl.innerText = '00:00';
-        }
-    } catch (e) {}
-
-    try {
-        if (sendNotify && callPartner) {
-            sendCallSignal('call_hangup', {});
-        }
-    } catch (e) {}
-
-    try {
-        if (callTimerInterval) {
-            clearInterval(callTimerInterval);
-            callTimerInterval = null;
-        }
-    } catch (e) {}
-
-    try {
-        if (rtcPeer) {
-            rtcPeer.ontrack = null;
-            rtcPeer.onicecandidate = null;
-            rtcPeer.oniceconnectionstatechange = null;
-            rtcPeer.close();
-            rtcPeer = null;
-        }
-    } catch (e) {}
-
-    try {
-        if (localCallStream) {
-            localCallStream.getTracks().forEach(function(track) {
-                track.stop();
-            });
-            localCallStream = null;
-        }
-    } catch (e) {}
-
-    try {
-        var remoteAudio = document.getElementById('msb-remote-audio');
-        if (remoteAudio) {
-            remoteAudio.pause();
-            remoteAudio.srcObject = null;
-        }
-    } catch (e) {}
-
-    callPartner = null;
-    isCallInitiator = false;
-    isMicMuted = false;
-    isSpeakerOn = true;
-    callSeconds = 0;
-}
-window.hangupCall = hangupCall;
 
 function enqueueChatPayload(payload) {
     if (!payload.lid) {
@@ -620,6 +156,7 @@ function enqueueChatPayload(payload) {
     renderPendingBubbles();
     flushOutboxQueue();
 }
+
 function renderPendingBubbles() {
     var mDiv = getMessagesDiv();
     if (!mDiv || !currentRoomId) return;
@@ -682,13 +219,12 @@ function renderPendingBubbles() {
         mDiv.scrollTop = mDiv.scrollHeight;
     }
 }
-
 function flushOutboxQueue() {
     renderPendingBubbles();
     if (msbIsFlushing || msbOutboxQueue.length === 0) return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
-    var item = msbOutboxQueue[0];
+    var item = msbOutboxQueue.at(0);
     if (!item) return;
 
     msbIsFlushing = true;
@@ -711,6 +247,7 @@ function flushOutboxQueue() {
     } else if (item.text) {
         fd.append('text', item.text);
     }
+
     if (item.quoteId) {
         fd.append('quoteId', item.quoteId);
         fd.append('quoteText', item.quoteText || '');
@@ -754,7 +291,6 @@ function flushOutboxQueue() {
 function flushRetryQueue() {
     flushOutboxQueue();
 }
-
 function syncMessengerAuth() {
     ensureCleanMessengerTopbar();
     chatUser = getActiveChatIdentity();
@@ -769,7 +305,7 @@ function syncMessengerAuth() {
         nameEl.textContent = chatUser + (uName && uName !== chatUser ? ' (' + uName + ')' : '');
     }
     if (avEl && !avEl.querySelector('img')) {
-        avEl.textContent = 'МСБ-55115';
+        avEl.textContent = chatUser.substring(0, 2).toUpperCase();
     }
     if (hdrEl) {
         hdrEl.textContent = '👤 ' + chatUser;
@@ -863,25 +399,23 @@ function renderAvatarElement(el, name, avatarDataUrl) {
         el.innerHTML = '<img src="' + avatarDataUrl + '" alt="av">';
     } else {
         el.innerHTML = '';
-        var clean = String(name || '').trim();
-        if (!clean || clean === '?' || clean === 'Чат не выбран') {
-            el.style.fontSize = '9px';
-            el.style.fontWeight = '900';
+        if (!name || name === '?') {
+            el.style.fontSize = '8px';
             el.style.lineHeight = '1.1';
             el.style.textAlign = 'center';
             el.textContent = 'МСБ-55115';
         } else {
-            el.style.fontSize = '14px';
-            el.style.fontWeight = '600';
-            el.textContent = clean.substring(0, 2).toUpperCase();
+            el.style.fontSize = '';
+            el.textContent = String(name).substring(0, 2).toUpperCase();
         }
     }
 }
 
+
 function uploadMyAvatar(inputEl) {
     chatUser = getActiveChatIdentity();
     if (!inputEl.files || inputEl.files.length === 0 || !chatUser) return;
-    var file = inputEl.files[0];
+    var file = inputEl.files.item(0);
     var reader = new FileReader();
     reader.onload = function(e) {
         var img = new Image();
@@ -913,6 +447,7 @@ function uploadMyAvatar(inputEl) {
     };
     reader.readAsDataURL(file);
 }
+
 document.addEventListener('DOMContentLoaded', function() {
     ensureCleanMessengerTopbar();
     var tInput = document.getElementById('text-input');
@@ -931,11 +466,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof setAppTheme === 'function') {
         setAppTheme(savedTheme, true);
     }
-    var pAv = document.getElementById('partner-avatar');
-    if (pAv && !currentPartner) renderAvatarElement(pAv, '', '');
     syncMessengerAuth();
-});
+	    var pAv = document.getElementById('partner-avatar');
+    if (pAv && !currentPartner) renderAvatarElement(pAv, '', '');
 
+});
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
@@ -1000,13 +535,14 @@ function renderRequests() {
         box.appendChild(item);
     });
 }
+
 function renderFriends() {
     chatUser = getActiveChatIdentity();
     var box = document.getElementById('friends-box');
     if (!box || !chatUser) return;
     box.innerHTML = '';
     if (friendsList.length === 0) {
-        box.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Список контактов пуст</div>';
+        box.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Список друзей пуст</div>';
         return;
     }
     friendsList.forEach(function(friend) {
@@ -1028,9 +564,9 @@ function renderFriends() {
             avatar: friend.avatar || '',
             online: Boolean(friend.online)
         }).replace(/"/g, '&quot;');
-        var callBtnsHTML = (!friend.isGroup) ? (
-            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Аудиозвонок\', \'' + friend.name + '\')" title="Позвонить">📞</button>'
-        ) : '';
+        var callBtnsHTML =
+            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Аудиозвонок\', \'' + friend.name + '\')" title="Аудиозвонок">📞</button>' +
+            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Видеозвонок\', \'' + friend.name + '\')" title="Видеозвонок">🎥</button>';
         var delBtnHTML = '<button class="delete-friend-btn" onclick="deleteFriend(' + friendDataEscaped + ', event)">&times;</button>';
         item.innerHTML =
             '<div class="friend-info">' +
@@ -1131,7 +667,6 @@ function resetChatArea() {
     renderedMsgIds.clear();
     document.getElementById('partner-display-name').textContent = "Чат не выбран";
     renderAvatarElement(document.getElementById('partner-avatar'), '', '');
-    document.getElementById('chat-status').style.display = "none";
     var tInput = document.getElementById('text-input');
     if (tInput) {
         tInput.setAttribute('disabled', 'true');
@@ -1187,6 +722,7 @@ function selectChat(itemObj) {
     renderFriends();
     setTimeout(renderPendingBubbles, 60);
 }
+
 function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
     if (sb) sb.classList.remove('hidden');
@@ -1229,7 +765,6 @@ function sendMessage() {
     });
     textInput.focus();
 }
-
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -1277,6 +812,7 @@ function toggleVoiceRecord() {
         }).catch(function() { alert("Нет доступа к микрофону!"); });
     }
 }
+
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -1345,7 +881,7 @@ function toggleVideoRecord() {
 function uploadAnyFile(inputElement) {
     chatUser = getActiveChatIdentity();
     if (!inputElement.files || inputElement.files.length === 0 || !chatUser || !currentRoomId) return;
-    var file = inputElement.files;
+    var file = inputElement.files.item(0);
     var qId = quotedMessageId || null;
     var qTxt = quotedMessageText || null;
     var qSnd = quotedMessageSender || null;
@@ -1363,6 +899,7 @@ function uploadAnyFile(inputElement) {
         quoteSender: qSnd
     });
 }
+
 function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     var container = rowElement.querySelector('.swipe-container');
     var leftIndicator = rowElement.querySelector('.left-indicator');
@@ -1401,7 +938,6 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
             rightIndicator.style.opacity = (currentX < -35) ? '1' : '0';
         }
     }, { passive: false });
-
     container.addEventListener('touchend', function() {
         isSwiping = false;
         container.style.transition = 'transform 0.2s cubic-bezier(0.1, 0.8, 0.3, 1)';
@@ -1583,75 +1119,54 @@ function fetchMessages() {
         }
     }).catch(function() {});
 }
-
 function renderSingleRow(mDiv, msg, isMy, checkIcon) {
     if (msg.clientMsgId) {
         var tempDup = mDiv.querySelector('.msb-pending-row[data-lid="' + msg.clientMsgId + '"]');
         if (tempDup) tempDup.remove();
-        msbOutboxQueue = msbOutboxQueue.filter(function(item) {
-            return item && item.lid !== msg.clientMsgId;
-        });
+        msbOutboxQueue = msbOutboxQueue.filter(function(item) { return item && item.lid !== msg.clientMsgId; });
         saveTextOutboxToStorage();
     }
     var row = document.createElement('div');
     row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
     row.setAttribute('data-msg-id', msg.id);
     if (msg.clientMsgId) row.setAttribute('data-client-id', msg.clientMsgId);
-
-    row.innerHTML = '<div class="swipe-indicator left-indicator">💬</div>' +
-        '<div class="swipe-container"><div class="bubble"></div></div>' +
-        '<div class="swipe-indicator right-indicator">↪️</div>';
-
+    row.innerHTML = '<div class="swipe-indicator left-indicator">💬</div><div class="swipe-container"><div class="bubble"></div></div><div class="swipe-indicator right-indicator">↪️</div>';
     var bubble = row.querySelector('.bubble');
-    var quoteHTML = (msg.quoteId && msg.quoteText)
-        ? ('<div class="msg-quote-block"><div class="msg-quote-author">' + (msg.quoteSender || 'Система') + '</div>' + msg.quoteText + '</div>')
-        : '';
-    var forwardHTML = msg.forwardedFrom
-        ? ('<div class="msg-forwarded-label">↪ Переслано от: ' + msg.forwardedFrom + '</div>')
-        : '';
-    var authorHTML = (isCurrentGroup && !isMy)
-        ? ('<div class="msg-author">' + msg.sender + '</div>')
-        : '';
+    var quoteHTML = (msg.quoteId && msg.quoteText) ? ('<div class="msg-quote-block"><div class="msg-quote-author">' + (msg.quoteSender || 'Система') + '</div>' + msg.quoteText + '</div>') : '';
+    var forwardHTML = msg.forwardedFrom ? ('<div class="msg-forwarded-label">↪ Переслано от: ' + msg.forwardedFrom + '</div>') : '';
+    var authorHTML = (isCurrentGroup && !isMy) ? ('<div class="msg-author">' + msg.sender + '</div>') : '';
     var delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
     var contentHTML = '';
-
     if (msg.type === 'audio') {
-        contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="metadata" onerror="var el=this;setTimeout(function(){el.load();},2500);" style="display:block;max-width:100%;"></audio>';
+        contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="metadata" onerror="var el=this;setTimeout(function(){el.load();},2500);" style="display:block; max-width:100%;"></audio>';
     } else if (msg.type === 'video') {
         contentHTML = '<video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" onerror="var el=this;setTimeout(function(){el.load();},2500);" style="display:block;" onclick="playVideoWithSound(this)"></video>';
     } else if (msg.type === 'gif') {
-        contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF\')">';
+        contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF от ' + msg.sender + '\')">';
     } else if (msg.type === 'file') {
         try {
             var fileObj = JSON.parse(msg.text);
             var ext = fileObj.name.split('.').pop().toLowerCase();
             if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) {
-                contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото\')">';
+                contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото: ' + fileObj.name + '\')">';
             } else {
                 contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + fileObj.name + '</span><span class="chat-file-action">Скачать</span></div></a>';
             }
-        } catch (e) {
-            contentHTML = '<div class="msg-text">Поврежденный файл</div>';
-        }
+        } catch (e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
     } else {
         contentHTML = '<div class="msg-text">' + msg.text + '</div>';
     }
-
     bubble.innerHTML = delBtnHTML + quoteHTML + forwardHTML + authorHTML + contentHTML + '<div class="msg-time">' + msg.time + checkIcon + '</div>';
     mDiv.appendChild(row);
     setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
 }
+
 function playVideoWithSound(v) {
     document.querySelectorAll('#messages video.video-round').forEach(function(other) {
         if (other !== v) { other.muted = true; other.pause(); }
     });
-    if (!v.paused && !v.muted) {
-        v.muted = true; v.pause();
-    } else {
-        v.muted = false; v.loop = false; v.currentTime = 0;
-        v.play().catch(function() {});
-        v.onended = function() { v.muted = true; v.pause(); v.currentTime = 0; };
-    }
+    if (!v.paused && !v.muted) { v.muted = true; v.pause(); }
+    else { v.muted = false; v.loop = false; v.currentTime = 0; v.play().catch(function() {}); v.onended = function() { v.muted = true; v.pause(); v.currentTime = 0; }; }
 }
 
 function sendFriendRequest() {
@@ -1661,29 +1176,18 @@ function sendFriendRequest() {
     var targetName = input.value.trim();
     if (!targetName || !chatUser) return alert('Введите позывной!');
     if (targetName.toLowerCase() === chatUser.toLowerCase()) return alert('Нельзя добавить самого себя!');
-    fetch('/api/friends/request/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: chatUser, to: targetName })
-    }).then(function(res) { return res.json(); }).then(function(data) {
-        if (data && data.success) {
-            input.value = '';
-            alert('✅ Заявка отправлена: ' + targetName);
-            loadFriendsAndRequests();
-        } else {
-            alert('❌ ' + (data && data.message ? data.message : 'Ошибка'));
-        }
-    }).catch(function() { alert('❌ Ошибка связи'); });
+    fetch('/api/friends/request/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: chatUser, to: targetName }) })
+        .then(function(res) { return res.json(); }).then(function(data) {
+            if (data && data.success) { input.value = ''; alert('✅ Заявка отправлена: ' + targetName); loadFriendsAndRequests(); }
+            else alert('❌ ' + (data && data.message ? data.message : 'Ошибка'));
+        }).catch(function() { alert('❌ Ошибка связи'); });
 }
 
 function handleRequest(fromUser, action) {
     chatUser = getActiveChatIdentity();
     if (!chatUser || !fromUser) return;
-    fetch('/api/friends/request/respond', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: chatUser, from: fromUser, action: action })
-    }).then(function() { loadFriendsAndRequests(); }).catch(function() {});
+    fetch('/api/friends/request/respond', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: chatUser, from: fromUser, action: action }) })
+        .then(function() { loadFriendsAndRequests(); }).catch(function() {});
 }
 
 function updateTotalUnreadBadge() {
@@ -1696,20 +1200,8 @@ function updateTotalUnreadBadge() {
     if (total > 0) badge.innerText = total;
 }
 
-// === КОНЦОВКА ТОЛЬКО ДЛЯ messenger.js ===
-window.addEventListener('online', function() {
-    clearNetworkErrorBanner();
-    flushOutboxQueue();
-    if (currentRoomId) {
-        fetchMessages();
-        markChatAsRead(currentRoomId);
-    }
-});
-
-setInterval(function() {
-    renderPendingBubbles();
-    flushOutboxQueue();
-}, 3500);
+window.addEventListener('online', function() { clearNetworkErrorBanner(); flushOutboxQueue(); if (currentRoomId) { fetchMessages(); markChatAsRead(currentRoomId); } });
+setInterval(function() { renderPendingBubbles(); flushOutboxQueue(); }, 3500);
 
 window.openMessengerWindow = openMessengerWindow;
 window.closeMessengerWindow = closeMessengerWindow;
@@ -1732,9 +1224,3 @@ window.inlineDeleteMessage = inlineDeleteMessage;
 window.playVideoWithSound = playVideoWithSound;
 window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
-window.triggerCallInDev = triggerCallInDev;
-window.acceptIncomingCall = acceptIncomingCall;
-window.hangupCall = hangupCall;
-window.handleCallSignal = handleCallSignal;
-window.toggleCallMicrophone = toggleCallMicrophone;
-window.toggleCallSpeaker = toggleCallSpeaker;

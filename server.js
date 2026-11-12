@@ -1050,14 +1050,7 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     });
 }
 
-// НАДЁЖНЫЙ WEBSOCKET ДЛЯ AMVERA CLOUD
-const wss = new WebSocket.Server({ noServer: true, maxPayload: 20 * 1024 * 1024 });
-
-server.on('upgrade', function(request, socket, head) {
-    wss.handleUpgrade(request, socket, head, function(ws) {
-        wss.emit('connection', ws, request);
-    });
-});
+const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
     const str = JSON.stringify(obj);
@@ -1209,14 +1202,8 @@ wss.on('connection', function(ws) {
         try {
             const msg = JSON.parse(message.toString());
             if (msg.type === 'ping') {
-                if (msg.callsign) {
-                    ws.callsign = String(msg.callsign).trim().toLowerCase();
-                    markUserOnline(msg.callsign);
-                } else if (msg.user && msg.user === 'АДМИН') {
-                    ws.callsign = 'муравей';
-                    markUserOnline('муравей');
-                }
-                if (msg.user) ws.user = String(msg.user).trim().toLowerCase();
+                if (msg.callsign) markUserOnline(msg.callsign);
+                else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
@@ -1230,22 +1217,6 @@ wss.on('connection', function(ws) {
                     pushSubscriptions.push({ user: msg.user, callsign: msg.callsign || '', sub: msg.sub });
                 }
                 writeJSON(SUBS_FILE, pushSubscriptions);
-                return;
-            }
-            if (msg.type && msg.type.startsWith('call_')) {
-                if (msg.from) ws.callsign = String(msg.from).trim().toLowerCase();
-                const targetKey = String(msg.target || '').trim().toLowerCase();
-                wss.clients.forEach(function(client) {
-                    if (client.readyState === WebSocket.OPEN && client !== ws) {
-                        const cCall = String(client.callsign || '').trim().toLowerCase();
-                        const cUser = String(client.user || '').trim().toLowerCase();
-                        const isMatch = (cCall && cCall === targetKey) ||
-                                        (cUser && cUser === targetKey) ||
-                                        (targetKey === 'муравей' && (cCall === 'муравей' || cUser === 'админ')) ||
-                                        (targetKey === 'админ' && (cCall === 'муравей' || cUser === 'админ'));
-                        if (isMatch) client.send(JSON.stringify(msg));
-                    }
-                });
                 return;
             }
             if (msg.type === 'add_row') {
