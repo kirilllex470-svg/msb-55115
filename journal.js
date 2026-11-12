@@ -1743,3 +1743,47 @@ window.changePhotoZoom = changePhotoZoom;
 window.resetPhotoZoom = resetPhotoZoom;
 
 window.addEventListener('DOMContentLoaded', initApp);
+// === АВТОМАТИЧЕСКАЯ ПРИВЯЗКА КНОПКИ ВХОДА ===
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Принудительно убираем экран загрузки через 1.5 сек
+    setTimeout(function() {
+        var splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+    }, 1500);
+
+    // 2. Находим кнопку входа по тексту или ID и перенаправляем на authLogin / login
+    var allButtons = document.querySelectorAll('button');
+    allButtons.forEach(function(btn) {
+        var txt = (btn.textContent || '').trim().toLowerCase();
+        if (txt === 'войти' || txt === 'вход' || btn.id === 'login-submit-btn' || btn.id === 'auth-login-btn') {
+            btn.onclick = function(e) {
+                if (e) e.preventDefault();
+                unlockMobileFeatures();
+                var callInput = document.getElementById('auth-callsign-input') || document.getElementById('login-callsign');
+                if (callInput && callInput.value.trim() !== '') {
+                    authLogin();
+                } else {
+                    login();
+                }
+            };
+        }
+    });
+
+    // 3. Поддержка нажатия клавиши Enter для мгновенного входа
+    var passInputs = document.querySelectorAll('input[type="password"]');
+    passInputs.forEach(function(inp) {
+        inp.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                unlockMobileFeatures();
+                var callInput = document.getElementById('auth-callsign-input') || document.getElementById('login-callsign');
+                if (callInput && callInput.value.trim() !== '') {
+                    authLogin();
+                } else {
+                    login();
+                }
+            }
+        });
+    });
+});
+
