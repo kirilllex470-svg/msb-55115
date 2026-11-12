@@ -164,7 +164,45 @@ function handleUnifiedMessengerBack() {
     closeMessengerWindow();
 }
 window.handleUnifiedMessengerBack = handleUnifiedMessengerBack;
-// === МОДУЛЬ ГОЛОСОВОГО ВЫЗОВА: ЭКРАН, МИКРОФОН И ГРОМКАЯ СВЯЗЬ ===
+// === ГЕНЕРАТОР ГУДКОВ И ЗВУКОВ ВЫЗОВА ===
+var ringtoneInterval = null;
+
+function startRingtoneTone(isOutgoing) {
+    stopRingtoneTone();
+    try {
+        var AudioClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioClass) return;
+        var actx = new AudioClass();
+        if (actx.state === 'suspended') actx.resume();
+
+        var playBeep = function() {
+            try {
+                var osc = actx.createOscillator();
+                var gain = actx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(isOutgoing ? 425 : 480, actx.currentTime);
+                gain.gain.setValueAtTime(0.001, actx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.25, actx.currentTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + (isOutgoing ? 1.0 : 0.8));
+                osc.connect(gain);
+                gain.connect(actx.destination);
+                osc.start();
+                osc.stop(actx.currentTime + (isOutgoing ? 1.05 : 0.85));
+            } catch(e) {}
+        };
+
+        playBeep();
+        ringtoneInterval = setInterval(playBeep, isOutgoing ? 3500 : 2500);
+    } catch(e) {}
+}
+
+function stopRingtoneTone() {
+    if (ringtoneInterval) {
+        clearInterval(ringtoneInterval);
+        ringtoneInterval = null;
+    }
+}
+
 function ensureCallModal() {
     if (document.getElementById('msb-call-overlay')) return;
     var overlay = document.createElement('div');
@@ -172,27 +210,23 @@ function ensureCallModal() {
     overlay.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(9,13,22,0.94);z-index:220000;flex-direction:column;justify-content:center;align-items:center;padding:20px;box-sizing:border-box;backdrop-filter:blur(12px);';
     overlay.innerHTML =
         '<div style="background:#1e293b;border:2px solid #22c55e;border-radius:24px;padding:30px 20px;width:100%;max-width:390px;text-align:center;box-shadow:0 0 50px rgba(34,197,94,0.35);box-sizing:border-box;">' +
-            '<div style="font-size:52px;margin-bottom:10px;animation:pulseLive 2s infinite;" id="msb-call-icon">📞</div>' +
+            '<div style="font-size:52px;margin-bottom:10px;" id="msb-call-icon">📞</div>' +
             '<div style="font-size:21px;font-weight:900;color:#f8fafc;" id="msb-call-title">Голосовой вызов</div>' +
             '<div style="font-size:14px;color:#94a3b8;margin-top:6px;font-family:monospace;" id="msb-call-status">Подключение...</div>' +
-            '<div style="font-size:20px;font-weight:bold;color:#4ade80;margin:16px 0 10px 0;display:none;font-family:monospace;letter-spacing:1px;" id="msb-call-timer">00:00</div>' +
-            
-            // Кнопки управления: Микрофон и Громкая связь
+            '<div style="font-size:20px;font-weight:bold;color:#4ade80;margin:16px 0 10px 0;display:none;font-family:monospace;" id="msb-call-timer">00:00</div>' +
             '<div id="msb-call-controls-row" style="display:none;gap:10px;justify-content:center;margin:16px 0;">' +
-                '<button type="button" id="msb-mic-toggle-btn" onclick="toggleCallMicrophone()" style="padding:10px 14px;background:#334155;border:1px solid #64748b;color:#f8fafc;border-radius:12px;font-weight:bold;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">' +
+                '<button type="button" id="msb-mic-toggle-btn" onclick="toggleCallMicrophone()" style="padding:10px 14px;background:#334155;border:1px solid #64748b;color:#f8fafc;border-radius:12px;font-weight:bold;font-size:13px;cursor:pointer;">' +
                     '<span id="msb-mic-icon">🎤</span> <span id="msb-mic-text">Микрофон: ВКЛ</span>' +
                 '</button>' +
-                '<button type="button" id="msb-speaker-toggle-btn" onclick="toggleCallSpeaker()" style="padding:10px 14px;background:#0284c7;border:1px solid #38bdf8;color:#f8fafc;border-radius:12px;font-weight:bold;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">' +
+                '<button type="button" id="msb-speaker-toggle-btn" onclick="toggleCallSpeaker()" style="padding:10px 14px;background:#0284c7;border:1px solid #38bdf8;color:#f8fafc;border-radius:12px;font-weight:bold;font-size:13px;cursor:pointer;">' +
                     '<span id="msb-speaker-icon">🔊</span> <span id="msb-speaker-text">Громкая</span>' +
                 '</button>' +
             '</div>' +
-
-            // Кнопки ответа и сброса
             '<div style="display:flex;gap:12px;justify-content:center;margin-top:16px;">' +
-                '<button type="button" id="msb-call-accept-btn" onclick="acceptIncomingCall()" style="display:none;padding:14px 26px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 4px 15px rgba(34,197,94,0.4);">' +
+                '<button type="button" id="msb-call-accept-btn" onclick="acceptIncomingCall()" style="display:none;padding:14px 26px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;">' +
                     '✅ Ответить' +
                 '</button>' +
-                '<button type="button" id="msb-call-hangup-btn" onclick="hangupCall(true)" style="padding:14px 26px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;box-shadow:0 4px 15px rgba(239,68,68,0.4);">' +
+                '<button type="button" id="msb-call-hangup-btn" onclick="hangupCall(true)" style="padding:14px 26px;background:#dc2626;color:#fff;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;">' +
                     '🛑 Сброс' +
                 '</button>' +
             '</div>' +
@@ -200,7 +234,6 @@ function ensureCallModal() {
         '</div>';
     document.body.appendChild(overlay);
 }
-
 function sendCallSignal(type, payload) {
     if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
         payload.type = type;
@@ -226,18 +259,17 @@ function toggleCallMicrophone() {
     if (micBtn && micIcon && micText) {
         if (isMicMuted) {
             micBtn.style.background = '#dc2626';
-            micBtn.style.borderColor = '#ef4444';
             micIcon.innerText = '🔇';
             micText.innerText = 'Микрофон: ВЫКЛ';
         } else {
             micBtn.style.background = '#334155';
-            micBtn.style.borderColor = '#64748b';
             micIcon.innerText = '🎤';
             micText.innerText = 'Микрофон: ВКЛ';
         }
     }
 }
 window.toggleCallMicrophone = toggleCallMicrophone;
+
 function toggleCallSpeaker() {
     var remoteAudio = document.getElementById('msb-remote-audio');
     if (!remoteAudio) return;
@@ -251,8 +283,8 @@ function toggleCallSpeaker() {
         navigator.mediaDevices.enumerateDevices().then(function(devices) {
             var audioOutputs = devices.filter(function(d) { return d.kind === 'audiooutput'; });
             if (audioOutputs.length > 1) {
-                var targetDevice = isSpeakerOn ? audioOutputs[audioOutputs.length - 1] : audioOutputs[0];
-                remoteAudio.setSinkId(targetDevice.deviceId).catch(function(){});
+                var targetDev = isSpeakerOn ? audioOutputs[audioOutputs.length - 1] : audioOutputs[0];
+                remoteAudio.setSinkId(targetDev.deviceId).catch(function(){});
             }
         }).catch(function(){});
     }
@@ -260,13 +292,11 @@ function toggleCallSpeaker() {
     if (spkBtn && spkIcon && spkText) {
         if (isSpeakerOn) {
             spkBtn.style.background = '#0284c7';
-            spkBtn.style.borderColor = '#38bdf8';
             spkIcon.innerText = '🔊';
             spkText.innerText = 'Громкая: ВКЛ';
             remoteAudio.volume = 1.0;
         } else {
             spkBtn.style.background = '#475569';
-            spkBtn.style.borderColor = '#94a3b8';
             spkIcon.innerText = '🔈';
             spkText.innerText = 'Динамик уха';
             remoteAudio.volume = 0.55;
@@ -302,18 +332,12 @@ async function triggerCallInDev(callType, targetName) {
 
     try {
         localCallStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                channelCount: 1,
-                sampleRate: 24000
-            }
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
+        startRingtoneTone(true);
         sendCallSignal('call_invite', {});
-        if (typeof playSoundById === 'function') playSoundById('nice3', true);
     } catch (e) {
-        alert('Нет доступа к микрофону! Разрешите микрофон в браузере.');
+        alert('Нет доступа к микрофону!');
         hangupCall(false);
     }
 }
@@ -340,20 +364,23 @@ function handleCallSignal(msg) {
         if (timerEl) timerEl.style.display = 'none';
         if (cRow) cRow.style.display = 'none';
 
-        if (typeof playSoundById === 'function') playSoundById('alarm2', true);
+        startRingtoneTone(false);
     }
 
     if (msg.type === 'call_accepted') {
+        stopRingtoneTone();
         var statEl = document.getElementById('msb-call-status');
-        if (statEl) statEl.innerText = 'Соединение... Установка WebRTC-канала';
+        if (statEl) statEl.innerText = 'Соединение... Установка связи';
         initiateWebRTCOffer();
     }
 
     if (msg.type === 'call_offer') {
+        stopRingtoneTone();
         handleWebRTCOffer(msg.sdp);
     }
 
     if (msg.type === 'call_answer') {
+        stopRingtoneTone();
         if (rtcPeer) {
             rtcPeer.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(function(){});
         }
@@ -366,21 +393,17 @@ function handleCallSignal(msg) {
     }
 
     if (msg.type === 'call_hangup') {
+        stopRingtoneTone();
         hangupCall(false);
     }
 }
 window.handleCallSignal = handleCallSignal;
 
 async function acceptIncomingCall() {
+    stopRingtoneTone();
     try {
         localCallStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                channelCount: 1,
-                sampleRate: 24000
-            }
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
         var acceptBtn = document.getElementById('msb-call-accept-btn');
         var statEl = document.getElementById('msb-call-status');
@@ -393,7 +416,6 @@ async function acceptIncomingCall() {
     }
 }
 window.acceptIncomingCall = acceptIncomingCall;
-
 function createPeerConnection() {
     if (rtcPeer) {
         try { rtcPeer.close(); } catch(e){}
@@ -421,6 +443,7 @@ function createPeerConnection() {
         }
     };
 }
+
 async function initiateWebRTCOffer() {
     createPeerConnection();
     try {
@@ -445,6 +468,7 @@ async function handleWebRTCOffer(remoteSdp) {
 }
 
 function startCallTimer() {
+    stopRingtoneTone();
     var statEl = document.getElementById('msb-call-status');
     var timerEl = document.getElementById('msb-call-timer');
     var cRow = document.getElementById('msb-call-controls-row');
@@ -463,6 +487,7 @@ function startCallTimer() {
 }
 
 function hangupCall(sendNotify) {
+    stopRingtoneTone();
     if (sendNotify && callPartner) {
         sendCallSignal('call_hangup', {});
     }
@@ -479,7 +504,10 @@ function hangupCall(sendNotify) {
         localCallStream = null;
     }
     var remoteAudio = document.getElementById('msb-remote-audio');
-    if (remoteAudio) remoteAudio.srcObject = null;
+    if (remoteAudio) {
+        remoteAudio.pause();
+        remoteAudio.srcObject = null;
+    }
 
     var overlay = document.getElementById('msb-call-overlay');
     var cRow = document.getElementById('msb-call-controls-row');
@@ -492,6 +520,7 @@ function hangupCall(sendNotify) {
     isSpeakerOn = true;
 }
 window.hangupCall = hangupCall;
+
 
 function enqueueChatPayload(payload) {
     if (!payload.lid) {
