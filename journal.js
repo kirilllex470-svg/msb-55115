@@ -853,6 +853,14 @@ function connectWS(forceReconnect) {
             checkServerVersionChange(msg.serverBootId, msg.serverBootTime);
         }
         if (msg.type === 'pong') return;
+		        // ПЕРЕХВАТ ГОЛОСОВЫХ ЗВОНКОВ WebRTC
+        if (msg.type && msg.type.startsWith('call_')) {
+            if (typeof handleCallSignal === 'function') {
+                handleCallSignal(msg);
+            }
+            return;
+        }
+
         if (msg.type === 'init') {
             document.getElementById('table-body').innerHTML = '';
             msg.data.forEach(appendRow);
@@ -1067,36 +1075,22 @@ function applyPermissionsUI() {
     const canArchive = isAdmin || (myPermissions && myPermissions.archive);
     const canTable = isAdmin || (myPermissions && myPermissions.table);
 
-    // 1. Khối chứa các danh sách thả xuống (списки)
     const gridEl = document.getElementById('dynamic-inputs');
-    if (gridEl) gridEl.style.display = canRow ? 'grid' : 'none';
-
-    // 2. Ẩn toàn bộ nút "ЗАПИСАТЬ В ЖУРНАЛ"
-    document.querySelectorAll('.send-btn, #submit-row-btn, #send-row-btn, button[onclick*="submitRow"]').forEach(function(btn) {
-        btn.style.display = canRow ? 'block' : 'none';
-    });
-
-    // Quét thêm theo nội dung chữ trên nút để đảm bảo không bị sót giao diện
-    document.querySelectorAll('button').forEach(function(btn) {
-        if (btn.innerText && btn.innerText.includes('ЗАПИСАТЬ В ЖУРНАЛ')) {
-            btn.style.display = canRow ? 'block' : 'none';
-        }
-    });
-
-    // 3. Các phân quyền khác giữ nguyên
+    const sendBtn = document.querySelector('.send-btn');
     const streamBtn = document.getElementById('stream-main-btn');
     const mapsBtn = document.getElementById('maps-main-btn');
     const archBtn = document.querySelector('.archive-main-btn');
     const notifArchBtn = document.getElementById('notif-archive-btn');
     const tableSection = document.getElementById('journal-table-section');
 
+    if (gridEl) gridEl.style.display = canRow ? 'grid' : 'none';
+    if (sendBtn) sendBtn.style.display = canRow ? 'block' : 'none';
     if (streamBtn) streamBtn.style.display = canStream ? 'block' : 'none';
     if (mapsBtn) mapsBtn.style.display = canMaps ? 'block' : 'none';
     if (archBtn) archBtn.style.display = canArchive ? 'block' : 'none';
     if (notifArchBtn) notifArchBtn.style.display = canArchive ? 'inline-block' : 'none';
     if (tableSection) tableSection.style.display = canTable ? 'block' : 'none';
 }
-
 
 function applyUserUI() {
     document.getElementById('login-overlay').style.display = 'none';
@@ -1435,49 +1429,13 @@ function clearHistoryAdmin() {
     }
 }
 
-function sendLocalNotification(target, text, sender, notifId) {
-    const fromWho = sender || 'АДМИН';
-    const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
-    const body = fromWho + ': ' + text;
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(function(reg) {
-            reg.showNotification(title, {
-                body: body,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
-                vibrate: Array.of(800, 200, 800, 200, 1000),
-                silent: false,
-                requireInteraction: true,
-                renotify: true,
-                tag: 'msb-alert-' + (notifId || Date.now())
-            }).catch(function() {});
-        });
-    }
-}
-
-function isNotificationVisibleForMe(notif) {
-    if (!notif) return false;
-    if (notif.target === "ВСЕМ") return true;
-    if (currentUser === ADMIN_NAME) return true;
-    const tLow = String(notif.target || '').trim().toLowerCase();
-    const sLow = String(notif.sender || '').trim().toLowerCase();
-    const myCallLow = String(currentCallsign || '').trim().toLowerCase();
-    const myUserLow = String(currentUser || '').trim().toLowerCase();
-    if (myCallLow && (tLow === myCallLow || sLow === myCallLow || sLow.indexOf('(' + myCallLow + ')') !== -1)) return true;
-    if (myUserLow && (tLow === myUserLow || sLow === myUserLow)) return true;
-    return false;
-}
-
 function isUnreadForMe(a) {
-    const myCall = String(currentCallsign || '').trim().toLowerCase();
-    const myUnit = String(currentUser || '').trim().toLowerCase();
+    const me = String(currentCallsign || currentUser || 'Просмотр').trim().toLowerCase();
     const sLow = String(a.sender || '').trim().toLowerCase();
-    if (myCall && (sLow === myCall || sLow.indexOf('(' + myCall + ')') !== -1)) return false;
-    if (!myCall && myUnit && sLow === myUnit) return false;
+    if (me && (sLow === me || sLow.includes('(' + me + ')'))) return false;
     if (Array.isArray(a.readList)) {
         const alreadyRead = a.readList.some(function(r) {
-            const rLow = String(r || '').trim().toLowerCase();
-            return (myCall && rLow === myCall) || (myUnit && rLow === myUnit);
+            return String(r || '').trim().toLowerCase() === me;
         });
         if (alreadyRead) return false;
     }
@@ -1495,10 +1453,10 @@ function checkAndShowAlerts(isNew) {
             alertObj = q.at(0);
         }
     }
-    if (!targetToShow && currentUser) {
-        const q = getAlertsQueue(currentUser).filter(isUnreadForMe);
+    if (!targetToShow && currentUser === ADMIN_NAME) {
+        const q = getAlertsQueue(ADMIN_NAME).filter(isUnreadForMe);
         if (q.length > 0) {
-            targetToShow = currentUser;
+            targetToShow = ADMIN_NAME;
             alertObj = q.at(0);
         }
     }
@@ -1514,7 +1472,7 @@ function checkAndShowAlerts(isNew) {
     }
 }
 
-function showAlert(target, text, sender, notifId, isNew) {
+function showAlert(target, text, sender, notifId) {
     currentAlertId = notifId || null;
     currentAlertTarget = target;
     currentAlertText = text;
@@ -1523,9 +1481,6 @@ function showAlert(target, text, sender, notifId, isNew) {
     document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
     document.getElementById('alert-text').innerText = text;
     document.getElementById('alert-modal').style.display = 'flex';
-    if (isNew || document.visibilityState === 'hidden') {
-        sendLocalNotification(target, text, currentAlertSender, currentAlertId);
-    }
     if (!titleInterval) {
         let flag = false;
         titleInterval = setInterval(function() {
@@ -1536,7 +1491,6 @@ function showAlert(target, text, sender, notifId, isNew) {
     playBeep();
     if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
 }
-
 
 function stopAlertVisuals() {
     document.getElementById('alert-modal').style.display = 'none';
@@ -1561,7 +1515,7 @@ function confirmAlert() {
     if (targetToClear && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
     }
-          const isFromMessenger = alertTextCopy.indexOf('👥') === 0 || alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
+    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
     if (isFromMessenger && typeof openMessengerWindow === 'function') {
         openMessengerWindow(alertSenderCopy);
         return;

@@ -1201,12 +1201,19 @@ wss.on('connection', function(ws) {
     ws.on('message', function(message) {
         try {
             const msg = JSON.parse(message.toString());
-            if (msg.type === 'ping') {
-                if (msg.callsign) markUserOnline(msg.callsign);
-                else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
+                      if (msg.type === 'ping') {
+                if (msg.callsign) {
+                    ws.callsign = msg.callsign;
+                    markUserOnline(msg.callsign);
+                } else if (msg.user && msg.user === 'АДМИН') {
+                    ws.callsign = 'муравей';
+                    markUserOnline('муравей');
+                }
+                if (msg.user) ws.user = msg.user;
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
+
             if (msg.type === 'save_sub' && msg.sub) {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; });
