@@ -37,8 +37,8 @@ var callSeconds = 0;
 var isCallInitiator = false;
 var isMicMuted = false;
 var isSpeakerOn = true;
+var ringtoneInterval = null;
 
-// === CẤU HÌNH WEBRTC VỚI ĐA MÁY CHỦ STUN VÀ RELAY ===
 var RTC_CONFIG = {
     iceServers: [
         { urls: 'stun:://google.com' },
@@ -64,103 +64,6 @@ var RTC_CONFIG = {
     ],
     iceCandidatePoolSize: 10
 };
-
-function createPeerConnection() {
-    if (rtcPeer) {
-        try { rtcPeer.close(); } catch(e){}
-        rtcPeer = null;
-    }
-    
-    rtcPeer = new RTCPeerConnection(RTC_CONFIG);
-
-    if (localCallStream) {
-        localCallStream.getAudioTracks().forEach(function(track) {
-            rtcPeer.addTrack(track, localCallStream);
-        });
-    }
-
-    rtcPeer.onicecandidate = function(event) {
-        if (event.candidate) {
-            sendCallSignal('call_ice', { candidate: event.candidate });
-        }
-    };
-
-    rtcPeer.oniceconnectionstatechange = function() {
-        console.log('MSB WebRTC State:', rtcPeer.iceConnectionState);
-        var statEl = document.getElementById('msb-call-status');
-        if (statEl) {
-            if (rtcPeer.iceConnectionState === 'connected' || rtcPeer.iceConnectionState === 'completed') {
-                statEl.innerText = '🟢 Связь установлена (Голос активен)';
-            } else if (rtcPeer.iceConnectionState === 'failed') {
-                statEl.innerText = '🔴 Переподключение канала...';
-                rtcPeer.restartIce();
-            }
-        }
-    };
-
-    rtcPeer.ontrack = function(event) {
-        var remoteAudio = document.getElementById('msb-remote-audio');
-        if (!remoteAudio) {
-            remoteAudio = document.createElement('audio');
-            remoteAudio.id = 'msb-remote-audio';
-            remoteAudio.autoplay = true;
-            document.body.appendChild(remoteAudio);
-        }
-
-        if (event.streams && event.streams[0]) {
-            remoteAudio.srcObject = event.streams[0];
-        } else {
-            var inboundStream = new MediaStream();
-            inboundStream.addTrack(event.track);
-            remoteAudio.srcObject = inboundStream;
-        }
-
-        remoteAudio.muted = false;
-        remoteAudio.volume = 1.0;
-
-        var playPromise = remoteAudio.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(function(err) {
-                window.addEventListener('click', function unlockAudio() {
-                    remoteAudio.play();
-                    window.removeEventListener('click', unlockAudio);
-                }, { once: true });
-            });
-        }
-        startCallTimer();
-    };
-}
-
-async function initiateWebRTCOffer() {
-    createPeerConnection();
-    try {
-        var offer = await rtcPeer.createOffer({
-            offerToReceiveAudio: true,
-            voiceActivityDetection: true
-        });
-        await rtcPeer.setLocalDescription(offer);
-        sendCallSignal('call_offer', { sdp: offer });
-    } catch (e) {
-        hangupCall(true);
-    }
-}
-
-async function handleWebRTCOffer(remoteSdp) {
-    createPeerConnection();
-    try {
-        await rtcPeer.setRemoteDescription(new RTCSessionDescription(remoteSdp));
-        var answer = await rtcPeer.createAnswer({
-            offerToReceiveAudio: true,
-            voiceActivityDetection: true
-        });
-        await rtcPeer.setLocalDescription(answer);
-        sendCallSignal('call_answer', { sdp: answer });
-    } catch (e) {
-        hangupCall(true);
-    }
-}
-
-
 
 try {
     var savedTextQ = localStorage.getItem('msb_edge_q');
@@ -240,7 +143,7 @@ function ensureCleanMessengerTopbar() {
             return;
         }
         var txt = child.textContent || '';
-        if (txt.indexOf('В ЖУРНАЛ') !== -1 || txt.indexOf('МЕССЕНДЖЕР') !== -1) {
+        if (txt.indexOf('В ЖУРНАЛ') !== -1 || txt.indexOf('МЕССЕНДЖЕР') !== -1 || txt.indexOf('Темы') !== -1) {
             child.style.display = 'none';
         }
     });
@@ -281,9 +184,7 @@ function handleUnifiedMessengerBack() {
     closeMessengerWindow();
 }
 window.handleUnifiedMessengerBack = handleUnifiedMessengerBack;
-// === ГЕНЕРАТОР ГУДКОВ И ЗВУКОВ ВЫЗОВА ===
-var ringtoneInterval = null;
-
+// === ЗВУКИ ГУДКОВ И ОКНО ВЫЗОВА ===
 function startRingtoneTone(isOutgoing) {
     stopRingtoneTone();
     try {
@@ -351,6 +252,7 @@ function ensureCallModal() {
         '</div>';
     document.body.appendChild(overlay);
 }
+
 function sendCallSignal(type, payload) {
     if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
         payload.type = type;
@@ -359,7 +261,6 @@ function sendCallSignal(type, payload) {
         ws.send(JSON.stringify(payload));
     }
 }
-
 function toggleCallMicrophone() {
     if (!localCallStream) return;
     var audioTracks = localCallStream.getAudioTracks();
@@ -400,7 +301,7 @@ function toggleCallSpeaker() {
         navigator.mediaDevices.enumerateDevices().then(function(devices) {
             var audioOutputs = devices.filter(function(d) { return d.kind === 'audiooutput'; });
             if (audioOutputs.length > 1) {
-                var targetDev = isSpeakerOn ? audioOutputs[audioOutputs.length - 1] : audioOutputs[0];
+                var targetDev = isSpeakerOn ? audioOutputs[audioOutputs.length - 1] : audioOutputs;
                 remoteAudio.setSinkId(targetDev.deviceId).catch(function(){});
             }
         }).catch(function(){});
@@ -454,7 +355,7 @@ async function triggerCallInDev(callType, targetName) {
         startRingtoneTone(true);
         sendCallSignal('call_invite', {});
     } catch (e) {
-        alert('Нет доступа к микрофону!');
+        alert('Нет доступа к микрофону! Разрешите микрофон в браузере.');
         hangupCall(false);
     }
 }
@@ -517,14 +418,18 @@ function handleCallSignal(msg) {
 window.handleCallSignal = handleCallSignal;
 
 async function acceptIncomingCall() {
-    stopRingtoneTone();
     try {
-        localCallStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        });
+        stopRingtoneTone();
         var acceptBtn = document.getElementById('msb-call-accept-btn');
         var statEl = document.getElementById('msb-call-status');
         if (acceptBtn) acceptBtn.style.display = 'none';
+        if (statEl) statEl.innerText = 'Активация микрофона и подключение...';
+
+        if (!localCallStream) {
+            localCallStream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            });
+        }
         if (statEl) statEl.innerText = 'Вызов принят. Подключение канала...';
         sendCallSignal('call_accepted', {});
     } catch (e) {
@@ -533,8 +438,98 @@ async function acceptIncomingCall() {
     }
 }
 window.acceptIncomingCall = acceptIncomingCall;
+function createPeerConnection() {
+    if (rtcPeer) {
+        try { rtcPeer.close(); } catch(e){}
+        rtcPeer = null;
+    }
+    rtcPeer = new RTCPeerConnection(RTC_CONFIG);
 
+    if (localCallStream) {
+        localCallStream.getAudioTracks().forEach(function(track) {
+            rtcPeer.addTrack(track, localCallStream);
+        });
+    }
 
+    rtcPeer.onicecandidate = function(event) {
+        if (event.candidate) {
+            sendCallSignal('call_ice', { candidate: event.candidate });
+        }
+    };
+
+    rtcPeer.oniceconnectionstatechange = function() {
+        var statEl = document.getElementById('msb-call-status');
+        if (statEl && rtcPeer) {
+            if (rtcPeer.iceConnectionState === 'connected' || rtcPeer.iceConnectionState === 'completed') {
+                statEl.innerText = '🟢 Связь установлена (Голос активен)';
+            } else if (rtcPeer.iceConnectionState === 'failed') {
+                statEl.innerText = '🔴 Переподключение канала...';
+                rtcPeer.restartIce();
+            }
+        }
+    };
+
+    rtcPeer.ontrack = function(event) {
+        var remoteAudio = document.getElementById('msb-remote-audio');
+        if (!remoteAudio) {
+            remoteAudio = document.createElement('audio');
+            remoteAudio.id = 'msb-remote-audio';
+            remoteAudio.autoplay = true;
+            document.body.appendChild(remoteAudio);
+        }
+
+        if (event.streams && event.streams[0]) {
+            remoteAudio.srcObject = event.streams[0];
+        } else {
+            var inboundStream = new MediaStream();
+            inboundStream.addTrack(event.track);
+            remoteAudio.srcObject = inboundStream;
+        }
+
+        remoteAudio.muted = false;
+        remoteAudio.volume = 1.0;
+
+        var playPromise = remoteAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(function() {
+                window.addEventListener('click', function unlockAudio() {
+                    remoteAudio.play();
+                    window.removeEventListener('click', unlockAudio);
+                }, { once: true });
+            });
+        }
+        startCallTimer();
+    };
+}
+
+async function initiateWebRTCOffer() {
+    createPeerConnection();
+    try {
+        var offer = await rtcPeer.createOffer({
+            offerToReceiveAudio: true,
+            voiceActivityDetection: true
+        });
+        await rtcPeer.setLocalDescription(offer);
+        sendCallSignal('call_offer', { sdp: offer });
+    } catch (e) {
+        hangupCall(true);
+    }
+}
+
+async function handleWebRTCOffer(remoteSdp) {
+    createPeerConnection();
+    try {
+        await rtcPeer.setRemoteDescription(new RTCSessionDescription(remoteSdp));
+        var answer = await rtcPeer.createAnswer({
+            offerToReceiveAudio: true,
+            voiceActivityDetection: true
+        });
+        await rtcPeer.setLocalDescription(answer);
+        sendCallSignal('call_answer', { sdp: answer });
+    } catch (e) {
+        hangupCall(true);
+    }
+}
 function startCallTimer() {
     stopRingtoneTone();
     var statEl = document.getElementById('msb-call-status');
@@ -555,7 +550,6 @@ function startCallTimer() {
 }
 
 function hangupCall(sendNotify) {
-    // 1. Dập tắt ngay lập tức giao diện cuộc gọi (Chạy đầu tiên để không bao giờ bị treo)
     try {
         stopRingtoneTone();
         var overlay = document.getElementById('msb-call-overlay');
@@ -569,14 +563,12 @@ function hangupCall(sendNotify) {
         }
     } catch (e) {}
 
-    // 2. Gửi tín hiệu báo cho máy bên kia biết cuộc gọi đã kết thúc
     try {
         if (sendNotify && callPartner) {
             sendCallSignal('call_hangup', {});
         }
     } catch (e) {}
 
-    // 3. Dừng đồng hồ đếm thời gian
     try {
         if (callTimerInterval) {
             clearInterval(callTimerInterval);
@@ -584,7 +576,6 @@ function hangupCall(sendNotify) {
         }
     } catch (e) {}
 
-    // 4. Giải phóng tài nguyên WebRTC
     try {
         if (rtcPeer) {
             rtcPeer.ontrack = null;
@@ -595,7 +586,6 @@ function hangupCall(sendNotify) {
         }
     } catch (e) {}
 
-    // 5. Tắt hoàn toàn Micro của thiết bị
     try {
         if (localCallStream) {
             localCallStream.getTracks().forEach(function(track) {
@@ -605,7 +595,6 @@ function hangupCall(sendNotify) {
         }
     } catch (e) {}
 
-    // 6. Ngắt luồng âm thanh đầu ra
     try {
         var remoteAudio = document.getElementById('msb-remote-audio');
         if (remoteAudio) {
@@ -614,7 +603,6 @@ function hangupCall(sendNotify) {
         }
     } catch (e) {}
 
-    // 7. Đặt lại các biến trạng thái
     callPartner = null;
     isCallInitiator = false;
     isMicMuted = false;
@@ -622,8 +610,6 @@ function hangupCall(sendNotify) {
     callSeconds = 0;
 }
 window.hangupCall = hangupCall;
-
-
 
 function enqueueChatPayload(payload) {
     if (!payload.lid) {
@@ -702,7 +688,7 @@ function flushOutboxQueue() {
     if (msbIsFlushing || msbOutboxQueue.length === 0) return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
 
-    var item = msbOutboxQueue.at(0);
+    var item = msbOutboxQueue[0];
     if (!item) return;
 
     msbIsFlushing = true;
@@ -783,7 +769,7 @@ function syncMessengerAuth() {
         nameEl.textContent = chatUser + (uName && uName !== chatUser ? ' (' + uName + ')' : '');
     }
     if (avEl && !avEl.querySelector('img')) {
-        avEl.textContent = chatUser.substring(0, 2).toUpperCase();
+        avEl.textContent = 'МСБ-55115';
     }
     if (hdrEl) {
         hdrEl.textContent = '👤 ' + chatUser;
@@ -801,6 +787,7 @@ function syncMessengerAuth() {
     }
     loadFriendsAndRequests();
 }
+
 function openMessengerWindow(targetPartnerName) {
     ensureCleanMessengerTopbar();
     chatUser = getActiveChatIdentity();
@@ -890,10 +877,11 @@ function renderAvatarElement(el, name, avatarDataUrl) {
         }
     }
 }
+
 function uploadMyAvatar(inputEl) {
     chatUser = getActiveChatIdentity();
     if (!inputEl.files || inputEl.files.length === 0 || !chatUser) return;
-    var file = inputEl.files.item(0);
+    var file = inputEl.files[0];
     var reader = new FileReader();
     reader.onload = function(e) {
         var img = new Image();
@@ -925,7 +913,6 @@ function uploadMyAvatar(inputEl) {
     };
     reader.readAsDataURL(file);
 }
-
 document.addEventListener('DOMContentLoaded', function() {
     ensureCleanMessengerTopbar();
     var tInput = document.getElementById('text-input');
@@ -988,6 +975,7 @@ function loadFriendsAndRequests() {
             }
         }).catch(function() {});
 }
+
 function renderRequests() {
     var box = document.getElementById('requests-box');
     if (!box) return;
@@ -1012,14 +1000,13 @@ function renderRequests() {
         box.appendChild(item);
     });
 }
-
 function renderFriends() {
     chatUser = getActiveChatIdentity();
     var box = document.getElementById('friends-box');
     if (!box || !chatUser) return;
     box.innerHTML = '';
     if (friendsList.length === 0) {
-        box.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Список друзей пуст</div>';
+        box.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-size:13px;">Список контактов пуст</div>';
         return;
     }
     friendsList.forEach(function(friend) {
@@ -1041,9 +1028,9 @@ function renderFriends() {
             avatar: friend.avatar || '',
             online: Boolean(friend.online)
         }).replace(/"/g, '&quot;');
-        var callBtnsHTML =
-            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Аудиозвонок\', \'' + friend.name + '\')" title="Аудиозвонок">📞</button>' +
-            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Видеозвонок\', \'' + friend.name + '\')" title="Видеозвонок">🎥</button>';
+        var callBtnsHTML = (!friend.isGroup) ? (
+            '<button class="friend-call-mini" onclick="event.stopPropagation(); triggerCallInDev(\'Аудиозвонок\', \'' + friend.name + '\')" title="Позвонить">📞</button>'
+        ) : '';
         var delBtnHTML = '<button class="delete-friend-btn" onclick="deleteFriend(' + friendDataEscaped + ', event)">&times;</button>';
         item.innerHTML =
             '<div class="friend-info">' +
@@ -1065,6 +1052,7 @@ function openCreateGroupModal() {
 function closeGroupModal() {
     document.getElementById('group-modal').style.display = 'none';
 }
+
 function submitCreateGroup() {
     chatUser = getActiveChatIdentity();
     var nameInput = document.getElementById('group-name-input');
@@ -1098,7 +1086,6 @@ function submitCreateGroup() {
         }
     });
 }
-
 function deleteFriend(friendObj, event) {
     chatUser = getActiveChatIdentity();
     if (event) event.stopPropagation();
@@ -1155,6 +1142,7 @@ function resetChatArea() {
         mDiv.innerHTML = '<div class="chat-placeholder">Выберите контакт или конференцию слева.</div>';
     }
 }
+
 function selectChat(itemObj) {
     chatUser = getActiveChatIdentity();
     var stEl = document.getElementById('chat-status');
@@ -1199,7 +1187,6 @@ function selectChat(itemObj) {
     renderFriends();
     setTimeout(renderPendingBubbles, 60);
 }
-
 function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
     if (sb) sb.classList.remove('hidden');
@@ -1242,6 +1229,7 @@ function sendMessage() {
     });
     textInput.focus();
 }
+
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -1289,7 +1277,6 @@ function toggleVoiceRecord() {
         }).catch(function() { alert("Нет доступа к микрофону!"); });
     }
 }
-
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -1354,10 +1341,11 @@ function toggleVideoRecord() {
         }).catch(function() { alert("Нет доступа к камере!"); });
     }
 }
+
 function uploadAnyFile(inputElement) {
     chatUser = getActiveChatIdentity();
     if (!inputElement.files || inputElement.files.length === 0 || !chatUser || !currentRoomId) return;
-    var file = inputElement.files.item(0);
+    var file = inputElement.files;
     var qId = quotedMessageId || null;
     var qTxt = quotedMessageText || null;
     var qSnd = quotedMessageSender || null;
@@ -1375,7 +1363,6 @@ function uploadAnyFile(inputElement) {
         quoteSender: qSnd
     });
 }
-
 function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     var container = rowElement.querySelector('.swipe-container');
     var leftIndicator = rowElement.querySelector('.left-indicator');
@@ -1596,6 +1583,7 @@ function fetchMessages() {
         }
     }).catch(function() {});
 }
+
 function renderSingleRow(mDiv, msg, isMy, checkIcon) {
     if (msg.clientMsgId) {
         var tempDup = mDiv.querySelector('.msb-pending-row[data-lid="' + msg.clientMsgId + '"]');
@@ -1653,7 +1641,6 @@ function renderSingleRow(mDiv, msg, isMy, checkIcon) {
     mDiv.appendChild(row);
     setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
 }
-
 function playVideoWithSound(v) {
     document.querySelectorAll('#messages video.video-round').forEach(function(other) {
         if (other !== v) { other.muted = true; other.pause(); }

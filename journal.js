@@ -175,7 +175,6 @@ async function subscribeToWebPush() {
         }
     } catch (e) {}
 }
-
 function createWavUrl(freq, durationSec, volume) {
     const sr = 8000;
     const numSamples = sr * durationSec;
@@ -211,6 +210,7 @@ function unlockMobileFeatures() {
         navigator.wakeLock.request('screen').catch(function() {});
     }
 }
+
 const SOUND_PRESETS = [
     { id: 'alarm1', name: '🚨 Тревога 1 (Сирена МСБ — стандарт)', type: 'alarm' },
     { id: 'alarm2', name: '🚨 Тревога 2 (Двойной радарный импульс)', type: 'alarm' },
@@ -242,7 +242,6 @@ function playToneNotes(notes, waveType) {
         });
     } catch (e) {}
 }
-
 function playSoundById(soundId, isPreview) {
     const id = soundId || selectedSoundId || 'alarm1';
     try {
@@ -415,7 +414,6 @@ function updateStreamUI() {
         if (viewerPanel) viewerPanel.style.display = 'none';
     }
 }
-
 function toggleMapsSection() {
     const box = document.getElementById('maps-section-box');
     if (!box) return;
@@ -488,6 +486,7 @@ function closePhotoLightbox() {
     const lb = document.getElementById('photo-lightbox');
     if (lb) lb.style.display = 'none';
 }
+
 function renderMapsGrid() {
     const grid = document.getElementById('maps-tiles-grid');
     if (!grid) return;
@@ -514,7 +513,6 @@ function renderMapsGrid() {
         grid.appendChild(tile);
     });
 }
-
 function fetchMapsFromServer() {
     fetch('/maps-list?t=' + Date.now())
         .then(function(r) { return r.json(); })
@@ -591,6 +589,7 @@ function uploadMapPhoto() {
     };
     reader.readAsDataURL(file);
 }
+
 const MONTH_NAMES = Array.of(
     "ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ",
     "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ"
@@ -605,7 +604,6 @@ function formatRuDateFromIso(iso) {
     const parts = iso.split('-');
     return (parts.length === 3) ? (parts.at(2) + '.' + parts.at(1) + '.' + parts.at(0)) : iso;
 }
-
 function fetchArchiveFromServer(cb) {
     fetch('/archive-data?t=' + Date.now())
         .then(function(r) { return r.json(); })
@@ -682,7 +680,6 @@ function renderArchiveCalendar() {
         gridEl.appendChild(cell);
     }
 }
-
 function selectArchiveDate(dateKey) {
     selectedArchiveDate = dateKey;
     renderArchiveCalendar();
@@ -712,6 +709,7 @@ function selectArchiveDate(dateKey) {
         tbody.appendChild(tr);
     });
 }
+
 function isNotificationVisibleForMe(notif) {
     if (!notif) return false;
     if (notif.target === "ВСЕМ") return true;
@@ -756,7 +754,6 @@ function renderNotificationsWindow() {
     }
     updateBroadcastTicker();
 }
-
 function updateBroadcastTicker() {
     const ticker = document.getElementById('msg-broadcast-ticker');
     if (!ticker) return;
@@ -839,12 +836,20 @@ function connectWS(forceReconnect) {
         ws = null;
     }
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-   var wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-   ws = new WebSocket(wsProtocol + '//' + location.host + '/');
+    
+    var wsProto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
+    ws = new WebSocket(wsProto + '//' + location.host + '/');
 
     ws.onopen = function() {
         lastPongTime = Date.now();
         subscribeToWebPush();
+        if (currentUser) {
+            ws.send(JSON.stringify({
+                type: 'ping',
+                user: currentUser || '',
+                callsign: currentCallsign || ''
+            }));
+        }
     };
 
     ws.onmessage = function(event) {
@@ -854,7 +859,8 @@ function connectWS(forceReconnect) {
             checkServerVersionChange(msg.serverBootId, msg.serverBootTime);
         }
         if (msg.type === 'pong') return;
-		        // ПЕРЕХВАТ ГОЛОСОВЫХ ЗВОНКОВ WebRTC
+
+        // ПЕРЕХВАТ ГОЛОСОВЫХ ВЫЗОВОВ WebRTC
         if (msg.type && msg.type.startsWith('call_')) {
             if (typeof handleCallSignal === 'function') {
                 handleCallSignal(msg);
@@ -948,14 +954,19 @@ function connectWS(forceReconnect) {
 
 setInterval(function() {
     if (ws && ws.readyState === WebSocket.OPEN) {
+        if (Date.now() - lastPongTime > 16000) {
+            connectWS(true);
+            return;
+        }
         ws.send(JSON.stringify({
             type: 'ping',
             user: currentUser || '',
             callsign: currentCallsign || ''
         }));
+    } else {
+        connectWS(false);
     }
-}, 5000);
-
+}, 4000);
 
 window.addEventListener('online', function() {
     connectWS(true);
@@ -970,7 +981,6 @@ document.addEventListener('visibilitychange', function() {
         }
     }
 });
-
 function handleAlertClearedMsg(msg) {
     const queue = getAlertsQueue(msg.target);
     if (msg.target === 'ВСЕМ') {
@@ -1073,15 +1083,24 @@ function applyPermissionsUI() {
     const canTable = isAdmin || (myPermissions && myPermissions.table);
 
     const gridEl = document.getElementById('dynamic-inputs');
-    const sendBtn = document.querySelector('.send-btn');
+    if (gridEl) gridEl.style.display = canRow ? 'grid' : 'none';
+
+    document.querySelectorAll('.send-btn, #submit-row-btn, #send-row-btn, button[onclick*="submitRow"]').forEach(function(btn) {
+        btn.style.display = canRow ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('button').forEach(function(btn) {
+        if (btn.innerText && btn.innerText.includes('ЗАПИСАТЬ В ЖУРНАЛ')) {
+            btn.style.display = canRow ? 'block' : 'none';
+        }
+    });
+
     const streamBtn = document.getElementById('stream-main-btn');
     const mapsBtn = document.getElementById('maps-main-btn');
     const archBtn = document.querySelector('.archive-main-btn');
     const notifArchBtn = document.getElementById('notif-archive-btn');
     const tableSection = document.getElementById('journal-table-section');
 
-    if (gridEl) gridEl.style.display = canRow ? 'grid' : 'none';
-    if (sendBtn) sendBtn.style.display = canRow ? 'block' : 'none';
     if (streamBtn) streamBtn.style.display = canStream ? 'block' : 'none';
     if (mapsBtn) mapsBtn.style.display = canMaps ? 'block' : 'none';
     if (archBtn) archBtn.style.display = canArchive ? 'block' : 'none';
@@ -1117,7 +1136,6 @@ function applyUserUI() {
     }
     if (typeof syncMessengerAuth === 'function') syncMessengerAuth();
 }
-
 function initApp() {
     runSplash();
     hideAuthMessages();
@@ -1193,313 +1211,11 @@ function initApp() {
     }
     connectWS(false);
 }
+
 function hideAuthMessages() {
     const err = document.getElementById('login-error');
     if (err) err.style.display = 'none';
 }
-
-function openRegisterModal() {
-    document.getElementById('register-modal').style.display = 'flex';
-    document.getElementById('reg-status-msg').style.display = 'none';
-}
-
-function closeRegisterModal() {
-    document.getElementById('register-modal').style.display = 'none';
-}
-
-function submitRegistration() {
-    const unit = document.getElementById('reg-unit-select').value;
-    const callsign = document.getElementById('reg-callsign').value.trim();
-    const password = document.getElementById('reg-pass').value.trim();
-    const msgEl = document.getElementById('reg-status-msg');
-    if (!unit || !callsign || !password) {
-        msgEl.style.color = '#ef4444';
-        msgEl.innerText = '❌ Заполните позывной и пароль!';
-        msgEl.style.display = 'block';
-        return;
-    }
-    fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit: unit, username: callsign, password: password })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        msgEl.style.display = 'block';
-        if (data.success) {
-            msgEl.style.color = '#4ade80';
-            msgEl.innerText = '✅ Заявка отправлена АДМИНУ! Ожидайте одобрения.';
-            document.getElementById('reg-callsign').value = '';
-            document.getElementById('reg-pass').value = '';
-        } else {
-            msgEl.style.color = '#ef4444';
-            msgEl.innerText = '❌ ' + (data.message || 'Ошибка регистрации');
-        }
-    });
-}
-
-function refreshMyPermissionsFromServer() {
-    if (!currentCallsign) return;
-    if (currentUser === ADMIN_NAME) {
-        myPermissions = { row: true, stream: true, maps: true, archive: true, table: true };
-        applyPermissionsUI();
-        return;
-    }
-    fetch('/api/user/me?user=' + encodeURIComponent(currentCallsign) + '&t=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data && data.permissions) {
-                myPermissions = data.permissions;
-                applyPermissionsUI();
-            }
-        }).catch(function() {});
-}
-
-function attemptLogin() {
-    unlockMobileFeatures();
-    const userIndex = Number(document.getElementById('login-select').value);
-    const callsignInput = document.getElementById('login-callsign').value.trim();
-    const pass = document.getElementById('login-pass').value.trim();
-    const unitObj = USERS_CONFIG.at(userIndex);
-    const errEl = document.getElementById('login-error');
-    if (!unitObj || !pass) {
-        errEl.innerText = '❌ Введите пароль!';
-        errEl.style.display = 'block';
-        return;
-    }
-    if (unitObj.name === ADMIN_NAME && pass === "551150000" && (!callsignInput || callsignInput.toLowerCase() === "муравей")) {
-        myPermissions = { row: true, stream: true, maps: true, archive: true, table: true };
-        completeLoginSuccess(ADMIN_NAME, "муравей", unitObj.color);
-        return;
-    }
-    if (!callsignInput) {
-        errEl.innerText = '❌ Введите ваш Позывной и пароль!';
-        errEl.style.display = 'block';
-        return;
-    }
-    fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unit: unitObj.name, username: callsignInput, password: pass })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) {
-            myPermissions = data.permissions || { row: false, stream: false, maps: false, archive: false, table: false };
-            completeLoginSuccess(unitObj.name, data.username || callsignInput, unitObj.color);
-        } else {
-            errEl.innerText = '❌ ' + (data.message || 'Неверный пароль или позывной не одобрен');
-            errEl.style.display = 'block';
-        }
-    }).catch(function() {
-        errEl.innerText = '❌ Ошибка связи с сервером';
-        errEl.style.display = 'block';
-    });
-}
-
-function completeLoginSuccess(unitName, callsign, color) {
-    hideAuthMessages();
-    currentUser = unitName;
-    currentCallsign = callsign || unitName;
-    userColor = color;
-    localStorage.setItem('journal_user', currentUser);
-    localStorage.setItem('journal_callsign', currentCallsign);
-    localStorage.setItem('journal_color', userColor);
-    localStorage.setItem('chat_username', currentCallsign);
-    applyUserUI();
-    refreshMyPermissionsFromServer();
-    subscribeToWebPush();
-    checkAndShowAlerts(false);
-}
-
-function openAdminUsersModal() {
-    if (currentUser !== ADMIN_NAME) return;
-    document.getElementById('admin-users-modal').style.display = 'flex';
-    fetchAdminUsersList();
-}
-
-function closeAdminUsersModal() {
-    document.getElementById('admin-users-modal').style.display = 'none';
-}
-
-function renderPermCheckboxes(u) {
-    const p = u.permissions || { row: false, stream: false, maps: false, archive: false, table: false };
-    const k = u.key;
-    return '<div class="perm-grid">' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.row ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'row\', this.checked)"> 📤 Запись</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.table ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'table\', this.checked)"> 📊 Таблица</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.stream ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'stream\', this.checked)"> 🎥 Стрим</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.maps ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'maps\', this.checked)"> 🗺️ Карта</label>' +
-        '<label class="perm-chip"><input type="checkbox" ' + (p.archive ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'archive\', this.checked)"> 🗂️ Архив</label></div>';
-}
-
-function fetchAdminUsersList() {
-    if (currentUser !== ADMIN_NAME) return;
-    fetch('/api/admin/users?t=' + Date.now()).then(function(r) { return r.json(); }).then(function(data) {
-        const pBox = document.getElementById('admin-pending-list');
-        const aBox = document.getElementById('admin-approved-list');
-        const badge = document.getElementById('pending-count-badge');
-        if (!pBox || !aBox) return;
-        pBox.innerHTML = '';
-        aBox.innerHTML = '';
-        const pending = data.pending || new Array();
-        const approved = data.approved || new Array();
-        if (badge) {
-            badge.style.display = pending.length > 0 ? 'inline-block' : 'none';
-            badge.innerText = pending.length;
-        }
-        if (pending.length === 0) pBox.innerHTML = '<div style="color:#64748b;">Нет новых заявок</div>';
-        pending.forEach(function(u) {
-            const row = document.createElement('div');
-            row.className = 'user-row-card';
-            row.innerHTML = '<div style="flex:1;"><div><b>Позывной:</b> <span style="color:#38bdf8;">' + u.username + '</span> | <b>Подр.:</b> ' + u.unit + ' | <b>Пароль:</b> <code style="color:#facc15;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div>' +
-                '<div style="display:flex; gap:6px;"><button class="lb-btn" style="background:#22c55e;" onclick="adminUserAction(\'' + u.key + '\', \'approve\')">✅ Одобрить</button><button class="lb-btn" style="background:#ef4444;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">❌ Отклонить</button></div>';
-            pBox.appendChild(row);
-        });
-        if (approved.length === 0) aBox.innerHTML = '<div style="color:#64748b;">Пока нет пользователей</div>';
-        approved.forEach(function(u) {
-            const row = document.createElement('div');
-            row.className = 'user-row-card';
-            row.innerHTML = '<div style="flex:1;"><div><b>' + u.username + '</b> (' + u.unit + ') — Пароль: <code style="color:#4ade80; font-weight:bold;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div><button class="lb-btn" style="background:#ef4444; padding:5px 10px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">🗑️ Удалить</button>';
-            aBox.appendChild(row);
-        });
-    });
-}
-function toggleUserPerm(userKey, permName, val) {
-    fetch('/api/admin/users/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: userKey, action: 'set_perm', permName: permName, permVal: val })
-    });
-}
-
-function adminUserAction(userKey, action) {
-    fetch('/api/admin/users/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: userKey, action: action })
-    }).then(function() { fetchAdminUsersList(); });
-}
-
-function logoutUser() {
-    localStorage.removeItem('journal_user');
-    localStorage.removeItem('journal_callsign');
-    localStorage.removeItem('journal_color');
-    localStorage.removeItem('chat_username');
-    location.reload();
-}
-
-function loginAsViewer() {
-    unlockMobileFeatures();
-    document.getElementById('login-overlay').style.display = 'none';
-    renderNotificationsWindow();
-    renderMapsGrid();
-    updateStreamUI();
-    subscribeToWebPush();
-    checkAndShowAlerts(false);
-}
-
-function sendAdminAlert() {
-    if (!currentUser) return;
-    const target = document.getElementById('admin-target').value;
-    const msg = document.getElementById('admin-msg').value.trim();
-    if (!target || !msg) return alert("Заполните получателя и текст!");
-    const senderLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
-    ws.send(JSON.stringify({ type: 'admin_alert', sender: senderLabel, color: userColor, time: getStaticDateTime(), target: target, text: msg }));
-    document.getElementById('admin-msg').value = '';
-}
-
-function sendMiniNotification() {
-    if (!currentUser) return alert("Войдите в систему!");
-    const target = document.getElementById('mini-notif-target').value;
-    const input = document.getElementById('mini-notif-input');
-    const msg = input.value.trim();
-    if (!target || !msg) return;
-    const senderLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
-    ws.send(JSON.stringify({ type: 'admin_alert', sender: senderLabel, color: userColor, time: getStaticDateTime(), target: target, text: msg }));
-    input.value = '';
-}
-
-function clearHistoryAdmin() {
-    if (currentUser === ADMIN_NAME && confirm("⚠️ Очистить текущий журнал событий у всех?")) {
-        ws.send(JSON.stringify({ type: 'clear_history' }));
-    }
-}
-
-function isUnreadForMe(a) {
-    const me = String(currentCallsign || currentUser || 'Просмотр').trim().toLowerCase();
-    const sLow = String(a.sender || '').trim().toLowerCase();
-    if (me && (sLow === me || sLow.includes('(' + me + ')'))) return false;
-    if (Array.isArray(a.readList)) {
-        const alreadyRead = a.readList.some(function(r) {
-            return String(r || '').trim().toLowerCase() === me;
-        });
-        if (alreadyRead) return false;
-    }
-    return true;
-}
-
-function checkAndShowAlerts(isNew) {
-    if (document.getElementById('alert-modal').style.display === 'flex' && !isNew) return;
-    let targetToShow = null;
-    let alertObj = null;
-    if (currentCallsign) {
-        const q = getAlertsQueue(currentCallsign).filter(isUnreadForMe);
-        if (q.length > 0) {
-            targetToShow = currentCallsign;
-            alertObj = q.at(0);
-        }
-    }
-    if (!targetToShow && currentUser === ADMIN_NAME) {
-        const q = getAlertsQueue(ADMIN_NAME).filter(isUnreadForMe);
-        if (q.length > 0) {
-            targetToShow = ADMIN_NAME;
-            alertObj = q.at(0);
-        }
-    }
-    if (!targetToShow) {
-        const q = getAlertsQueue("ВСЕМ").filter(isUnreadForMe);
-        if (q.length > 0) {
-            targetToShow = "ВСЕМ";
-            alertObj = q.at(0);
-        }
-    }
-    if (targetToShow && alertObj) {
-        showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
-    }
-}
-
-function showAlert(target, text, sender, notifId) {
-    currentAlertId = notifId || null;
-    currentAlertTarget = target;
-    currentAlertText = text;
-    currentAlertSender = sender || ADMIN_NAME;
-    const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
-    document.getElementById('alert-text').innerText = text;
-    document.getElementById('alert-modal').style.display = 'flex';
-    if (!titleInterval) {
-        let flag = false;
-        titleInterval = setInterval(function() {
-            document.title = flag ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!";
-            flag = !flag;
-        }, 600);
-    }
-    playBeep();
-    if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
-}
-
-function stopAlertVisuals() {
-    document.getElementById('alert-modal').style.display = 'none';
-    currentAlertId = null;
-    currentAlertTarget = "";
-    if (titleInterval) { clearInterval(titleInterval); titleInterval = null; }
-    if (soundInterval) { clearInterval(soundInterval); soundInterval = null; }
-    if (sirenAudio) { sirenAudio.pause(); sirenAudio.currentTime = 0; }
-    if (navigator.vibrate) navigator.vibrate(0);
-    document.title = "МСБ55115";
-}
-
 function confirmAlert() {
     unlockMobileFeatures();
     const whoConfirmed = currentCallsign || currentUser || 'Просмотр';
@@ -1509,10 +1225,8 @@ function confirmAlert() {
     const alertTextCopy = String(currentAlertText || '');
     const alertSenderCopy = String(currentAlertSender || '');
 
-    // 1. МГНОВЕННО прячем саму табличку и глушим сирену/гудки
     stopAlertVisuals();
 
-    // 2. Очищаем эту тревогу из локальной очереди, чтобы она НЕ вылезла повторно
     if (targetToClear && pendingAlerts[targetToClear]) {
         if (Array.isArray(pendingAlerts[targetToClear])) {
             pendingAlerts[targetToClear] = pendingAlerts[targetToClear].filter(function(a) {
@@ -1526,7 +1240,6 @@ function confirmAlert() {
         }
     }
 
-    // 3. Отправляем на сервер подтверждение прочтения
     if (targetToClear && ws && ws.readyState === WebSocket.OPEN) {
         try {
             ws.send(JSON.stringify({
@@ -1539,7 +1252,6 @@ function confirmAlert() {
         } catch(e) {}
     }
 
-    // 4. Если это уведомление о звонке или сообщении — сразу открываем мессенджер
     const isCallNotif = alertTextCopy.indexOf('📞') !== -1 || alertTextCopy.indexOf('ЗВОНОК') !== -1;
     const isFromMessenger = isCallNotif ||
         alertTextCopy.indexOf('👥') === 0 ||
@@ -1554,220 +1266,271 @@ function confirmAlert() {
         return;
     }
 
-    // 5. Проверяем следующие тревоги, если они есть
     checkAndShowAlerts(false);
 }
 
-
-function submitRow() {
-    if (!currentUser) return;
-    let values = new Array(), isEmpty = true;
-    for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-        let val = document.getElementById('in-' + i).value;
-        if (COLUMNS_CONFIG.at(i).digitsOnly && val) val = val.replace(/[^0-9.,\/\\]/g, '');
-        values.push(val);
-        if (val) isEmpty = false;
+function stopAlertVisuals() {
+    const modal = document.getElementById('alert-modal');
+    if (modal) modal.style.display = 'none';
+    if (titleInterval) {
+        clearInterval(titleInterval);
+        titleInterval = null;
     }
-    if (isEmpty) return alert("Пустая строка!");
-    const now = new Date();
-    const authorLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
-    ws.send(JSON.stringify({ type: 'add_row', user: authorLabel, color: userColor, time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5), values: values }));
-    for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
+    if (soundInterval) {
+        clearInterval(soundInterval);
+        soundInterval = null;
+    }
+    document.title = 'МСБ-55115 Журнал';
+    if (sirenAudio) {
+        sirenAudio.pause();
+        sirenAudio.currentTime = 0;
+    }
+    currentAlertId = null;
+    currentAlertText = '';
+    currentAlertTarget = '';
+    currentAlertSender = '';
 }
-function appendRow(row) {
-    if (row.values && row.values.at(0)) {
-        const firstCol = String(row.values.at(0));
-        if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕН") !== -1) return;
+
+function checkAndShowAlerts(forceSound) {
+    const myName = currentCallsign || currentUser || 'Просмотр';
+    const queueAll = getAlertsQueue('ВСЕМ');
+    const unreadAll = queueAll.find(function(a) {
+        return !a.readList || a.readList.indexOf(myName) === -1;
+    });
+
+    if (unreadAll) {
+        showAlert('ВСЕМ', unreadAll.text, unreadAll.sender, unreadAll.id, forceSound);
+        return;
     }
+
+    let targetToInspect = currentCallsign || currentUser;
+    if (currentUser === ADMIN_NAME) targetToInspect = 'муравей';
+    if (targetToInspect) {
+        const queueUnit = getAlertsQueue(targetToInspect);
+        if (queueUnit.length > 0) {
+            const first = queueUnit.at(0);
+            showAlert(targetToInspect, first.text, first.sender, first.id, forceSound);
+            return;
+        }
+    }
+    stopAlertVisuals();
+}
+
+function showAlert(target, text, sender, notifId, playAudioNow) {
+    currentAlertTarget = target;
+    currentAlertId = notifId;
+    currentAlertText = text;
+    currentAlertSender = sender || ADMIN_NAME;
+
+    const modal = document.getElementById('alert-modal');
+    const label = document.getElementById('alert-target-label');
+    const textEl = document.getElementById('alert-text');
+    if (!modal || !label || !textEl) return;
+
+    label.innerText = '🛑 ВНИМАНИЕ! СООБЩЕНИЕ ДЛЯ (' + target + ') ОТ ' + (sender || ADMIN_NAME) + '!';
+    textEl.innerText = text;
+    modal.style.display = 'flex';
+
+    if (playAudioNow) {
+        playBeep();
+    }
+}
+function sendAdminAlert() {
+    if (currentUser !== ADMIN_NAME) return;
+    const target = document.getElementById('admin-target').value;
+    const text = document.getElementById('admin-alert-text').value.trim();
+    if (!text) return alert('Введите текст сообщения!');
+    const now = new Date();
+    const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
+    ws.send(JSON.stringify({
+        type: 'admin_alert',
+        sender: currentUser,
+        color: userColor,
+        target: target,
+        text: text,
+        time: timeString
+    }));
+    document.getElementById('admin-alert-text').value = '';
+}
+
+function sendMiniAlert() {
+    const target = document.getElementById('mini-notif-target').value;
+    const text = document.getElementById('mini-notif-text').value.trim();
+    if (!text) return alert('Введите текст быстрого ответа!');
+    const now = new Date();
+    const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
+    const mySender = currentCallsign ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
+    ws.send(JSON.stringify({
+        type: 'admin_alert',
+        sender: mySender,
+        color: userColor,
+        target: target,
+        text: text,
+        time: timeString
+    }));
+    document.getElementById('mini-notif-text').value = '';
+}
+
+function clearAllHistory() {
+    if (currentUser !== ADMIN_NAME) return;
+    if (confirm('ВНИМАНИЕ! Вы точно хотите очистить всю текущую таблицу, карты и оповещения? Архив по датам останется сохранен!')) {
+        ws.send(JSON.stringify({ type: 'clear_history' }));
+    }
+}
+
+function appendRow(row) {
     const tbody = document.getElementById('table-body');
     const tr = document.createElement('tr');
-    let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color:' + row.color + '">' + row.user + '</td>';
+    tr.style.animation = 'fadeIn 0.3s';
+    let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color:' + (row.color || '#fff') + '">' + row.user + '</td>';
     for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
-        html += '<td>' + ((row.values && row.values.at(i)) ? row.values.at(i) : '-') + '</td>';
+        let val = (row.values && row.values.at(i) !== undefined) ? row.values.at(i) : '-';
+        html += '<td>' + (val || '-') + '</td>';
     }
     tr.innerHTML = html;
     tbody.appendChild(tr);
-    requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    tbody.scrollTop = tbody.scrollHeight;
 }
 
-function triggerCallInDev(callType, targetName) {
-    playSoundById('nice2', true);
-    const modal = document.getElementById('call-dev-modal');
-    const icon = document.getElementById('call-dev-icon');
-    const title = document.getElementById('call-dev-title');
-    const text = document.getElementById('call-dev-text');
-    if (icon) icon.innerText = (callType === 'Видеозвонок') ? '🎥' : '📞';
-    if (title) title.innerText = callType + (targetName ? (' [' + targetName + ']') : '') + ' — МСБ-55115';
-    if (text) text.innerHTML = 'Модуль <b>«' + callType + '»</b> в разработке системы <b>МСБ-55115</b>!';
-    if (modal) modal.style.display = 'flex';
+function submitRow() {
+    if (currentUser !== ADMIN_NAME && (!myPermissions || !myPermissions.row)) {
+        return alert('У вас нет разрешения командира на запись в журнал!');
+    }
+    let values = new Array();
+    for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
+        const input = document.getElementById('in-' + i);
+        values.push(input ? input.value : '');
+    }
+    const hasData = values.some(function(v) { return v && v.trim() !== ''; });
+    if (!hasData) return alert('Заполните хотя бы одно поле перед отправкой!');
+    const sender = currentCallsign ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
+    ws.send(JSON.stringify({
+        type: 'add_row',
+        user: sender,
+        color: userColor,
+        values: values
+    }));
+    for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
+        const input = document.getElementById('in-' + i);
+        if (input) {
+            if (input.tagName === 'SELECT') input.selectedIndex = 0;
+            else input.value = '';
+        }
+    }
 }
 
-function closeCallDevModal() {
-    const m = document.getElementById('call-dev-modal');
-    if (m) m.style.display = 'none';
-}
-
-const GIF_TITLES = {
-    military: [
-        "🪖 Спецназ МСБ", "🛡️ Броня крепка", "🚁 Вертушка", "📡 Радар ПВО",
-        "🎯 Снайпер", "🟩 ПНВ Разведка", "🚜 Танковый прорыв", "⚡ Штурм",
-        "🎖️ Отвага", "📻 Радиосвязь", "🔥 Артиллерия", "🛩️ Су-57 в небе",
-        "🧭 Маршрут", "💣 Саперы", "🐕 Дозор", "🚢 Флот",
-        "🚁 Десант", "🛡️ Оборона", "🎆 Салют Победы", "🏆 МСБ-55115"
-    ],
-    rocket: [
-        "🚀 Пуск из шахты", "🔥 Гиперзвук", "⚡ Тополь-М", "💥 Перехват ПВО",
-        "🛰️ Баллистика", "🚀 РВСН Дежурство", "🌋 Огненный старт", "🎯 Точно в цель",
-        "🚀 Комплекс Ярс", "🧭 Телеметрия", "🔥 Форсаж", "🛡️ Купол С-400",
-        "⚡ Удар с неба", "🚀 Залп РСЗО", "🛰️ Орбитальный блок", "🔥 Плазма",
-        "🚀 Калибр", "⏱️ Пуск 3..2..1", "💥 Ударная волна", "🚀 Щит МСБ"
-    ],
-    cosmic: [
-        "🌌 Глубокий космос", "🛰️ Станция МКС", "👨‍🚀 Космонавт", "🌟 Сверхновая",
-        "🛸 Варп-прыжок", "🪐 Сатурн", "☄️ Метеориты", "🌌 Андромеда",
-        "🛰️ Спутник ВКС", "🌑 Лунная база", "⚡ Солнечный шторм", "🕳️ Черная дыра",
-        "🚀 Стыковка", "🌠 Звездный флот", "🪐 Марс", "🛰️ Лазерная орбита",
-        "🌌 Галактика", "👨‍🚀 Невесомость", "🌟 Пульсар", "🌌 Космос МСБ"
-    ]
-};
-
-var gifCacheStore = {};
-
-function makeAnimatedSvgGif(cat, idx, title) {
-    const cacheKey = cat + '_' + idx;
-    if (gifCacheStore[cacheKey]) return gifCacheStore[cacheKey];
-    const palettes = {
-        military: ['#051f10', '#14532d', '#22c55e', '#facc15'],
-        rocket: ['#260804', '#7c2d12', '#f97316', '#fde047'],
-        cosmic: ['#090422', '#3b0764', '#38bdf8', '#c084fc']
-    };
-    const pal = palettes[cat] || palettes.military;
-    const parts = String(title || '').split(' ');
-    const icon = parts.at(0) || '🚀';
-    const label = parts.slice(1).join(' ') || 'МСБ-55115';
-    const canvas = document.createElement('canvas');
-    canvas.width = 320; canvas.height = 200;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 320, 200);
-    grad.addColorStop(0, pal.at(0)); grad.addColorStop(1, pal.at(1));
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, 320, 200);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-    for (let x = 20; x < 320; x += 28) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 200); ctx.stroke(); }
-    for (let y = 20; y < 200; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke(); }
-    ctx.strokeStyle = pal.at(2); ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.arc(160, 78, 52, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = pal.at(3); ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
-    ctx.beginPath(); ctx.arc(160, 78, 36, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-    ctx.font = '46px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(icon, 160, 78);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.78)'; ctx.fillRect(14, 144, 292, 42);
-    ctx.strokeStyle = pal.at(2); ctx.lineWidth = 1.5; ctx.strokeRect(14, 144, 292, 42);
-    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 15px "Segoe UI", monospace, sans-serif';
-    ctx.fillText(label + ' #' + (idx + 1), 160, 166);
-    const dataUrl = canvas.toDataURL('image/png');
-    gifCacheStore[cacheKey] = dataUrl;
-    return dataUrl;
-}
-
-function setAppTheme(themeName) {
-    const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
+function setAppTheme(themeName, skipSave) {
     document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
-    document.body.classList.add('theme-' + clean);
-    localStorage.setItem('msb_app_theme', clean);
-    Array.of('military', 'rocket', 'cosmic').forEach(function(t) {
-        const b = document.getElementById('theme-btn-' + t);
-        if (b) b.classList.toggle('active', t === clean);
-    });
+    document.body.classList.add('theme-' + themeName);
+    if (!skipSave) {
+        localStorage.setItem('msb_app_theme', themeName);
+    }
 }
-
-function toggleChatGifDrawer() {
-    const drawer = document.getElementById('chat-gif-drawer');
-    if (!drawer) { openThemeSettingsModal(); return; }
-    if (drawer.style.display === 'none' || !drawer.style.display) {
-        drawer.style.display = 'flex';
-        switchGifCategory(currentGifCategory || 'military');
-    } else {
-        drawer.style.display = 'none';
+function openAdminUsersModal() {
+    if (currentUser !== ADMIN_NAME) return;
+    const modal = document.getElementById('admin-users-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        fetchAdminUsersList();
     }
 }
 
-function switchGifCategory(cat) {
-    currentGifCategory = (cat === 'rocket' || cat === 'cosmic') ? cat : 'military';
-    Array.of('military', 'rocket', 'cosmic').forEach(function(t) {
-        const tab = document.getElementById('gif-tab-' + t);
-        if (tab) tab.classList.toggle('active', t === currentGifCategory);
-    });
-    const grid = document.getElementById('chat-gifs-grid') || document.getElementById('viewer-gifs-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
-    const titles = GIF_TITLES[currentGifCategory] || GIF_TITLES.military;
-    titles.forEach(function(title, idx) {
-        const src = makeAnimatedSvgGif(currentGifCategory, idx, title);
-        const card = document.createElement('div'); card.className = 'gif-card-item';
-        const imgEl = document.createElement('img'); imgEl.src = src; imgEl.alt = title;
-        const capEl = document.createElement('div'); capEl.className = 'gif-card-title'; capEl.innerText = title;
-        card.appendChild(imgEl); card.appendChild(capEl);
-        card.onclick = function() { sendGifToCurrentChat(src, title); };
-        grid.appendChild(card);
-    });
+function closeAdminUsersModal() {
+    const modal = document.getElementById('admin-users-modal');
+    if (modal) modal.style.display = 'none';
 }
 
-function sendGifToCurrentChat(gifSrc) {
-    if (typeof currentRoomId === 'undefined' || !currentRoomId) {
-        alert('Сначала выберите друга или конференцию слева, чтобы отправить гифку!');
-        return;
+function fetchAdminUsersList() {
+    if (currentUser !== ADMIN_NAME) return;
+    fetch('/api/admin/users?t=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            renderAdminUsersLists(data.pending || new Array(), data.approved || new Array());
+        })
+        .catch(function() {});
+}
+
+function renderAdminUsersLists(pending, approved) {
+    const pBox = document.getElementById('admin-pending-list');
+    const aBox = document.getElementById('admin-approved-list');
+    if (pBox) {
+        pBox.innerHTML = '';
+        if (pending.length === 0) {
+            pBox.innerHTML = '<div style="color:#64748b; font-size:13px; padding:6px 0;">Нет новых заявок</div>';
+        } else {
+            pending.forEach(function(u) {
+                const row = document.createElement('div');
+                row.className = 'user-row-card';
+                row.innerHTML =
+                    '<div><b>' + u.username + '</b> <span style="color:#38bdf8;">(' + u.unit + ')</span></div>' +
+                    '<div style="display:flex; gap:6px;">' +
+                        '<button type="button" style="background:#22c55e; padding:6px 12px; font-size:12px;" onclick="adminUserAction(\'' + u.key + '\', \'approve\')">Одобрить</button>' +
+                        '<button type="button" style="background:#ef4444; padding:6px 12px; font-size:12px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">Удалить</button>' +
+                    '</div>';
+                pBox.appendChild(row);
+            });
+        }
     }
-    const sender = (typeof getActiveChatIdentity === 'function') ? getActiveChatIdentity() : currentCallsign;
-    if (!sender) return;
-    fetch(gifSrc).then(function(r) { return r.blob(); }).then(function(blob) {
-        const formData = new FormData();
-        formData.append('sender', sender); formData.append('room', currentRoomId);
-        formData.append('type', 'file'); formData.append('media', blob, 'gif_' + Date.now() + '.png');
-        return fetch('/api/send', { method: 'POST', body: formData });
+    if (aBox) {
+        aBox.innerHTML = '';
+        if (approved.length === 0) {
+            aBox.innerHTML = '<div style="color:#64748b; font-size:13px; padding:6px 0;">Нет зарегистрированных пользователей</div>';
+        } else {
+            approved.forEach(function(u) {
+                const row = document.createElement('div');
+                row.className = 'user-row-card';
+                const p = u.permissions || {};
+                const makeChip = function(name, label) {
+                    const checked = p[name] ? 'checked' : '';
+                    return '<label class="perm-chip"><input type="checkbox" ' + checked + ' onchange="adminSetUserPerm(\'' + u.key + '\', \'' + name + '\', this.checked)"> ' + label + '</label>';
+                };
+                row.innerHTML =
+                    '<div style="min-width:180px;"><b>' + u.username + '</b> <span style="color:#38bdf8;">(' + u.unit + ')</span></div>' +
+                    '<div class="perm-grid">' +
+                        makeChip('row', 'Запись') +
+                        makeChip('stream', 'Стрим') +
+                        makeChip('maps', 'Карты') +
+                        makeChip('archive', 'Архив') +
+                        makeChip('table', 'Таблица') +
+                    '</div>' +
+                    '<div><button type="button" style="background:#ef4444; padding:5px 10px; font-size:12px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">&times;</button></div>';
+                aBox.appendChild(row);
+            });
+        }
+    }
+}
+
+function adminUserAction(key, action) {
+    fetch('/api/admin/users/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: key, action: action })
     }).then(function() {
-        const drawer = document.getElementById('chat-gif-drawer');
-        if (drawer) drawer.style.display = 'none';
-        closeMsgPhotoViewer();
-        if (typeof fetchMessages === 'function') { lastMessagesCount = -1; fetchMessages(); }
+        fetchAdminUsersList();
     });
 }
 
-function openMsgPhotoViewer(src, title) {
-    const modal = document.getElementById('msg-photo-viewer-modal');
-    const img = document.getElementById('msg-viewer-img');
-    const ttl = document.getElementById('msg-viewer-title');
-    msgImageZoom = 1;
-    if (img) { img.src = src || makeAnimatedSvgGif('military', 0, '🪖 МСБ-55115'); img.style.transform = 'scale(1)'; }
-    if (ttl) ttl.innerText = title || '🖼️ Просмотр и настройки темы';
-    const zLbl = document.getElementById('msg-zoom-label');
-    if (zLbl) zLbl.innerText = '100%';
-    setAppTheme(localStorage.getItem('msb_app_theme') || 'military');
-    if (modal) modal.style.display = 'flex';
+function adminSetUserPerm(key, permName, permVal) {
+    fetch('/api/admin/users/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: key, action: 'set_perm', permName: permName, permVal: permVal })
+    }).then(function() {
+        fetchAdminUsersList();
+    });
 }
 
-function openAvatarInViewer(el, titleName) {
-    const imgEl = el ? el.querySelector('img') : null;
-    const fallback = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ ' + (titleName || currentCallsign || 'МСБ'));
-    openMsgPhotoViewer(imgEl ? imgEl.src : fallback, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
+function refreshMyPermissionsFromServer() {
+    if (!currentCallsign) return;
+    fetch('/api/user/me?user=' + encodeURIComponent(currentCallsign) + '&t=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data && data.permissions) {
+                myPermissions = data.permissions;
+                applyPermissionsUI();
+            }
+        })
+        .catch(function() {});
 }
 
-function openThemeSettingsModal() {
-    const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема МСБ-55115');
-    openMsgPhotoViewer(preview, '🎨 Выбор темы оформления (Военный / Ракетный / Космос)');
-}
-window.openThemeAndGifHub = openThemeSettingsModal;
-
-function closeMsgPhotoViewer() {
-    const m = document.getElementById('msg-photo-viewer-modal');
-    if (m) m.style.display = 'none';
-}
-
-function changeMsgImageZoom(delta) {
-    msgImageZoom = Math.min(4, Math.max(0.5, msgImageZoom + delta));
-    const img = document.getElementById('msg-viewer-img');
-    const lbl = document.getElementById('msg-zoom-label');
-    if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
-    if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
-}
-
-initApp();
+window.addEventListener('DOMContentLoaded', initApp);

@@ -1050,15 +1050,14 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     });
 }
 
+// НАДЁЖНЫЙ WEBSOCKET ДЛЯ AMVERA CLOUD
 const wss = new WebSocket.Server({ noServer: true, maxPayload: 20 * 1024 * 1024 });
 
-// BẮT BUỘC CHO AMVERA: Chuyển tiếp kết nối Upgrade từ HTTP sang WebSocket
 server.on('upgrade', function(request, socket, head) {
     wss.handleUpgrade(request, socket, head, function(ws) {
         wss.emit('connection', ws, request);
     });
 });
-
 
 function broadcastWS(obj) {
     const str = JSON.stringify(obj);
@@ -1209,7 +1208,7 @@ wss.on('connection', function(ws) {
     ws.on('message', function(message) {
         try {
             const msg = JSON.parse(message.toString());
-                     if (msg.type === 'ping') {
+            if (msg.type === 'ping') {
                 if (msg.callsign) {
                     ws.callsign = String(msg.callsign).trim().toLowerCase();
                     markUserOnline(msg.callsign);
@@ -1221,8 +1220,6 @@ wss.on('connection', function(ws) {
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
-
-
             if (msg.type === 'save_sub' && msg.sub) {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; });
@@ -1235,23 +1232,9 @@ wss.on('connection', function(ws) {
                 writeJSON(SUBS_FILE, pushSubscriptions);
                 return;
             }
-			            if (msg.type && msg.type.startsWith('call_')) {
-                if (msg.from) {
-                    ws.callsign = String(msg.from).trim().toLowerCase();
-                }
+            if (msg.type && msg.type.startsWith('call_')) {
+                if (msg.from) ws.callsign = String(msg.from).trim().toLowerCase();
                 const targetKey = String(msg.target || '').trim().toLowerCase();
-
-                // Gửi thông báo chuông khi có cuộc gọi đến
-                if (msg.type === 'call_invite') {
-                    broadcastAlert(
-                        msg.from || 'БОЕЦ',
-                        '#22c55e',
-                        getServerDateTime(),
-                        targetKey,
-                        '📞 ВХОДЯЩИЙ ЗВОНОК! Откройте мессенджер, чтобы ответить'
-                    );
-                }
-                
                 wss.clients.forEach(function(client) {
                     if (client.readyState === WebSocket.OPEN && client !== ws) {
                         const cCall = String(client.callsign || '').trim().toLowerCase();
@@ -1260,16 +1243,11 @@ wss.on('connection', function(ws) {
                                         (cUser && cUser === targetKey) ||
                                         (targetKey === 'муравей' && (cCall === 'муравей' || cUser === 'админ')) ||
                                         (targetKey === 'админ' && (cCall === 'муравей' || cUser === 'админ'));
-
-                        if (isMatch) {
-                            client.send(JSON.stringify(msg));
-                        }
+                        if (isMatch) client.send(JSON.stringify(msg));
                     }
                 });
                 return;
             }
-
-			
             if (msg.type === 'add_row') {
                 const newRow = { id: Date.now(), time: getServerDateTime(), user: msg.user, values: msg.values, color: msg.color };
                 tableHistory.push(newRow);
