@@ -127,8 +127,8 @@ function ensureCleanMessengerTopbar() {
             '<span>Назад</span>' +
         '</button>' +
         '<div class="msb-profile-pill">' +
-            '?</div>' +
-            '<div class="msb-profile-meta">' +
+            'МСБ-55115</div>' +
+             '<div class="msb-profile-meta">' +
                 '<span id="msg-my-name" class="msb-profile-callsign">Боец</span>' +
                 '<label for="msb-top-avatar-file" class="msb-avatar-edit-link">📷 Сменить аватарку</label>' +
                 '<input type="file" id="msb-top-avatar-file" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">' +
@@ -399,9 +399,18 @@ function renderAvatarElement(el, name, avatarDataUrl) {
         el.innerHTML = '<img src="' + avatarDataUrl + '" alt="av">';
     } else {
         el.innerHTML = '';
-        el.textContent = (name || '?').substring(0, 2).toUpperCase();
+        if (!name || name === '?') {
+            el.style.fontSize = '8px';
+            el.style.lineHeight = '1.1';
+            el.style.textAlign = 'center';
+            el.textContent = 'МСБ-55115';
+        } else {
+            el.style.fontSize = '';
+            el.textContent = String(name).substring(0, 2).toUpperCase();
+        }
     }
 }
+
 
 function uploadMyAvatar(inputEl) {
     chatUser = getActiveChatIdentity();
@@ -458,6 +467,9 @@ document.addEventListener('DOMContentLoaded', function() {
         setAppTheme(savedTheme, true);
     }
     syncMessengerAuth();
+	    var pAv = document.getElementById('partner-avatar');
+    if (pAv && !currentPartner) renderAvatarElement(pAv, '', '');
+
 });
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
@@ -654,7 +666,7 @@ function resetChatArea() {
     lastMessagesCount = -1;
     renderedMsgIds.clear();
     document.getElementById('partner-display-name').textContent = "Чат не выбран";
-    document.getElementById('chat-status').style.display = "none";
+    renderAvatarElement(document.getElementById('partner-avatar'), '', '');
     var tInput = document.getElementById('text-input');
     if (tInput) {
         tInput.setAttribute('disabled', 'true');
