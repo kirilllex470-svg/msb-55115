@@ -839,7 +839,8 @@ function connectWS(forceReconnect) {
         ws = null;
     }
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-    ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
+   var wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+   ws = new WebSocket(wsProtocol + '//' + location.host + '/');
 
     ws.onopen = function() {
         lastPongTime = Date.now();
@@ -944,21 +945,17 @@ function connectWS(forceReconnect) {
         setTimeout(function() { connectWS(false); }, 1500);
     };
 }
+
 setInterval(function() {
     if (ws && ws.readyState === WebSocket.OPEN) {
-        if (Date.now() - lastPongTime > 12000) {
-            connectWS(true);
-            return;
-        }
         ws.send(JSON.stringify({
             type: 'ping',
             user: currentUser || '',
             callsign: currentCallsign || ''
         }));
-    } else {
-        connectWS(false);
     }
-}, 4000);
+}, 5000);
+
 
 window.addEventListener('online', function() {
     connectWS(true);

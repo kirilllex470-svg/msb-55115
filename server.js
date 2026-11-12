@@ -1050,7 +1050,15 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     });
 }
 
-const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
+const wss = new WebSocket.Server({ noServer: true, maxPayload: 20 * 1024 * 1024 });
+
+// BẮT BUỘC CHO AMVERA: Chuyển tiếp kết nối Upgrade từ HTTP sang WebSocket
+server.on('upgrade', function(request, socket, head) {
+    wss.handleUpgrade(request, socket, head, function(ws) {
+        wss.emit('connection', ws, request);
+    });
+});
+
 
 function broadcastWS(obj) {
     const str = JSON.stringify(obj);

@@ -555,39 +555,74 @@ function startCallTimer() {
 }
 
 function hangupCall(sendNotify) {
-    stopRingtoneTone();
-    if (sendNotify && callPartner) {
-        sendCallSignal('call_hangup', {});
-    }
-    if (callTimerInterval) {
-        clearInterval(callTimerInterval);
-        callTimerInterval = null;
-    }
-    if (rtcPeer) {
-        try { rtcPeer.close(); } catch(e){}
-        rtcPeer = null;
-    }
-    if (localCallStream) {
-        localCallStream.getTracks().forEach(function(t) { t.stop(); });
-        localCallStream = null;
-    }
-    var remoteAudio = document.getElementById('msb-remote-audio');
-    if (remoteAudio) {
-        remoteAudio.pause();
-        remoteAudio.srcObject = null;
-    }
+    // 1. Dập tắt ngay lập tức giao diện cuộc gọi (Chạy đầu tiên để không bao giờ bị treo)
+    try {
+        stopRingtoneTone();
+        var overlay = document.getElementById('msb-call-overlay');
+        var cRow = document.getElementById('msb-call-controls-row');
+        var timerEl = document.getElementById('msb-call-timer');
+        if (overlay) overlay.style.display = 'none';
+        if (cRow) cRow.style.display = 'none';
+        if (timerEl) {
+            timerEl.style.display = 'none';
+            timerEl.innerText = '00:00';
+        }
+    } catch (e) {}
 
-    var overlay = document.getElementById('msb-call-overlay');
-    var cRow = document.getElementById('msb-call-controls-row');
-    if (overlay) overlay.style.display = 'none';
-    if (cRow) cRow.style.display = 'none';
+    // 2. Gửi tín hiệu báo cho máy bên kia biết cuộc gọi đã kết thúc
+    try {
+        if (sendNotify && callPartner) {
+            sendCallSignal('call_hangup', {});
+        }
+    } catch (e) {}
 
+    // 3. Dừng đồng hồ đếm thời gian
+    try {
+        if (callTimerInterval) {
+            clearInterval(callTimerInterval);
+            callTimerInterval = null;
+        }
+    } catch (e) {}
+
+    // 4. Giải phóng tài nguyên WebRTC
+    try {
+        if (rtcPeer) {
+            rtcPeer.ontrack = null;
+            rtcPeer.onicecandidate = null;
+            rtcPeer.oniceconnectionstatechange = null;
+            rtcPeer.close();
+            rtcPeer = null;
+        }
+    } catch (e) {}
+
+    // 5. Tắt hoàn toàn Micro của thiết bị
+    try {
+        if (localCallStream) {
+            localCallStream.getTracks().forEach(function(track) {
+                track.stop();
+            });
+            localCallStream = null;
+        }
+    } catch (e) {}
+
+    // 6. Ngắt luồng âm thanh đầu ra
+    try {
+        var remoteAudio = document.getElementById('msb-remote-audio');
+        if (remoteAudio) {
+            remoteAudio.pause();
+            remoteAudio.srcObject = null;
+        }
+    } catch (e) {}
+
+    // 7. Đặt lại các biến trạng thái
     callPartner = null;
     isCallInitiator = false;
     isMicMuted = false;
     isSpeakerOn = true;
+    callSeconds = 0;
 }
 window.hangupCall = hangupCall;
+
 
 
 function enqueueChatPayload(payload) {
