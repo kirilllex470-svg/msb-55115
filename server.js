@@ -1232,12 +1232,22 @@ wss.on('connection', function(ws) {
                     ws.callsign = String(msg.from).trim().toLowerCase();
                 }
                 const targetKey = String(msg.target || '').trim().toLowerCase();
+
+                // Gửi thông báo chuông khi có cuộc gọi đến
+                if (msg.type === 'call_invite') {
+                    broadcastAlert(
+                        msg.from || 'БОЕЦ',
+                        '#22c55e',
+                        getServerDateTime(),
+                        targetKey,
+                        '📞 ВХОДЯЩИЙ ЗВОНОК! Откройте мессенджер, чтобы ответить'
+                    );
+                }
                 
                 wss.clients.forEach(function(client) {
                     if (client.readyState === WebSocket.OPEN && client !== ws) {
                         const cCall = String(client.callsign || '').trim().toLowerCase();
                         const cUser = String(client.user || '').trim().toLowerCase();
-                        
                         const isMatch = (cCall && cCall === targetKey) ||
                                         (cUser && cUser === targetKey) ||
                                         (targetKey === 'муравей' && (cCall === 'муравей' || cUser === 'админ')) ||
@@ -1250,6 +1260,7 @@ wss.on('connection', function(ws) {
                 });
                 return;
             }
+
 			
             if (msg.type === 'add_row') {
                 const newRow = { id: Date.now(), time: getServerDateTime(), user: msg.user, values: msg.values, color: msg.color };

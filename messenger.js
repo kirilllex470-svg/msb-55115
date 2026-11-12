@@ -41,9 +41,20 @@ var isSpeakerOn = true;
 var RTC_CONFIG = {
     iceServers: [
         { urls: 'stun:://google.com' },
-        { urls: 'stun:://google.com' }
+        { urls: 'stun:://google.com' },
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        }
     ]
 };
+
 
 try {
     var savedTextQ = localStorage.getItem('msb_edge_q');
