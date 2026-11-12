@@ -38,8 +38,12 @@ var isCallInitiator = false;
 var isMicMuted = false;
 var isSpeakerOn = true;
 
+// === CẤU HÌNH WEBRTC VỚI ĐA MÁY CHỦ STUN VÀ RELAY ===
 var RTC_CONFIG = {
     iceServers: [
+        { urls: 'stun:://google.com' },
+        { urls: 'stun:://google.com' },
+        { urls: 'stun:://google.com' },
         { urls: 'stun:://google.com' },
         { urls: 'stun:://google.com' },
         {
@@ -51,9 +55,111 @@ var RTC_CONFIG = {
             urls: 'turn:openrelay.metered.ca:443',
             username: 'openrelayproject',
             credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
         }
-    ]
+    ],
+    iceCandidatePoolSize: 10
 };
+
+function createPeerConnection() {
+    if (rtcPeer) {
+        try { rtcPeer.close(); } catch(e){}
+        rtcPeer = null;
+    }
+    
+    rtcPeer = new RTCPeerConnection(RTC_CONFIG);
+
+    if (localCallStream) {
+        localCallStream.getAudioTracks().forEach(function(track) {
+            rtcPeer.addTrack(track, localCallStream);
+        });
+    }
+
+    rtcPeer.onicecandidate = function(event) {
+        if (event.candidate) {
+            sendCallSignal('call_ice', { candidate: event.candidate });
+        }
+    };
+
+    rtcPeer.oniceconnectionstatechange = function() {
+        console.log('MSB WebRTC State:', rtcPeer.iceConnectionState);
+        var statEl = document.getElementById('msb-call-status');
+        if (statEl) {
+            if (rtcPeer.iceConnectionState === 'connected' || rtcPeer.iceConnectionState === 'completed') {
+                statEl.innerText = '🟢 Связь установлена (Голос активен)';
+            } else if (rtcPeer.iceConnectionState === 'failed') {
+                statEl.innerText = '🔴 Переподключение канала...';
+                rtcPeer.restartIce();
+            }
+        }
+    };
+
+    rtcPeer.ontrack = function(event) {
+        var remoteAudio = document.getElementById('msb-remote-audio');
+        if (!remoteAudio) {
+            remoteAudio = document.createElement('audio');
+            remoteAudio.id = 'msb-remote-audio';
+            remoteAudio.autoplay = true;
+            document.body.appendChild(remoteAudio);
+        }
+
+        if (event.streams && event.streams[0]) {
+            remoteAudio.srcObject = event.streams[0];
+        } else {
+            var inboundStream = new MediaStream();
+            inboundStream.addTrack(event.track);
+            remoteAudio.srcObject = inboundStream;
+        }
+
+        remoteAudio.muted = false;
+        remoteAudio.volume = 1.0;
+
+        var playPromise = remoteAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(function(err) {
+                window.addEventListener('click', function unlockAudio() {
+                    remoteAudio.play();
+                    window.removeEventListener('click', unlockAudio);
+                }, { once: true });
+            });
+        }
+        startCallTimer();
+    };
+}
+
+async function initiateWebRTCOffer() {
+    createPeerConnection();
+    try {
+        var offer = await rtcPeer.createOffer({
+            offerToReceiveAudio: true,
+            voiceActivityDetection: true
+        });
+        await rtcPeer.setLocalDescription(offer);
+        sendCallSignal('call_offer', { sdp: offer });
+    } catch (e) {
+        hangupCall(true);
+    }
+}
+
+async function handleWebRTCOffer(remoteSdp) {
+    createPeerConnection();
+    try {
+        await rtcPeer.setRemoteDescription(new RTCSessionDescription(remoteSdp));
+        var answer = await rtcPeer.createAnswer({
+            offerToReceiveAudio: true,
+            voiceActivityDetection: true
+        });
+        await rtcPeer.setLocalDescription(answer);
+        sendCallSignal('call_answer', { sdp: answer });
+    } catch (e) {
+        hangupCall(true);
+    }
+}
+
 
 
 try {
@@ -427,56 +533,7 @@ async function acceptIncomingCall() {
     }
 }
 window.acceptIncomingCall = acceptIncomingCall;
-function createPeerConnection() {
-    if (rtcPeer) {
-        try { rtcPeer.close(); } catch(e){}
-    }
-    rtcPeer = new RTCPeerConnection(RTC_CONFIG);
 
-    if (localCallStream) {
-        localCallStream.getTracks().forEach(function(track) {
-            rtcPeer.addTrack(track, localCallStream);
-        });
-    }
-
-    rtcPeer.onicecandidate = function(event) {
-        if (event.candidate) {
-            sendCallSignal('call_ice', { candidate: event.candidate });
-        }
-    };
-
-    rtcPeer.ontrack = function(event) {
-        var remoteAudio = document.getElementById('msb-remote-audio');
-        if (remoteAudio && event.streams && event.streams[0]) {
-            remoteAudio.srcObject = event.streams[0];
-            remoteAudio.play().catch(function(){});
-            startCallTimer();
-        }
-    };
-}
-
-async function initiateWebRTCOffer() {
-    createPeerConnection();
-    try {
-        var offer = await rtcPeer.createOffer();
-        await rtcPeer.setLocalDescription(offer);
-        sendCallSignal('call_offer', { sdp: offer });
-    } catch (e) {
-        hangupCall(true);
-    }
-}
-
-async function handleWebRTCOffer(remoteSdp) {
-    createPeerConnection();
-    try {
-        await rtcPeer.setRemoteDescription(new RTCSessionDescription(remoteSdp));
-        var answer = await rtcPeer.createAnswer();
-        await rtcPeer.setLocalDescription(answer);
-        sendCallSignal('call_answer', { sdp: answer });
-    } catch (e) {
-        hangupCall(true);
-    }
-}
 
 function startCallTimer() {
     stopRingtoneTone();
