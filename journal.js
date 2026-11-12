@@ -1508,17 +1508,56 @@ function confirmAlert() {
     const idToClear = currentAlertId;
     const alertTextCopy = String(currentAlertText || '');
     const alertSenderCopy = String(currentAlertSender || '');
+
+    // 1. МГНОВЕННО прячем саму табличку и глушим сирену/гудки
     stopAlertVisuals();
-    if (targetToClear && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
+
+    // 2. Очищаем эту тревогу из локальной очереди, чтобы она НЕ вылезла повторно
+    if (targetToClear && pendingAlerts[targetToClear]) {
+        if (Array.isArray(pendingAlerts[targetToClear])) {
+            pendingAlerts[targetToClear] = pendingAlerts[targetToClear].filter(function(a) {
+                return a.id !== idToClear;
+            });
+            if (pendingAlerts[targetToClear].length === 0) {
+                delete pendingAlerts[targetToClear];
+            }
+        } else {
+            delete pendingAlerts[targetToClear];
+        }
     }
-    const isFromMessenger = alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
+
+    // 3. Отправляем на сервер подтверждение прочтения
+    if (targetToClear && ws && ws.readyState === WebSocket.OPEN) {
+        try {
+            ws.send(JSON.stringify({
+                type: 'clear_alert',
+                target: targetToClear,
+                notifId: idToClear,
+                readBy: whoConfirmed,
+                readTime: readTime
+            }));
+        } catch(e) {}
+    }
+
+    // 4. Если это уведомление о звонке или сообщении — сразу открываем мессенджер
+    const isCallNotif = alertTextCopy.indexOf('📞') !== -1 || alertTextCopy.indexOf('ЗВОНОК') !== -1;
+    const isFromMessenger = isCallNotif ||
+        alertTextCopy.indexOf('👥') === 0 ||
+        alertTextCopy.indexOf('💬') === 0 ||
+        alertTextCopy.indexOf('🎙️') === 0 ||
+        alertTextCopy.indexOf('🎥') === 0 ||
+        alertTextCopy.indexOf('📎') === 0 ||
+        alertTextCopy.indexOf('🎬') === 0;
+
     if (isFromMessenger && typeof openMessengerWindow === 'function') {
         openMessengerWindow(alertSenderCopy);
         return;
     }
+
+    // 5. Проверяем следующие тревоги, если они есть
     checkAndShowAlerts(false);
 }
+
 
 function submitRow() {
     if (!currentUser) return;
