@@ -1534,4 +1534,76 @@ function refreshMyPermissionsFromServer() {
 }
 
 window.addEventListener('DOMContentLoaded', initApp);
+// === ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК АВТОРИЗАЦИИ И ЭКРАНОВ ===
+function switchAuthTab(tab) {
+    const loginBox = document.getElementById('login-form-box') || document.getElementById('auth-login-box');
+    const regBox = document.getElementById('reg-form-box') || document.getElementById('auth-reg-box');
+    const tabLogin = document.getElementById('tab-btn-login');
+    const tabReg = document.getElementById('tab-btn-reg');
+    const err = document.getElementById('login-error');
+    if (err) err.style.display = 'none';
 
+    if (tab === 'login') {
+        if (loginBox) loginBox.style.display = 'block';
+        if (regBox) regBox.style.display = 'none';
+        if (tabLogin) tabLogin.classList.add('active');
+        if (tabReg) tabReg.classList.remove('active');
+    } else {
+        if (loginBox) loginBox.style.display = 'none';
+        if (regBox) regBox.style.display = 'block';
+        if (tabLogin) tabLogin.classList.remove('active');
+        if (tabReg) tabReg.classList.add('active');
+    }
+}
+
+function handleAuthSubmit(event) {
+    if (event) event.preventDefault();
+    const loginBox = document.getElementById('login-form-box') || document.getElementById('auth-login-box');
+    if (loginBox && loginBox.style.display !== 'none') {
+        authLogin();
+    } else {
+        submitRegister();
+    }
+}
+
+// === ПОЛНЫЙ ЭКСПОРТ ОБРАБОТЧИКОВ ИНТЕРФЕЙСА В WINDOW ===
+window.login = login;
+window.authLogin = authLogin;
+window.logout = logout;
+window.switchAuthTab = switchAuthTab;
+window.handleAuthSubmit = handleAuthSubmit;
+window.openRegisterModal = openRegisterModal;
+window.closeRegisterModal = closeRegisterModal;
+window.submitRegister = submitRegister;
+window.submitRow = submitRow;
+window.confirmAlert = confirmAlert;
+window.stopAlertVisuals = stopAlertVisuals;
+window.sendAdminAlert = sendAdminAlert;
+window.sendMiniAlert = sendMiniAlert;
+window.clearAllHistory = clearAllHistory;
+window.toggleMapsSection = toggleMapsSection;
+window.uploadMapPhoto = uploadMapPhoto;
+window.openArchivePage = openArchivePage;
+window.closeArchivePage = closeArchivePage;
+window.changeArchiveMonth = changeArchiveMonth;
+window.selectArchiveDate = selectArchiveDate;
+window.handleStreamBtnClick = handleStreamBtnClick;
+window.startVideoStream = startVideoStream;
+window.stopVideoStream = stopVideoStream;
+window.openActiveStreamWindow = openActiveStreamWindow;
+window.openStreamExternalFallback = openStreamExternalFallback;
+window.closeStreamPage = closeStreamPage;
+window.openSoundModal = openSoundModal;
+window.closeSoundModal = closeSoundModal;
+window.playSoundById = playSoundById;
+window.openAdminUsersModal = openAdminUsersModal;
+window.closeAdminUsersModal = closeAdminUsersModal;
+window.adminUserAction = adminUserAction;
+window.adminSetUserPerm = adminSetUserPerm;
+window.forceReloadApp = forceReloadApp;
+window.setAppTheme = setAppTheme;
+window.installPWA = installPWA;
+window.openPhotoLightbox = openPhotoLightbox;
+window.closePhotoLightbox = closePhotoLightbox;
+window.changePhotoZoom = changePhotoZoom;
+window.resetPhotoZoom = resetPhotoZoom;
