@@ -134,7 +134,7 @@ async function installPWA() {
         await deferredPrompt.userChoice;
         deferredPrompt = null;
     } else {
-        alert('Чтобы установить приложение МСБ55115, откройте меню браузера (⋮ или "Поделиться") и нажмите "Установить приложение" / "Добавить на главный экран".');
+        alert('Чтобы установить приложение МСБ55115, откройте меню браузера и нажмите "Установить приложение" / "Добавить на главный экран".');
     }
 }
 
@@ -1428,7 +1428,7 @@ function setAppTheme(themeName, skipSave) {
 }
 function openAdminUsersModal() {
     if (currentUser !== ADMIN_NAME) return;
-    const modal = document.getElementById('admin-users-modal');
+    var modal = document.getElementById('admin-users-modal');
     if (modal) {
         modal.style.display = 'flex';
         fetchAdminUsersList();
@@ -1436,7 +1436,7 @@ function openAdminUsersModal() {
 }
 
 function closeAdminUsersModal() {
-    const modal = document.getElementById('admin-users-modal');
+    var modal = document.getElementById('admin-users-modal');
     if (modal) modal.style.display = 'none';
 }
 
@@ -1445,21 +1445,21 @@ function fetchAdminUsersList() {
     fetch('/api/admin/users?t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            renderAdminUsersLists(data.pending || new Array(), data.approved || new Array());
+            renderAdminUsersLists(data.pending || [], data.approved || []);
         })
         .catch(function() {});
 }
 
 function renderAdminUsersLists(pending, approved) {
-    const pBox = document.getElementById('admin-pending-list');
-    const aBox = document.getElementById('admin-approved-list');
+    var pBox = document.getElementById('admin-pending-list');
+    var aBox = document.getElementById('admin-approved-list');
     if (pBox) {
         pBox.innerHTML = '';
         if (pending.length === 0) {
             pBox.innerHTML = '<div style="color:#64748b; font-size:13px; padding:6px 0;">Нет новых заявок</div>';
         } else {
             pending.forEach(function(u) {
-                const row = document.createElement('div');
+                var row = document.createElement('div');
                 row.className = 'user-row-card';
                 row.innerHTML =
                     '<div><b>' + u.username + '</b> <span style="color:#38bdf8;">(' + u.unit + ')</span></div>' +
@@ -1477,12 +1477,12 @@ function renderAdminUsersLists(pending, approved) {
             aBox.innerHTML = '<div style="color:#64748b; font-size:13px; padding:6px 0;">Нет зарегистрированных пользователей</div>';
         } else {
             approved.forEach(function(u) {
-                const row = document.createElement('div');
+                var row = document.createElement('div');
                 row.className = 'user-row-card';
-                const p = u.permissions || {};
-                const makeChip = function(name, label) {
-                    const checked = p[name] ? 'checked' : '';
-                    return '<label class="perm-chip"><input type="checkbox" ' + checked + ' onchange="adminSetUserPerm(\'' + u.key + '\', \'' + name + '\', this.checked)"> ' + label + '</label>';
+                var p = u.permissions || {};
+                var makeChip = function(name, label) {
+                    var chk = p[name] ? 'checked' : '';
+                    return '<label class="perm-chip"><input type="checkbox" ' + chk + ' onchange="adminSetUserPerm(\'' + u.key + '\', \'' + name + '\', this.checked)"> ' + label + '</label>';
                 };
                 row.innerHTML =
                     '<div style="min-width:180px;"><b>' + u.username + '</b> <span style="color:#38bdf8;">(' + u.unit + ')</span></div>' +
@@ -1533,45 +1533,179 @@ function refreshMyPermissionsFromServer() {
         .catch(function() {});
 }
 
-window.addEventListener('DOMContentLoaded', initApp);
-// === ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК АВТОРИЗАЦИИ И ЭКРАНОВ ===
-function switchAuthTab(tab) {
-    const loginBox = document.getElementById('login-form-box') || document.getElementById('auth-login-box');
-    const regBox = document.getElementById('reg-form-box') || document.getElementById('auth-reg-box');
-    const tabLogin = document.getElementById('tab-btn-login');
-    const tabReg = document.getElementById('tab-btn-reg');
-    const err = document.getElementById('login-error');
+function login() {
+    unlockMobileFeatures();
+    var select = document.getElementById('login-select');
+    var passInput = document.getElementById('login-pass');
+    var err = document.getElementById('login-error');
+    if (!select || !passInput) return;
+
+    var uIdx = parseInt(select.value, 10);
+    var userObj = USERS_CONFIG[uIdx];
+    if (!userObj) return;
+
+    if (passInput.value.trim() !== userObj.pass) {
+        if (err) {
+            err.style.display = 'block';
+            err.innerText = 'Неверный пароль!';
+        }
+        return;
+    }
+
     if (err) err.style.display = 'none';
+    currentUser = userObj.name;
+    currentCallsign = (userObj.name === ADMIN_NAME) ? 'муравей' : userObj.name;
+    userColor = userObj.color;
 
-    if (tab === 'login') {
-        if (loginBox) loginBox.style.display = 'block';
-        if (regBox) regBox.style.display = 'none';
-        if (tabLogin) tabLogin.classList.add('active');
-        if (tabReg) tabReg.classList.remove('active');
-    } else {
-        if (loginBox) loginBox.style.display = 'none';
-        if (regBox) regBox.style.display = 'block';
-        if (tabLogin) tabLogin.classList.remove('active');
-        if (tabReg) tabReg.classList.add('active');
+    localStorage.setItem('journal_user', currentUser);
+    localStorage.setItem('journal_callsign', currentCallsign);
+    localStorage.setItem('journal_color', userColor);
+
+    applyUserUI();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'ping',
+            user: currentUser,
+            callsign: currentCallsign
+        }));
     }
 }
 
-function handleAuthSubmit(event) {
-    if (event) event.preventDefault();
-    const loginBox = document.getElementById('login-form-box') || document.getElementById('auth-login-box');
-    if (loginBox && loginBox.style.display !== 'none') {
-        authLogin();
-    } else {
-        submitRegister();
+function authLogin() {
+    unlockMobileFeatures();
+    var callInput = document.getElementById('auth-callsign-input') || document.getElementById('login-callsign');
+    var passInput = document.getElementById('auth-pass-input') || document.getElementById('login-pass');
+    var err = document.getElementById('login-error');
+    
+    var callsignVal = callInput ? callInput.value.trim() : '';
+    var passVal = passInput ? passInput.value.trim() : '';
+
+    if (!callsignVal || !passVal) {
+        if (err) {
+            err.style.display = 'block';
+            err.innerText = 'Введите позывной и пароль!';
+        }
+        return;
     }
+
+    fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: callsignVal, password: passVal })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        if (data.success) {
+            if (err) err.style.display = 'none';
+            currentCallsign = data.username;
+            currentUser = data.unit || data.username;
+            var uMatch = USERS_CONFIG.find(function(u) { return u.name === currentUser; });
+            userColor = uMatch ? uMatch.color : '#38bdf8';
+            myPermissions = data.permissions || {};
+
+            localStorage.setItem('journal_user', currentUser);
+            localStorage.setItem('journal_callsign', currentCallsign);
+            localStorage.setItem('journal_color', userColor);
+
+            applyUserUI();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'ping',
+                    user: currentUser,
+                    callsign: currentCallsign
+                }));
+            }
+        } else {
+            if (err) {
+                err.style.display = 'block';
+                err.innerText = data.message || 'Ошибка входа!';
+            }
+        }
+    })
+    .catch(function() {
+        if (err) {
+            err.style.display = 'block';
+            err.innerText = 'Ошибка связи с сервером!';
+        }
+    });
+}
+function logoutUser() {
+    localStorage.removeItem('journal_user');
+    localStorage.removeItem('journal_callsign');
+    localStorage.removeItem('journal_color');
+    currentUser = null;
+    currentCallsign = '';
+    myPermissions = { row: false, stream: false, maps: false, archive: false, table: false };
+
+    var panel = document.getElementById('input-panel');
+    var overlay = document.getElementById('login-overlay');
+    if (panel) panel.style.display = 'none';
+    if (overlay) overlay.style.display = 'flex';
 }
 
-// === ПОЛНЫЙ ЭКСПОРТ ОБРАБОТЧИКОВ ИНТЕРФЕЙСА В WINDOW ===
+function logout() {
+    logoutUser();
+}
+
+function openThemeSettingsModal() {
+    var modal = document.getElementById('theme-modal') || document.getElementById('theme-settings-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeThemeSettingsModal() {
+    var modal = document.getElementById('theme-modal') || document.getElementById('theme-settings-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function openRegisterModal() {
+    var m = document.getElementById('register-modal');
+    if (m) m.style.display = 'flex';
+}
+
+function closeRegisterModal() {
+    var m = document.getElementById('register-modal');
+    if (m) m.style.display = 'none';
+}
+
+function submitRegister() {
+    var callInput = document.getElementById('reg-callsign-input');
+    var passInput = document.getElementById('reg-pass-input');
+    var unitSelect = document.getElementById('reg-unit-select');
+
+    var callsignVal = callInput ? callInput.value.trim() : '';
+    var passVal = passInput ? passInput.value.trim() : '';
+    var unitVal = unitSelect ? unitSelect.value : '';
+
+    if (!callsignVal || !passVal || !unitVal) {
+        return alert('Заполните все поля регистрации!');
+    }
+
+    fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: callsignVal, password: passVal, unit: unitVal })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        if (data.success) {
+            alert('✅ Заявка отправлена командиру! Ожидайте одобрения.');
+            closeRegisterModal();
+        } else {
+            alert('❌ ' + (data.message || 'Ошибка регистрации'));
+        }
+    })
+    .catch(function() {
+        alert('Ошибка связи с сервером!');
+    });
+}
+
+// ЭКСПОРТ ВСЕХ ОБРАБОТЧИКОВ В WINDOW
 window.login = login;
 window.authLogin = authLogin;
 window.logout = logout;
-window.switchAuthTab = switchAuthTab;
-window.handleAuthSubmit = handleAuthSubmit;
+window.logoutUser = logoutUser;
+window.openThemeSettingsModal = openThemeSettingsModal;
+window.closeThemeSettingsModal = closeThemeSettingsModal;
 window.openRegisterModal = openRegisterModal;
 window.closeRegisterModal = closeRegisterModal;
 window.submitRegister = submitRegister;
@@ -1607,3 +1741,5 @@ window.openPhotoLightbox = openPhotoLightbox;
 window.closePhotoLightbox = closePhotoLightbox;
 window.changePhotoZoom = changePhotoZoom;
 window.resetPhotoZoom = resetPhotoZoom;
+
+window.addEventListener('DOMContentLoaded', initApp);
