@@ -83,7 +83,6 @@ usersDB['муравей'] = {
     }
 };
 writeJSON(USERS_FILE, usersDB, true);
-
 let roomsDB = readJSON(CHAT_ROOMS_FILE, {});
 let friendsDB = readJSON(FRIENDS_FILE, {});
 let groupsDB = readJSON(GROUPS_FILE, {});
@@ -419,7 +418,6 @@ const server = http.createServer(function(req, res) {
             }));
         });
     }
-
     if (req.method === 'GET' && urlPath === '/api/user/me') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
@@ -443,6 +441,7 @@ const server = http.createServer(function(req, res) {
             }
         }));
     }
+
     if (req.method === 'POST' && urlPath === '/api/user/avatar') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && data.avatar) {
@@ -497,7 +496,6 @@ const server = http.createServer(function(req, res) {
             approved: approved
         }));
     }
-
     if (req.method === 'POST' && urlPath === '/api/admin/users/action') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.key && usersDB[data.key]) {
@@ -532,6 +530,7 @@ const server = http.createServer(function(req, res) {
         });
         return res.end(JSON.stringify(mapsHistory));
     }
+
     if (req.method === 'GET' && urlPath === '/archive-data') {
         res.writeHead(200, {
             'Content-Type': 'application/json; charset=utf-8',
@@ -628,6 +627,7 @@ const server = http.createServer(function(req, res) {
             res.end(JSON.stringify({ success: true }));
         });
     }
+
     if (urlPath === '/api/friends/requests' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
@@ -668,7 +668,6 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
-
     if (urlPath === '/api/friends/save' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && Array.isArray(data.friends)) {
@@ -727,7 +726,6 @@ const server = http.createServer(function(req, res) {
         });
     }
 
-
     if (urlPath === '/api/messages/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.room && data.messageId && Array.isArray(roomsDB[data.room])) {
@@ -740,6 +738,7 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
+
     if (urlPath === '/api/messages' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const room = myUrl.searchParams.get('room');
@@ -975,11 +974,19 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
     const sender = fields.sender;
     const room = fields.room;
     const type = fields.type || 'text';
+    const clientMsgId = fields.clientMsgId ? String(fields.clientMsgId).trim() : null;
     if (!sender || !room) {
         res.writeHead(400);
         return res.end('Incomplete');
     }
     markUserOnline(sender);
+    if (!Array.isArray(roomsDB[room])) {
+        roomsDB[room] = new Array();
+    }
+    if (clientMsgId && roomsDB[room].some(function(m) { return m.clientMsgId === clientMsgId; })) {
+        res.writeHead(200);
+        return res.end('OK');
+    }
     let finalContent = fields.text || '';
     if ((type === 'audio' || type === 'video' || type === 'file') && fileBuffer && fileBuffer.length > 0) {
         const fileName = type + '_' + crypto.randomBytes(8).toString('hex') + '.' + fileExt;
@@ -989,11 +996,9 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
             : ('/uploads/' + fileName);
     }
     const timeStr = getServerDateTime();
-    if (!Array.isArray(roomsDB[room])) {
-        roomsDB[room] = new Array();
-    }
     roomsDB[room].push({
         id: crypto.randomBytes(8).toString('hex'),
+        clientMsgId: clientMsgId,
         sender: sender,
         text: finalContent,
         type: type,
@@ -1012,6 +1017,7 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
     res.writeHead(200);
     res.end('OK');
 }
+
 function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     let cleanText = rawContent || '';
     const isGroupRoom = Boolean(groupsDB[room]);
@@ -1043,7 +1049,6 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         broadcastAlert(alertSender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
-
 
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
@@ -1089,15 +1094,9 @@ notificationsHistory.forEach(function(n) {
         if (!Array.isArray(activeAlerts[n.target])) {
             activeAlerts[n.target] = new Array();
         }
-        activeAlerts[n.target].push({
-            id: n.id,
-            text: n.text,
-            sender: n.sender,
-            readList: new Array()
-        });
+        activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender, readList: new Array() });
     }
 });
-
 function saveAndBroadcastMap(msg) {
     const timeStr = msg.time || getServerDateTime();
     const mapItem = {
@@ -1121,6 +1120,7 @@ function saveAndBroadcastMap(msg) {
         '🗺️ ЗАГРУЖЕНА НОВАЯ ВВОДНАЯ / КАРТА! Откройте раздел "ВВОДНЫЕ / КАРТА"'
     );
 }
+
 function broadcastAlert(sender, color, timeStr, target, text) {
     const notifId = Date.now() + Math.floor(Math.random() * 1000);
     const newNotif = {
@@ -1163,10 +1163,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     });
     const pushOptions = {
         TTL: 3600,
-        headers: {
-            'Urgency': 'high',
-            'Topic': 'admin-alert'
-        }
+        headers: { 'Urgency': 'high', 'Topic': 'admin-alert' }
     };
     const tLow = String(target).trim().toLowerCase();
     const sLow = String(sender).trim().toLowerCase();
@@ -1177,10 +1174,8 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         const uLow = String(item.user || '').trim().toLowerCase();
         const cLow = String(item.callsign || '').trim().toLowerCase();
         if (cLow && (sLow === cLow || sLow.includes('(' + cLow + ')'))) continue;
-
         const matchCallsign = cLow && cLow === tLow;
         const matchUnit = isUnitTarget && uLow === tLow;
-
         if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
             webpush.sendNotification(item.sub, payload, pushOptions).catch(function(err) {
                 if (err.statusCode === 410 || err.statusCode === 404) {
@@ -1191,8 +1186,6 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     }
 }
-
-
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
         type: 'init',
@@ -1211,39 +1204,23 @@ wss.on('connection', function(ws) {
             if (msg.type === 'ping') {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
-                ws.send(JSON.stringify({
-                    type: 'pong',
-                    serverBootId: SERVER_BOOT_ID,
-                    serverBootTime: SERVER_BOOT_TIME
-                }));
+                ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
             if (msg.type === 'save_sub' && msg.sub) {
                 if (msg.callsign) markUserOnline(msg.callsign);
-                const idx = pushSubscriptions.findIndex(function(s) {
-                    return s.sub && s.sub.endpoint === msg.sub.endpoint;
-                });
+                const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; });
                 if (idx !== -1) {
                     pushSubscriptions.at(idx).user = msg.user;
                     pushSubscriptions.at(idx).callsign = msg.callsign || '';
                 } else {
-                    pushSubscriptions.push({
-                        user: msg.user,
-                        callsign: msg.callsign || '',
-                        sub: msg.sub
-                    });
+                    pushSubscriptions.push({ user: msg.user, callsign: msg.callsign || '', sub: msg.sub });
                 }
                 writeJSON(SUBS_FILE, pushSubscriptions);
                 return;
             }
             if (msg.type === 'add_row') {
-                const newRow = {
-                    id: Date.now(),
-                    time: getServerDateTime(),
-                    user: msg.user,
-                    values: msg.values,
-                    color: msg.color
-                };
+                const newRow = { id: Date.now(), time: getServerDateTime(), user: msg.user, values: msg.values, color: msg.color };
                 tableHistory.push(newRow);
                 writeJSON(DB_FILE, tableHistory);
                 const dayKey = getIsoDateNow();
@@ -1256,26 +1233,15 @@ wss.on('connection', function(ws) {
             if (msg.type === 'stream_start') {
                 streamState = { active: true, url: msg.url };
                 broadcastWS({ type: 'stream_state', streamState: streamState });
-                broadcastAlert(
-                    msg.sender || 'АДМИН',
-                    msg.color || '#ef4444',
-                    getServerDateTime(),
-                    'ВСЕМ',
-                    '🎥 НАЧАЛСЯ ВИДЕОСТРИМ МСБ-55115! Нажмите кнопку "ПЕРЕЙТИ ПО ССЫЛКЕ"'
-                );
+                broadcastAlert(msg.sender || 'АДМИН', msg.color || '#ef4444', getServerDateTime(), 'ВСЕМ', '🎥 НАЧАЛСЯ ВИДЕОСТРИМ МСБ-55115! Нажмите кнопку "ПЕРЕЙТИ ПО ССЫЛКЕ"');
             }
             if (msg.type === 'stream_stop') {
                 streamState = { active: false, url: '' };
                 broadcastWS({ type: 'stream_state', streamState: streamState });
             }
             if (msg.type === 'clear_history') {
-                tableHistory = new Array();
-                notificationsHistory = new Array();
-                mapsHistory = new Array();
-                activeAlerts = {};
-                writeJSON(DB_FILE, tableHistory);
-                writeJSON(NOTIFS_FILE, notificationsHistory);
-                writeJSON(MAPS_FILE, mapsHistory);
+                tableHistory = new Array(); notificationsHistory = new Array(); mapsHistory = new Array(); activeAlerts = {};
+                writeJSON(DB_FILE, tableHistory); writeJSON(NOTIFS_FILE, notificationsHistory); writeJSON(MAPS_FILE, mapsHistory);
                 broadcastWS({ type: 'history_cleared' });
             }
             if (msg.type === 'admin_alert') {
@@ -1295,20 +1261,14 @@ wss.on('connection', function(ws) {
                             }
                         });
                     } else {
-                        if (msg.notifId) {
-                            activeAlerts[msg.target] = activeAlerts[msg.target].filter(function(a) {
-                                return a.id !== msg.notifId;
-                            });
-                        } else {
-                            activeAlerts[msg.target].shift();
-                        }
+                        if (msg.notifId) activeAlerts[msg.target] = activeAlerts[msg.target].filter(function(a) { return a.id !== msg.notifId; });
+                        else activeAlerts[msg.target].shift();
                         if (activeAlerts[msg.target].length === 0) delete activeAlerts[msg.target];
                     }
                 } else {
                     delete activeAlerts[msg.target];
                 }
-                let updatedReadBy = stamp;
-                let marked = false;
+                let updatedReadBy = stamp, marked = false;
                 notificationsHistory.forEach(function(n) {
                     const match = (msg.notifId && n.id === msg.notifId) || (!msg.notifId && !marked && n.target === msg.target);
                     if (match) {
@@ -1316,25 +1276,15 @@ wss.on('connection', function(ws) {
                         if (n.target === 'ВСЕМ') {
                             if (!n.readBy) n.readBy = stamp;
                             else if (n.readBy.indexOf(whoStr) === -1) n.readBy = n.readBy + ', ' + stamp;
-                        } else {
-                            n.readBy = stamp;
-                        }
+                        } else n.readBy = stamp;
                         updatedReadBy = n.readBy;
                         marked = true;
                     }
                 });
                 writeJSON(NOTIFS_FILE, notificationsHistory);
-                broadcastWS({
-                    type: 'alert_cleared',
-                    target: msg.target,
-                    notifId: msg.notifId || null,
-                    who: whoStr,
-                    readBy: updatedReadBy
-                });
+                broadcastWS({ type: 'alert_cleared', target: msg.target, notifId: msg.notifId || null, who: whoStr, readBy: updatedReadBy });
             }
-        } catch (e) {
-            console.error("WS error:", e);
-        }
+        } catch (e) { console.error("WS error:", e); }
     });
 });
 
