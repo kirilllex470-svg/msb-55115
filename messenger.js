@@ -1696,6 +1696,7 @@ function updateTotalUnreadBadge() {
     if (total > 0) badge.innerText = total;
 }
 
+// === КОНЦОВКА ТОЛЬКО ДЛЯ messenger.js ===
 window.addEventListener('online', function() {
     clearNetworkErrorBanner();
     flushOutboxQueue();
@@ -1731,3 +1732,9 @@ window.inlineDeleteMessage = inlineDeleteMessage;
 window.playVideoWithSound = playVideoWithSound;
 window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
+window.triggerCallInDev = triggerCallInDev;
+window.acceptIncomingCall = acceptIncomingCall;
+window.hangupCall = hangupCall;
+window.handleCallSignal = handleCallSignal;
+window.toggleCallMicrophone = toggleCallMicrophone;
+window.toggleCallSpeaker = toggleCallSpeaker;
