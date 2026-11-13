@@ -380,3 +380,6 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
     font-weight: 700 !important;
     animation: typingPulse 1.1s infinite;
 }
+#server-update-modal {
+    z-index: 300000 !important;
+}
