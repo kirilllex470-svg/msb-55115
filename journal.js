@@ -1800,5 +1800,169 @@ function changeMsgImageZoom(delta) {
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
 }
+let isNetworkPoor = false;
+let initialConnectionDone = false;
+let fastProbeTimer = null;
+
+function makeJumpingHtml(text, clsName, stepDelaySec) {
+    const cls = clsName || 'jump-char';
+    const step = stepDelaySec || 0.09;
+    return Array.from(String(text)).map(function(ch, i) {
+        if (ch === ' ') return '&nbsp;';
+        return '<span class="' + cls + '" style="animation-delay:' + (i * step).toFixed(2) + 's">' + ch + '</span>';
+    }).join('');
+}
+
+function ensurePoorNetOverlay() {
+    if (document.getElementById('poor-net-overlay')) return;
+    const div = document.createElement('div');
+    div.id = 'poor-net-overlay';
+    div.innerHTML =
+        '<div class="poor-net-card">' +
+            '<div class="poor-net-radar">' +
+                '<svg viewBox="0 0 100 100" width="100%" height="100%">' +
+                    '<circle cx="50" cy="50" r="46" fill="#090d16" stroke="#f59e0b" stroke-width="2.5"/>' +
+                    '<circle cx="50" cy="50" r="30" fill="none" stroke="rgba(245,158,11,0.35)" stroke-width="1.5" stroke-dasharray="4 3"/>' +
+                    '<circle cx="50" cy="50" r="14" fill="none" stroke="rgba(56,189,248,0.45)" stroke-width="1.5"/>' +
+                    '<line x1="50" y1="4" x2="50" y2="96" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>' +
+                    '<line x1="4" y1="50" x2="96" y2="50" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>' +
+                    '<path class="radar-sweep" d="M50,50 L50,6 A44,44 0 0,1 88,28 Z" fill="rgba(245,158,11,0.38)"/>' +
+                    '<circle cx="50" cy="50" r="4" fill="#38bdf8"/>' +
+                '</svg>' +
+            '</div>' +
+            '<div class="msb-jump-title">' + makeJumpingHtml('МСБ55115', 'jump-char', 0.1) + '</div>' +
+            '<div class="poor-net-desc">' +
+                '📡 <b>Плохое качество связи</b><br>' +
+                'Идет проверка и установка соединения, обновление МСБ55115...' +
+            '</div>' +
+            '<div id="poor-net-sub" class="poor-net-substatus">⏳ Ожидание отклика канала связи...</div>' +
+        '</div>';
+    document.body.appendChild(div);
+}
+
+function setPoorNetworkState(poor, reasonText) {
+    ensurePoorNetOverlay();
+    isNetworkPoor = poor;
+    const overlay = document.getElementById('poor-net-overlay');
+    const sub = document.getElementById('poor-net-sub');
+
+    if (poor) {
+        if (sub && reasonText) sub.innerText = reasonText;
+        // Перед входом в главное меню или при полном обрыве показываем экран
+        if (!initialConnectionDone || !navigator.onLine) {
+            if (overlay) overlay.style.display = 'flex';
+        }
+        startAggressiveReconnect();
+    } else {
+        initialConnectionDone = true;
+        if (overlay) overlay.style.display = 'none';
+        stopAggressiveReconnect();
+        syncAllDataAfterReconnect();
+    }
+
+    if (typeof refreshChatHeaderStatusUI === 'function') {
+        refreshChatHeaderStatusUI();
+    }
+}
+
+function syncAllDataAfterReconnect() {
+    const sub = document.getElementById('poor-net-sub');
+    if (sub) sub.innerText = '✅ Связь поймана! Обновление сообщений и журнала...';
+    fetchMapsFromServer();
+    fetchArchiveFromServer();
+    refreshMyPermissionsFromServer();
+    if (typeof flushOutboxQueue === 'function') flushOutboxQueue();
+    if (typeof fetchMessages === 'function') fetchMessages();
+    if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests();
+}
+
+function probeTinySignal() {
+    if (!navigator.onLine) {
+        setPoorNetworkState(true, '❌ Сеть отсутствует. Ищем сигнал...');
+        return;
+    }
+    const ctrl = new AbortController();
+    const tid = setTimeout(function() { ctrl.abort(); }, 2800);
+
+    fetch('/manifest.json?ping=' + Date.now(), { cache: 'no-store', signal: ctrl.signal })
+        .then(function(r) {
+            clearTimeout(tid);
+            if (r.ok) {
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    connectWS(true);
+                } else {
+                    setPoorNetworkState(false);
+                }
+            }
+        })
+        .catch(function() {
+            clearTimeout(tid);
+            setPoorNetworkState(true, '📡 Слабый сигнал: попытка пробиться к серверу...');
+        });
+}
+
+function startAggressiveReconnect() {
+    if (fastProbeTimer) return;
+    fastProbeTimer = setInterval(function() {
+        if (ws && ws.readyState === WebSocket.OPEN && (Date.now() - lastPongTime < 7000)) {
+            setPoorNetworkState(false);
+            return;
+        }
+        probeTinySignal();
+    }, 1800);
+}
+
+function stopAggressiveReconnect() {
+    if (fastProbeTimer) {
+        clearInterval(fastProbeTimer);
+        fastProbeTimer = null;
+    }
+}
+
+// Проверка связи сразу при старте приложения (после заставки)
+window.addEventListener('load', function() {
+    ensurePoorNetOverlay();
+    setTimeout(function() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            setPoorNetworkState(true, '⏳ Установка защищенного соединения и обновление МСБ55115...');
+        } else {
+            initialConnectionDone = true;
+        }
+    }, 2200);
+});
+
+window.addEventListener('offline', function() {
+    setPoorNetworkState(true, '📡 Потеря сети! Ищем доступный канал...');
+});
+
+// Подключаемся к WebSocket-событиям для мгновенного снятия экрана и передачи "печатает"
+const _origConnectWS = connectWS;
+connectWS = function(forceReconnect) {
+    _origConnectWS(forceReconnect);
+    if (!ws || ws._msbHooked) return;
+    ws._msbHooked = true;
+
+    ws.addEventListener('open', function() {
+        setPoorNetworkState(false);
+    });
+
+    ws.addEventListener('message', function(ev) {
+        try {
+            const d = JSON.parse(ev.data);
+            if (d.type === 'init' || d.type === 'pong') {
+                if (isNetworkPoor || !initialConnectionDone) setPoorNetworkState(false);
+            }
+            if (d.type === 'user_typing' && typeof handleIncomingTypingWS === 'function') {
+                handleIncomingTypingWS(d.room, d.sender);
+            }
+        } catch (e) {}
+    });
+
+    ws.addEventListener('close', function() {
+        isNetworkPoor = true;
+        if (typeof refreshChatHeaderStatusUI === 'function') refreshChatHeaderStatusUI();
+        startAggressiveReconnect();
+    });
+};
 
 initApp();
