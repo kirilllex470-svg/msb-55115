@@ -62,13 +62,13 @@ function makeDirectRoomId(u1, u2) {
     var pair = sorted.join(',');
     return pair + '_' + pair;
 }
+
 function escapeEdgeHtml(str) {
     return String(str || '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
-
 function saveTextOutboxToStorage() {
     try {
         var onlyText = msbOutboxQueue.filter(function(item) {
@@ -411,7 +411,6 @@ function renderAvatarElement(el, name, avatarDataUrl) {
     }
 }
 
-
 function uploadMyAvatar(inputEl) {
     chatUser = getActiveChatIdentity();
     if (!inputEl.files || inputEl.files.length === 0 || !chatUser) return;
@@ -429,6 +428,9 @@ function uploadMyAvatar(inputEl) {
             var sy = (img.height - minSide) / 2;
             ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 160, 160);
             var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+            try {
+                localStorage.setItem('msb_cache_my_av_' + chatUser, dataUrl);
+            } catch (err) {}
             fetch('/api/user/avatar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -447,7 +449,6 @@ function uploadMyAvatar(inputEl) {
     };
     reader.readAsDataURL(file);
 }
-
 document.addEventListener('DOMContentLoaded', function() {
     ensureCleanMessengerTopbar();
     var tInput = document.getElementById('text-input');
@@ -467,25 +468,40 @@ document.addEventListener('DOMContentLoaded', function() {
         setAppTheme(savedTheme, true);
     }
     syncMessengerAuth();
-	    var pAv = document.getElementById('partner-avatar');
+    var pAv = document.getElementById('partner-avatar');
     if (pAv && !currentPartner) renderAvatarElement(pAv, '', '');
-
 });
+
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
 
-    // Сразу показываем сохраненный список друзей из памяти телефона
     if (friendsList.length === 0) {
         try {
-            var cachedFriends = JSON.parse(localStorage.getItem('msb_cache_friends_' + chatUser) || '[]');
+            var rawCachedFriends = localStorage.getItem('msb_cache_friends_' + chatUser);
+            var cachedFriends = rawCachedFriends ? JSON.parse(rawCachedFriends) : new Array();
             if (Array.isArray(cachedFriends) && cachedFriends.length > 0) {
                 friendsList = cachedFriends;
-                if (typeof myMessengerFriends !== 'undefined') myMessengerFriends = cachedFriends;
+                if (typeof myMessengerFriends !== 'undefined') {
+                    myMessengerFriends = cachedFriends;
+                }
+                if (typeof populateTargetSelect === 'function') {
+                    populateTargetSelect();
+                }
                 renderFriends();
+                updateTotalUnreadBadge();
             }
         } catch (e) {}
     }
+
+    try {
+        var cachedMyAv = localStorage.getItem('msb_cache_my_av_' + chatUser);
+        if (cachedMyAv) {
+            renderAvatarElement(document.getElementById('my-avatar'), chatUser, cachedMyAv);
+            var legAvInit = document.getElementById('my-avatar-legacy');
+            if (legAvInit) renderAvatarElement(legAvInit, chatUser, cachedMyAv);
+        }
+    } catch (e) {}
 
     fetch('/api/friends/get?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
@@ -520,14 +536,15 @@ function loadFriendsAndRequests() {
         .then(function(r) { return r.json(); })
         .then(function(d) {
             if (d && d.avatar) {
+                try {
+                    localStorage.setItem('msb_cache_my_av_' + chatUser, d.avatar);
+                } catch (e) {}
                 renderAvatarElement(document.getElementById('my-avatar'), chatUser, d.avatar);
                 var legAv = document.getElementById('my-avatar-legacy');
                 if (legAv) renderAvatarElement(legAv, chatUser, d.avatar);
             }
         }).catch(function() {});
 }
-
-
 function renderRequests() {
     var box = document.getElementById('requests-box');
     if (!box) return;
@@ -597,7 +614,6 @@ function renderFriends() {
         box.appendChild(item);
     });
 }
-
 function openCreateGroupModal() {
     document.getElementById('group-modal').style.display = 'flex';
 }
@@ -639,6 +655,7 @@ function submitCreateGroup() {
         }
     });
 }
+
 function deleteFriend(friendObj, event) {
     chatUser = getActiveChatIdentity();
     if (event) event.stopPropagation();
@@ -673,7 +690,6 @@ function deleteFriend(friendObj, event) {
         loadFriendsAndRequests();
     });
 }
-
 function resetChatArea() {
     currentPartner = null;
     currentRoomId = null;
@@ -756,7 +772,6 @@ function markChatAsRead(roomId) {
         loadFriendsAndRequests();
     });
 }
-
 function sendMessage() {
     chatUser = getActiveChatIdentity();
     var textInput = document.getElementById('text-input');
@@ -782,6 +797,7 @@ function sendMessage() {
     });
     textInput.focus();
 }
+
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -938,7 +954,6 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
         isHorizontal = false;
         container.style.transition = 'none';
     }, { passive: true });
-
     container.addEventListener('touchmove', function(e) {
         if (!isSwiping) return;
         var touch = e.touches.item(0);
@@ -955,6 +970,7 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
             rightIndicator.style.opacity = (currentX < -35) ? '1' : '0';
         }
     }, { passive: false });
+
     container.addEventListener('touchend', function() {
         isSwiping = false;
         container.style.transition = 'transform 0.2s cubic-bezier(0.1, 0.8, 0.3, 1)';
@@ -1071,17 +1087,24 @@ function fetchMessages() {
     var modal = document.getElementById('messenger-modal');
     var isModalOpen = modal && modal.style.display === 'flex';
 
-    // Если экран чата пуст, мгновенно рисуем историю из памяти телефона
     if (renderedMsgIds.size === 0) {
         try {
-            var cachedMsgs = JSON.parse(localStorage.getItem('msb_cache_room_' + currentRoomId) || '[]');
+            var rawRoomCache = localStorage.getItem('msb_cache_room_' + currentRoomId);
+            var cachedMsgs = rawRoomCache ? JSON.parse(rawRoomCache) : new Array();
             if (Array.isArray(cachedMsgs) && cachedMsgs.length > 0) {
+                var phInit = mDiv.querySelector('.chat-placeholder');
+                if (phInit) phInit.remove();
                 cachedMsgs.forEach(function(msg) {
-                    var isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
-                    var checkIcon = isMy ? (msg.read ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;">✓✓</span>' : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;">✓</span>') : '';
+                    var isMyInit = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
+                    var checkInit = isMyInit
+                        ? (msg.read
+                            ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;" title="Прочитано">✓✓</span>'
+                            : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;" title="Доставлено">✓</span>')
+                        : '';
                     renderedMsgIds.add(msg.id);
-                    renderSingleRow(mDiv, msg, isMy, checkIcon);
+                    renderSingleRow(mDiv, msg, isMyInit, checkInit);
                 });
+                lastMessagesCount = cachedMsgs.length;
                 mDiv.scrollTop = mDiv.scrollHeight;
             }
         } catch (e) {}
@@ -1094,7 +1117,6 @@ function fetchMessages() {
         try {
             localStorage.setItem('msb_cache_room_' + currentRoomId, JSON.stringify(data));
         } catch (e) {}
-
         var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
         if (!isCurrentGroup && currentPartner) {
             var stEl = document.getElementById('chat-status');
@@ -1157,6 +1179,13 @@ function fetchMessages() {
     }).catch(function() {});
 }
 
+function renderSingleRow(mDiv, msg, isMy, checkIcon) {
+    if (msg.clientMsgId) {
+        var tempDup = mDiv.querySelector('.msb-pending-row[data-lid="' + msg.clientMsgId + '"]');
+        if (tempDup) tempDup.remove();
+        msbOutboxQueue = msbOutboxQueue.filter(function(item) { return item && item.lid !== msg.clientMsgId; });
+        saveTextOutboxToStorage();
+    }
     var row = document.createElement('div');
     row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
     row.setAttribute('data-msg-id', msg.id);

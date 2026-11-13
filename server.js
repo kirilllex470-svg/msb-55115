@@ -247,38 +247,26 @@ const SW_CODE = [
     "    '/icon-512.png'",
     "];",
     "",
-    "// 1. Сохраняем всю оболочку приложения при установке",
     "self.addEventListener('install', function(e) {",
     "    self.skipWaiting();",
-    "    e.waitUntil(",
-    "        caches.open(SHELL_CACHE).then(function(cache) {",
-    "            return cache.addAll(SHELL_ASSETS);",
-    "        })",
-    "    );",
+    "    e.waitUntil(caches.open(SHELL_CACHE).then(function(cache) { return cache.addAll(SHELL_ASSETS); }));",
     "});",
-    "",
-    "// 2. Очистка устаревших версий кэша",
     "self.addEventListener('activate', function(e) {",
-    "    e.waitUntil(",
-    "        caches.keys().then(function(keys) {",
-    "            return Promise.all(keys.map(function(k) {",
-    "                if (k !== SHELL_CACHE && k !== MEDIA_CACHE) return caches.delete(k);",
-    "            }));",
-    "        }).then(function() {",
-    "            return clients.claim();",
-    "        })",
-    "    );",
+    "    e.waitUntil(caches.keys().then(function(keys) {",
+    "        return Promise.all(keys.map(function(k) {",
+    "            if (k !== SHELL_CACHE && k !== MEDIA_CACHE) return caches.delete(k);",
+    "        }));",
+    "    }).then(function() { return clients.claim(); }));",
     "});",
     "",
-    "// Вспомогательная функция для работы audio/video перемотки (Range-запросы) из кэша",
     "function buildRangeResponse(request, cachedResponse) {",
     "    const rangeHeader = request.headers.get('range');",
     "    if (!rangeHeader) return Promise.resolve(cachedResponse);",
     "    return cachedResponse.arrayBuffer().then(function(buf) {",
     "        const bytes = /^bytes=(\\d+)-(\\d+)?$/.exec(rangeHeader);",
     "        if (!bytes) return cachedResponse;",
-    "        const start = Number(bytes[1]);",
-    "        const end = bytes[2] ? Number(bytes[2]) : buf.byteLength - 1;",
+    "        const start = Number(bytes.at(1));",
+    "        const end = bytes.at(2) ? Number(bytes.at(2)) : buf.byteLength - 1;",
     "        const slice = buf.slice(start, end + 1);",
     "        return new Response(slice, {",
     "            status: 206,",
@@ -293,51 +281,37 @@ const SW_CODE = [
     "    });",
     "}",
     "",
-    "// 3. Перехват всех запросов",
     "self.addEventListener('fetch', function(event) {",
     "    const url = new URL(event.request.url);",
     "    if (event.request.method !== 'GET') return;",
-    "",
-    "    // А) Медиафайлы из чата (/uploads/...): берем из памяти телефона, если нет — качаем с Amvera и сохраняем",
     "    if (url.pathname.startsWith('/uploads/')) {",
-    "        event.respondWith(",
-    "            caches.open(MEDIA_CACHE).then(function(cache) {",
-    "                return cache.match(url.pathname).then(function(cachedRes) {",
-    "                    if (cachedRes) return buildRangeResponse(event.request, cachedRes);",
-    "                    return fetch(url.pathname).then(function(networkRes) {",
-    "                        if (networkRes && networkRes.status === 200) {",
-    "                            cache.put(url.pathname, networkRes.clone());",
-    "                            return buildRangeResponse(event.request, networkRes);",
-    "                        }",
-    "                        return networkRes;",
-    "                    });",
+    "        event.respondWith(caches.open(MEDIA_CACHE).then(function(cache) {",
+    "            return cache.match(url.pathname).then(function(cachedRes) {",
+    "                if (cachedRes) return buildRangeResponse(event.request, cachedRes);",
+    "                return fetch(url.pathname).then(function(networkRes) {",
+    "                    if (networkRes && networkRes.status === 200) {",
+    "                        cache.put(url.pathname, networkRes.clone());",
+    "                        return buildRangeResponse(event.request, networkRes);",
+    "                    }",
+    "                    return networkRes;",
     "                });",
-    "            })",
-    "        );",
-    "        return;",
-    "    }",
-    "",
-    "    // Б) Живые API-запросы (новые сообщения, онлайн-статусы, заявки) идут напрямую на сервер",
-    "    if (url.pathname.startsWith('/api/') || url.pathname === '/maps-list' || url.pathname === '/archive-data') {",
-    "        return;",
-    "    }",
-    "",
-    "    // В) Оболочка приложения (HTML, CSS, JS, иконки) открывается мгновенно из памяти телефона",
-    "    event.respondWith(",
-    "        caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
-    "            if (cachedRes) return cachedRes;",
-    "            return fetch(event.request).then(function(networkRes) {",
-    "                if (networkRes && networkRes.status === 200) {",
-    "                    const resClone = networkRes.clone();",
-    "                    caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
-    "                }",
-    "                return networkRes;",
     "            });",
-    "        })",
-    "    );",
+    "        }));",
+    "        return;",
+    "    }",
+    "    if (url.pathname.startsWith('/api/') || url.pathname === '/maps-list' || url.pathname === '/archive-data') return;",
+    "    event.respondWith(caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
+    "        if (cachedRes) return cachedRes;",
+    "        return fetch(event.request).then(function(networkRes) {",
+    "            if (networkRes && networkRes.status === 200) {",
+    "                const resClone = networkRes.clone();",
+    "                caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
+    "            }",
+    "            return networkRes;",
+    "        });",
+    "    }));",
     "});",
     "",
-    "// 4. Push-уведомления",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!', tag: 'msb-alert' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -345,7 +319,7 @@ const SW_CODE = [
     "        body: data.body,",
     "        icon: '/icon-192.png',",
     "        badge: '/icon-192.png',",
-    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
+    "        vibrate: Array.of(400, 100, 400, 100, 400, 200, 600),",
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
@@ -358,16 +332,13 @@ const SW_CODE = [
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
-    "            var cl = clientList[i];",
+    "            var cl = clientList.at(i);",
     "            if (cl && 'focus' in cl) return cl.focus();",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
 ].join('\n');
-
-
-
 function readBodyJSON(req, cb) {
     let body = '';
     req.on('data', function(chunk) {
@@ -523,6 +494,7 @@ const server = http.createServer(function(req, res) {
             }));
         });
     }
+
     if (req.method === 'GET' && urlPath === '/api/user/me') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
@@ -601,6 +573,7 @@ const server = http.createServer(function(req, res) {
             approved: approved
         }));
     }
+
     if (req.method === 'POST' && urlPath === '/api/admin/users/action') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.key && usersDB[data.key]) {
@@ -698,7 +671,6 @@ const server = http.createServer(function(req, res) {
         });
         return res.end(JSON.stringify(listData));
     }
-
     if (urlPath === '/api/friends/request/send' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.from || !data.to) {
@@ -773,6 +745,7 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
+
     if (urlPath === '/api/friends/save' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && Array.isArray(data.friends)) {
@@ -784,7 +757,6 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
-
     if (urlPath === '/api/groups/create' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.creator || !data.groupName || !Array.isArray(data.members)) {
@@ -983,7 +955,6 @@ const server = http.createServer(function(req, res) {
             res.end(data);
         }
     });
-
 });
 
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup) {
@@ -1021,6 +992,7 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         online: isOnline
     };
 }
+
 function handleMultipartSend(req, res) {
     const contentType = req.headers['content-type'] || '';
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
