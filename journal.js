@@ -1,29 +1,29 @@
-const USERS_CONFIG = Array.of(
+const USERS_CONFIG = [
     { name: "ШР", pass: "551151111", color: "#3b82f6" },
     { name: "РОТА-1", pass: "551152222", color: "#a855f7" },
     { name: "РОТА-2", pass: "551153333", color: "#22c55e" },
     { name: "РОТА-3", pass: "551154444", color: "#eab308" },
     { name: "АДМИН", pass: "5555", color: "#ef4444" }
-);
+];
 const ADMIN_NAME = "АДМИН";
 
-const COLUMNS_CONFIG = Array.of(
-    { label: "ГРУППА", options: Array.of("1", "2", "3", "4", "5") },
-    { label: "ИСХОДНИКИ", options: Array.of(
+const COLUMNS_CONFIG = [
+    { label: "ГРУППА", options: ["1", "2", "3", "4", "5"] },
+    { label: "ИСХОДНИКИ", options: [
         "НАЧАЛИ ДВИЖЕНИЕ", "ЖДУТ", "ИДУТ", "ПЕРЕСЕКАЮТ ОТКРЫТКУ",
         "ПРОШЛИ ИСХОДНЫЙ ПУНКТ", "ЗАНЯТИЕ Р-НА ФОР-Я ГРУПП",
         "ЗАНЯТИЕ ПЕРЕФОР-Я Р-НА ГРУПП", "ВЫХОД НА РУБЕЖ АТАКИ",
         "ВЫХОД НА РУБЕЖ ШТУРМА", "ЗАНИМАЮТСЯ МЕДИЦИНОЙ",
         "ЗАНИМАЮТСЯ СВЯЗЬЮ", "ОБОРОНА", "РАБОТАЮТ В ОБОРОНЕ",
         "ШТУРМУЮТ", "РВБС"
-    )},
-    { label: "ЦВЕТ ТОЧКИ", options: Array.of(
+    ]},
+    { label: "ЦВЕТ ТОЧКИ", options: [
         "ФИОЛЕТОВЫЙ", "БИРЮЗОВАЯ", "БИРЮЗОВАЯ-А", "СЕРАЯ", "ЗЕЛЕНАЯ",
         "СИНИЯ", "ЖЕЛТАЯ", "ОРАНЖЕВАЯ", "КРАСНАЯ", "РОЗОВАЯ",
         "РОЗОВАЯ-А", "БЕЖЕВАЯ", "КОРИЧНЕВАЯ", "ЧЕРНАЯ", "БОРДОВАЯ"
-    )},
+    ]},
     { label: "НОМЕР ТОЧКИ", options: new Array(), digitsOnly: true },
-    { label: "ЛЕСОПОЛОСА", options: Array.of(
+    { label: "ЛЕСОПОЛОСА", options: [
         "ФАКС", "ЗУБР1", "ПОЭТ", "СУДЬЯ", "СОР4", "СМОГ-1", "КИЛТ", "ЗАЯЦ", "ЗАМЕНА", "КРАСКА",
         "МАСТАК1", "ВОЛК3", "АНГЕЛ", "ВАЛИК1", "ЛЕЖАК", "ЛОТ ", "ПРИНТ7",
         "ГОН1", "СТОП-3", "ТАБЛА", "ПОКЕР", "ЛОКОН", "КАЛЫМ", "КАРМАН1",
@@ -40,9 +40,10 @@ const COLUMNS_CONFIG = Array.of(
         "-->ГИК", "-->МУРАЛ", "-->ГРЕК", "-->БАКУ", "-->БАКУ-1",
         "-->САЛАТ", "-->САЛАТ-1", "-->ГУК", "-->СМЕНА-1", "-->КАБАН",
         "-->КАБАН-2", "-->КАБАН-3", "-->ЛИС-1", "-->ЛИС-2", "-->ЛИС-3"
-    )},
+    ]},
     { label: "ПРИМЕЧАНИЯ", options: new Array() }
-);
+];
+
 let ws = null;
 let currentUser = null;
 let currentCallsign = "";
@@ -73,21 +74,6 @@ let deferredPrompt = null;
 let knownServerBootId = sessionStorage.getItem('msb_server_boot_id') || null;
 let pendingServerBootId = null;
 
-function saveLocalJournalCache(key, data) {
-    try {
-        localStorage.setItem('msb_jcache_' + key, JSON.stringify(data));
-    } catch (e) {}
-}
-
-function loadLocalJournalCache(key, fallback) {
-    try {
-        const raw = localStorage.getItem('msb_jcache_' + key);
-        return raw ? JSON.parse(raw) : fallback;
-    } catch (e) {
-        return fallback;
-    }
-}
-
 function getStaticDateTime() {
     const d = new Date();
     const dd = String(d.getDate()).padStart(2, '0');
@@ -97,12 +83,13 @@ function getStaticDateTime() {
     const min = String(d.getMinutes()).padStart(2, '0');
     return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min;
 }
-const SPLASH_FILES = Array.of(
+
+const SPLASH_FILES = [
     "boot/kernel_msb55115.sys", "crypto/cipher_channel_v4.dat", "net/websocket_sync_protocol.dll",
     "maps/tactical_forest_sectors.db", "auth/unit_credentials_guard.bin", "push/vapid_service_worker.js",
     "stream/salutejazz_rtc_bridge.mod", "journal/history_storage_engine.json", "audio/siren_emergency_synth.wav",
     "system/msb55115_ready_state.ok"
-);
+];
 
 function runSplash() {
     const s = document.getElementById('splash-screen');
@@ -126,7 +113,6 @@ function runSplash() {
         }
     }, 20);
 }
-
 window.addEventListener('beforeinstallprompt', function(e) {
     e.preventDefault();
     deferredPrompt = e;
@@ -151,12 +137,13 @@ async function installPWA() {
         alert('Чтобы установить приложение МСБ55115, откройте меню браузера (⋮ или "Поделиться") и нажмите "Установить приложение" / "Добавить на главный экран".');
     }
 }
+
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) outputArray.fill(rawData.charCodeAt(i), i, i + 1);
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
     return outputArray;
 }
 
@@ -208,8 +195,9 @@ function createWavUrl(freq, durationSec, volume) {
         }
         view.setInt16(44 + i * 2, sample, true);
     }
-    return URL.createObjectURL(new Blob(Array.of(buf), { type: 'audio/wav' }));
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
+
 function unlockMobileFeatures() {
     try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -224,7 +212,7 @@ function unlockMobileFeatures() {
     }
 }
 
-const SOUND_PRESETS = Array.of(
+const SOUND_PRESETS = [
     { id: 'alarm1', name: '🚨 Тревога 1 (Сирена МСБ — стандарт)', type: 'alarm' },
     { id: 'alarm2', name: '🚨 Тревога 2 (Двойной радарный импульс)', type: 'alarm' },
     { id: 'nice1',  name: '🎵 Красивый 1 (Хрустальный аккорд)', type: 'nice' },
@@ -232,8 +220,7 @@ const SOUND_PRESETS = Array.of(
     { id: 'nice3',  name: '🎵 Красивый 3 (Тёплая маримба)', type: 'nice' },
     { id: 'bank1',  name: '🏦 Банк 1 (Сбер / Перевод зачислен)', type: 'bank' },
     { id: 'bank2',  name: '🏦 Банк 2 (Премиум Банк / Push)', type: 'bank' }
-);
-
+];
 function playToneNotes(notes, waveType) {
     try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -255,6 +242,7 @@ function playToneNotes(notes, waveType) {
         });
     } catch (e) {}
 }
+
 function playSoundById(soundId, isPreview) {
     const id = soundId || selectedSoundId || 'alarm1';
     try {
@@ -263,55 +251,55 @@ function playSoundById(soundId, isPreview) {
         }
         if (id === 'alarm1') {
             if (!isPreview && sirenAudio) sirenAudio.play().catch(function() {});
-            playToneNotes(Array.of(
+            playToneNotes([
                 { f: 880, fEnd: 1140, t: 0, d: 0.25, v: 0.4, type: 'sawtooth' },
                 { f: 1140, fEnd: 880, t: 0.25, d: 0.25, v: 0.4, type: 'sawtooth' }
-            ));
+            ]);
         } else if (id === 'alarm2') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes(Array.of(
+            playToneNotes([
                 { f: 960, t: 0, d: 0.14, v: 0.45, type: 'square' },
                 { f: 960, t: 0.18, d: 0.14, v: 0.45, type: 'square' },
                 { f: 1280, t: 0.38, d: 0.28, v: 0.45, type: 'square' }
-            ));
+            ]);
         } else if (id === 'nice1') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes(Array.of(
+            playToneNotes([
                 { f: 523.25, t: 0, d: 0.45, v: 0.3, type: 'sine' },
                 { f: 659.25, t: 0.10, d: 0.45, v: 0.3, type: 'sine' },
                 { f: 783.99, t: 0.20, d: 0.55, v: 0.3, type: 'sine' },
                 { f: 1046.50, t: 0.30, d: 0.70, v: 0.35, type: 'sine' }
-            ));
+            ]);
         } else if (id === 'nice2') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes(Array.of(
+            playToneNotes([
                 { f: 440, t: 0, d: 0.35, v: 0.3, type: 'triangle' },
                 { f: 554.37, t: 0.18, d: 0.35, v: 0.3, type: 'triangle' },
                 { f: 659.25, t: 0.36, d: 0.65, v: 0.35, type: 'triangle' }
-            ));
+            ]);
         } else if (id === 'nice3') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes(Array.of(
+            playToneNotes([
                 { f: 587.33, t: 0, d: 0.22, v: 0.35, type: 'sine' },
                 { f: 880, t: 0.14, d: 0.22, v: 0.35, type: 'sine' },
                 { f: 739.99, t: 0.28, d: 0.22, v: 0.35, type: 'sine' },
                 { f: 1174.66, t: 0.42, d: 0.55, v: 0.4, type: 'sine' }
-            ));
+            ]);
         } else if (id === 'bank1') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes(Array.of(
+            playToneNotes([
                 { f: 783.99, t: 0, d: 0.16, v: 0.4, type: 'sine' },
-                { f: 1567.98, t: 0.12, d: 0.15, v: 0.18, type: 'triangle' },
+                { f: 1567.98, t: 0.12, d: 0.15, v: 0.3, type: 'triangle' },
                 { f: 1174.66, t: 0.14, d: 0.48, v: 0.45, type: 'sine' },
                 { f: 2349.32, t: 0.14, d: 0.35, v: 0.18, type: 'triangle' }
-            ));
+            ]);
         } else if (id === 'bank2') {
             if (sirenAudio) sirenAudio.pause();
-            playToneNotes(Array.of(
+            playToneNotes([
                 { f: 1046.50, t: 0, d: 0.11, v: 0.38, type: 'sine' },
                 { f: 1318.51, t: 0.09, d: 0.11, v: 0.38, type: 'sine' },
                 { f: 1567.98, t: 0.18, d: 0.45, v: 0.45, type: 'sine' }
-            ));
+            ]);
         }
     } catch (e) {}
 }
@@ -319,6 +307,7 @@ function playSoundById(soundId, isPreview) {
 function playBeep() {
     playSoundById(selectedSoundId, false);
 }
+
 function openSoundModal() {
     const modal = document.getElementById('sound-modal');
     const list = document.getElementById('sound-options-list');
@@ -359,7 +348,6 @@ function handleStreamBtnClick() {
         }
     }
 }
-
 function openStreamInAppPage(url) {
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
@@ -376,6 +364,7 @@ function openStreamExternalFallback() {
     const url = (activeStream && activeStream.url) ? activeStream.url : document.getElementById('stream-url-input').value.trim();
     if (url) window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
 }
+
 function openActiveStreamWindow() {
     if (activeStream && activeStream.url) {
         window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
@@ -442,6 +431,7 @@ function isMapVisibleForMe(m) {
     if (currentCallsign && (m.target === currentCallsign || m.sender === currentCallsign)) return true;
     return false;
 }
+
 let photoZoom = 1, photoPanX = 0, photoPanY = 0, isDraggingPhoto = false, dragStartX = 0, dragStartY = 0, zoomEventsBound = false;
 
 function applyPhotoTransform() {
@@ -526,24 +516,17 @@ function renderMapsGrid() {
 }
 
 function fetchMapsFromServer() {
-    if (allMaps.length === 0) {
-        const cachedMaps = loadLocalJournalCache('maps', new Array());
-        if (Array.isArray(cachedMaps) && cachedMaps.length > 0) {
-            allMaps = cachedMaps;
-            renderMapsGrid();
-        }
-    }
     fetch('/maps-list?t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(list) {
             if (Array.isArray(list)) {
                 allMaps = list;
-                saveLocalJournalCache('maps', list);
                 renderMapsGrid();
             }
         })
         .catch(function() {});
 }
+
 function uploadMapPhoto() {
     if (currentUser !== ADMIN_NAME) {
         return alert('Загружать карты может только АДМИН!');
@@ -595,7 +578,6 @@ function uploadMapPhoto() {
                 fileInput.value = '';
                 if (data && Array.isArray(data.maps)) {
                     allMaps = data.maps;
-                    saveLocalJournalCache('maps', data.maps);
                     renderMapsGrid();
                 } else {
                     fetchMapsFromServer();
@@ -609,6 +591,7 @@ function uploadMapPhoto() {
     };
     reader.readAsDataURL(file);
 }
+
 const MONTH_NAMES = Array.of(
     "ЯНВАРЬ", "ФЕВРАЛЬ", "МАРТ", "АПРЕЛЬ", "МАЙ", "ИЮНЬ",
     "ИЮЛЬ", "АВГУСТ", "СЕНТЯБРЬ", "ОКТЯБРЬ", "НОЯБРЬ", "ДЕКАБРЬ"
@@ -625,20 +608,11 @@ function formatRuDateFromIso(iso) {
 }
 
 function fetchArchiveFromServer(cb) {
-    if (Object.keys(archiveData).length === 0) {
-        const cachedArch = loadLocalJournalCache('archive', {});
-        if (cachedArch && typeof cachedArch === 'object' && Object.keys(cachedArch).length > 0) {
-            archiveData = cachedArch;
-            renderArchiveCalendar();
-            if (selectedArchiveDate) selectArchiveDate(selectedArchiveDate);
-        }
-    }
     fetch('/archive-data?t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data && typeof data === 'object') {
                 archiveData = data;
-                saveLocalJournalCache('archive', data);
                 renderArchiveCalendar();
                 if (selectedArchiveDate) {
                     selectArchiveDate(selectedArchiveDate);
@@ -732,6 +706,7 @@ function selectArchiveDate(dateKey) {
         tbody.appendChild(tr);
     });
 }
+
 function isNotificationVisibleForMe(notif) {
     if (!notif) return false;
     if (notif.target === "ВСЕМ") return true;
@@ -788,6 +763,7 @@ function updateBroadcastTicker() {
     });
     ticker.innerText = parts.join('   |   ');
 }
+
 function getAlertsQueue(target) {
     if (!target) return new Array();
     const tLow = String(target).trim().toLowerCase();
@@ -805,7 +781,6 @@ function getAlertsQueue(target) {
     }
     return Array.of(raw);
 }
-
 function checkServerVersionChange(bootId, bootTime) {
     if (!bootId) return;
     if (!knownServerBootId) {
@@ -832,23 +807,18 @@ async function forceReloadApp() {
         sessionStorage.removeItem('msb_server_boot_id');
     }
     try {
-        if ('caches' in window) {
-            const keys = await caches.keys();
-            for (let k of keys) {
-                if (k !== 'msb55115-media-v1') {
-                    await caches.delete(k);
-                }
-            }
-        }
         if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
-            for (let r of regs) {
-                await r.unregister();
-            }
+            for (let r of regs) { await r.update(); }
+        }
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            for (let k of keys) { await caches.delete(k); }
         }
     } catch (e) {}
     window.location.href = window.location.pathname + '?v=' + Date.now();
 }
+
 let lastPongTime = Date.now();
 
 function connectWS(forceReconnect) {
@@ -864,6 +834,7 @@ function connectWS(forceReconnect) {
 
     ws.onopen = function() {
         lastPongTime = Date.now();
+        setPoorNetworkState(false);
         subscribeToWebPush();
     };
 
@@ -873,13 +844,21 @@ function connectWS(forceReconnect) {
         if (msg.serverBootId) {
             checkServerVersionChange(msg.serverBootId, msg.serverBootTime);
         }
-        if (msg.type === 'pong') return;
+        if (msg.type === 'pong') {
+            if (isNetworkPoor || !initialConnectionDone) setPoorNetworkState(false);
+            return;
+        }
+        if (msg.type === 'user_typing') {
+            if (typeof handleIncomingTypingWS === 'function') {
+                handleIncomingTypingWS(msg.room, msg.sender);
+            }
+            return;
+        }
         if (msg.type === 'init') {
+            if (isNetworkPoor || !initialConnectionDone) setPoorNetworkState(false);
             document.getElementById('table-body').innerHTML = '';
             msg.data.forEach(appendRow);
-            saveLocalJournalCache('table_rows', msg.data);
             allNotifications = msg.notifications || new Array();
-            saveLocalJournalCache('notifs', allNotifications);
             renderNotificationsWindow();
             fetchMapsFromServer();
             fetchArchiveFromServer();
@@ -900,14 +879,10 @@ function connectWS(forceReconnect) {
         }
         if (msg.type === 'new_row') {
             appendRow(msg.row);
-            const curRows = loadLocalJournalCache('table_rows', new Array());
-            curRows.push(msg.row);
-            saveLocalJournalCache('table_rows', curRows);
             fetchArchiveFromServer();
         }
         if (msg.type === 'daily_archived') {
             document.getElementById('table-body').innerHTML = '';
-            saveLocalJournalCache('table_rows', new Array());
             fetchArchiveFromServer();
         }
         if (msg.type === 'new_map') {
@@ -931,9 +906,6 @@ function connectWS(forceReconnect) {
             allNotifications = new Array();
             allMaps = new Array();
             pendingAlerts = {};
-            saveLocalJournalCache('table_rows', new Array());
-            saveLocalJournalCache('notifs', new Array());
-            saveLocalJournalCache('maps', new Array());
             stopAlertVisuals();
             renderNotificationsWindow();
             renderMapsGrid();
@@ -941,21 +913,13 @@ function connectWS(forceReconnect) {
         if (msg.type === 'admin_alert') {
             if (msg.notif) {
                 const exists = allNotifications.some(function(n) { return n.id === msg.notif.id; });
-                if (!exists) {
-                    allNotifications.push(msg.notif);
-                    saveLocalJournalCache('notifs', allNotifications);
-                }
+                if (!exists) allNotifications.push(msg.notif);
                 renderNotificationsWindow();
             }
             const queue = getAlertsQueue(msg.target);
             const alertId = msg.notif ? msg.notif.id : Date.now();
             if (!queue.some(function(a) { return a.id === alertId; })) {
-                queue.push({
-                    id: alertId,
-                    text: msg.text,
-                    sender: msg.sender || ADMIN_NAME,
-                    readList: new Array()
-                });
+                queue.push({ id: alertId, text: msg.text, sender: msg.sender || ADMIN_NAME, readList: new Array() });
             }
             pendingAlerts[msg.target] = queue;
             checkAndShowAlerts(true);
@@ -966,34 +930,33 @@ function connectWS(forceReconnect) {
     };
 
     ws.onclose = function() {
-        setTimeout(function() { connectWS(false); }, 1500);
+        isNetworkPoor = true;
+        if (typeof refreshChatHeaderStatusUI === 'function') refreshChatHeaderStatusUI();
+        startAggressiveReconnect();
+        setTimeout(function() { connectWS(false); }, 1800);
     };
 }
 
 setInterval(function() {
     if (ws && ws.readyState === WebSocket.OPEN) {
         if (Date.now() - lastPongTime > 12000) {
+            isNetworkPoor = true;
+            if (typeof refreshChatHeaderStatusUI === 'function') refreshChatHeaderStatusUI();
             connectWS(true);
             return;
         }
-        ws.send(JSON.stringify({
-            type: 'ping',
-            user: currentUser || '',
-            callsign: currentCallsign || ''
-        }));
+        ws.send(JSON.stringify({ type: 'ping', user: currentUser || '', callsign: currentCallsign || '' }));
     } else {
         connectWS(false);
     }
 }, 4000);
 
-window.addEventListener('online', function() {
-    connectWS(true);
-});
+window.addEventListener('online', function() { connectWS(false); });
 
 document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
         if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 8000)) {
-            connectWS(true);
+            connectWS(false);
         } else {
             checkAndShowAlerts(false);
         }
@@ -1023,22 +986,14 @@ function handleAlertClearedMsg(msg) {
 
     if (msg.notifId) {
         allNotifications.forEach(function(n) {
-            if (n.id === msg.notifId) {
-                n.read = true;
-                n.readBy = msg.readBy || '';
-            }
+            if (n.id === msg.notifId) { n.read = true; n.readBy = msg.readBy || ''; }
         });
     } else {
         let marked = false;
         allNotifications.forEach(function(n) {
-            if (!marked && n.target === msg.target) {
-                n.read = true;
-                n.readBy = msg.readBy || '';
-                marked = true;
-            }
+            if (!marked && n.target === msg.target) { n.read = true; n.readBy = msg.readBy || ''; marked = true; }
         });
     }
-    saveLocalJournalCache('notifs', allNotifications);
     renderNotificationsWindow();
 
     const myName = currentCallsign || currentUser || 'Просмотр';
@@ -1056,9 +1011,7 @@ function populateTargetSelect() {
     const mapSelect = document.getElementById('map-target-select');
     const onlyFriends = myMessengerFriends.filter(function(f) { return f && !f.isGroup; });
     const sigParts = Array.of(currentUser || '');
-    onlyFriends.forEach(function(f) {
-        sigParts.push(f.name + ':' + (f.online ? '1' : '0') + ':' + (f.unit || ''));
-    });
+    onlyFriends.forEach(function(f) { sigParts.push(f.name + ':' + (f.online ? '1' : '0') + ':' + (f.unit || '')); });
     const newSig = sigParts.join('|');
     if (newSig !== lastTargetOptionsSig) {
         lastTargetOptionsSig = newSig;
@@ -1067,8 +1020,7 @@ function populateTargetSelect() {
             const prevVal = sel.value;
             sel.innerHTML = '';
             let optAll = document.createElement('option');
-            optAll.value = "ВСЕМ";
-            optAll.innerText = "📢 ВСЕМ";
+            optAll.value = "ВСЕМ"; optAll.innerText = "📢 ВСЕМ";
             sel.appendChild(optAll);
             onlyFriends.forEach(function(f) {
                 let opt = document.createElement('option');
@@ -1086,13 +1038,13 @@ function populateTargetSelect() {
         USERS_CONFIG.forEach(function(u) {
             if (u.name !== currentUser) {
                 let opt = document.createElement('option');
-                opt.value = u.name;
-                opt.innerText = u.name;
+                opt.value = u.name; opt.innerText = u.name;
                 mapSelect.appendChild(opt);
             }
         });
     }
 }
+
 function applyPermissionsUI() {
     const isAdmin = (currentUser === ADMIN_NAME);
     const canRow = isAdmin || (myPermissions && myPermissions.row);
@@ -1107,7 +1059,6 @@ function applyPermissionsUI() {
     document.querySelectorAll('.send-btn, #submit-row-btn, #send-row-btn, button[onclick*="submitRow"]').forEach(function(btn) {
         btn.style.display = canRow ? 'block' : 'none';
     });
-
     document.querySelectorAll('button').forEach(function(btn) {
         if (btn.innerText && btn.innerText.includes('ЗАПИСАТЬ В ЖУРНАЛ')) {
             btn.style.display = canRow ? 'block' : 'none';
@@ -1155,6 +1106,7 @@ function applyUserUI() {
     }
     if (typeof syncMessengerAuth === 'function') syncMessengerAuth();
 }
+
 function initApp() {
     runSplash();
     hideAuthMessages();
@@ -1178,13 +1130,11 @@ function initApp() {
     if (regSelect) regSelect.innerHTML = '';
     USERS_CONFIG.forEach(function(u, index) {
         let opt = document.createElement('option');
-        opt.value = index;
-        opt.innerText = u.name;
+        opt.value = index; opt.innerText = u.name;
         if (loginSelect) loginSelect.appendChild(opt);
         if (regSelect && u.name !== ADMIN_NAME) {
             let optR = document.createElement('option');
-            optR.value = u.name;
-            optR.innerText = u.name;
+            optR.value = u.name; optR.innerText = u.name;
             regSelect.appendChild(optR);
         }
     });
@@ -1219,28 +1169,15 @@ function initApp() {
         inputContainer.appendChild(div);
     });
 
-    const cachedRows = loadLocalJournalCache('table_rows', new Array());
-    if (Array.isArray(cachedRows) && cachedRows.length > 0) {
-        document.getElementById('table-body').innerHTML = '';
-        cachedRows.forEach(appendRow);
-    }
-    const cachedNotifs = loadLocalJournalCache('notifs', new Array());
-    if (Array.isArray(cachedNotifs) && cachedNotifs.length > 0) {
-        allNotifications = cachedNotifs;
-    }
-
     const savedUser = localStorage.getItem('journal_user');
     const savedCall = localStorage.getItem('journal_callsign');
     const savedColor = localStorage.getItem('journal_color');
-    const savedPerms = loadLocalJournalCache('my_perms', null);
-    if (savedPerms) myPermissions = savedPerms;
     if (savedUser) {
         currentUser = savedUser;
         currentCallsign = savedCall || savedUser;
         userColor = savedColor || '#fff';
         applyUserUI();
     }
-    fetchMapsFromServer();
     connectWS(false);
 }
 function hideAuthMessages() {
@@ -1292,7 +1229,6 @@ function refreshMyPermissionsFromServer() {
     if (!currentCallsign) return;
     if (currentUser === ADMIN_NAME) {
         myPermissions = { row: true, stream: true, maps: true, archive: true, table: true };
-        saveLocalJournalCache('my_perms', myPermissions);
         applyPermissionsUI();
         return;
     }
@@ -1301,7 +1237,6 @@ function refreshMyPermissionsFromServer() {
         .then(function(data) {
             if (data && data.permissions) {
                 myPermissions = data.permissions;
-                saveLocalJournalCache('my_perms', myPermissions);
                 applyPermissionsUI();
             }
         }).catch(function() {});
@@ -1321,7 +1256,6 @@ function attemptLogin() {
     }
     if (unitObj.name === ADMIN_NAME && pass === "551150000" && (!callsignInput || callsignInput.toLowerCase() === "муравей")) {
         myPermissions = { row: true, stream: true, maps: true, archive: true, table: true };
-        saveLocalJournalCache('my_perms', myPermissions);
         completeLoginSuccess(ADMIN_NAME, "муравей", unitObj.color);
         return;
     }
@@ -1339,7 +1273,6 @@ function attemptLogin() {
     .then(function(data) {
         if (data.success) {
             myPermissions = data.permissions || { row: false, stream: false, maps: false, archive: false, table: false };
-            saveLocalJournalCache('my_perms', myPermissions);
             completeLoginSuccess(unitObj.name, data.username || callsignInput, unitObj.color);
         } else {
             errEl.innerText = '❌ ' + (data.message || 'Неверный пароль или позывной не одобрен');
@@ -1350,6 +1283,7 @@ function attemptLogin() {
         errEl.style.display = 'block';
     });
 }
+
 function completeLoginSuccess(unitName, callsign, color) {
     hideAuthMessages();
     currentUser = unitName;
@@ -1385,7 +1319,6 @@ function renderPermCheckboxes(u) {
         '<label class="perm-chip"><input type="checkbox" ' + (p.maps ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'maps\', this.checked)"> 🗺️ Карта</label>' +
         '<label class="perm-chip"><input type="checkbox" ' + (p.archive ? 'checked' : '') + ' onchange="toggleUserPerm(\'' + k + '\', \'archive\', this.checked)"> 🗂️ Архив</label></div>';
 }
-
 function fetchAdminUsersList() {
     if (currentUser !== ADMIN_NAME) return;
     fetch('/api/admin/users?t=' + Date.now()).then(function(r) { return r.json(); }).then(function(data) {
@@ -1416,7 +1349,7 @@ function fetchAdminUsersList() {
             row.innerHTML = '<div style="flex:1;"><div><b>' + u.username + '</b> (' + u.unit + ') — Пароль: <code style="color:#4ade80; font-weight:bold;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div><button class="lb-btn" style="background:#ef4444; padding:5px 10px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">🗑️ Удалить</button>';
             aBox.appendChild(row);
         });
-    }).catch(function() {});
+    });
 }
 
 function toggleUserPerm(userKey, permName, val) {
@@ -1440,7 +1373,6 @@ function logoutUser() {
     localStorage.removeItem('journal_callsign');
     localStorage.removeItem('journal_color');
     localStorage.removeItem('chat_username');
-    localStorage.removeItem('msb_jcache_my_perms');
     location.reload();
 }
 
@@ -1453,6 +1385,7 @@ function loginAsViewer() {
     subscribeToWebPush();
     checkAndShowAlerts(false);
 }
+
 function sendAdminAlert() {
     if (!currentUser) return;
     const target = document.getElementById('admin-target').value;
@@ -1536,7 +1469,6 @@ function checkAndShowAlerts(isNew) {
         showAlert(targetToShow, alertObj.text, alertObj.sender, alertObj.id, isNew);
     }
 }
-
 function showAlert(target, text, sender, notifId, isNew) {
     currentAlertId = notifId || null;
     currentAlertTarget = target;
@@ -1559,6 +1491,7 @@ function showAlert(target, text, sender, notifId, isNew) {
     playBeep();
     if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
 }
+
 function stopAlertVisuals() {
     document.getElementById('alert-modal').style.display = 'none';
     currentAlertId = null;
@@ -1621,7 +1554,6 @@ function appendRow(row) {
     tbody.appendChild(tr);
     requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
 }
-
 function triggerCallInDev(callType, targetName) {
     playSoundById('nice2', true);
     const modal = document.getElementById('call-dev-modal');
@@ -1638,28 +1570,29 @@ function closeCallDevModal() {
     const m = document.getElementById('call-dev-modal');
     if (m) m.style.display = 'none';
 }
+
 const GIF_TITLES = {
-    military: Array.of(
+    military: [
         "🪖 Спецназ МСБ", "🛡️ Броня крепка", "🚁 Вертушка", "📡 Радар ПВО",
         "🎯 Снайпер", "🟩 ПНВ Разведка", "🚜 Танковый прорыв", "⚡ Штурм",
         "🎖️ Отвага", "📻 Радиосвязь", "🔥 Артиллерия", "🛩️ Су-57 в небе",
         "🧭 Маршрут", "💣 Саперы", "🐕 Дозор", "🚢 Флот",
         "🚁 Десант", "🛡️ Оборона", "🎆 Салют Победы", "🏆 МСБ-55115"
-    ),
-    rocket: Array.of(
+    ],
+    rocket: [
         "🚀 Пуск из шахты", "🔥 Гиперзвук", "⚡ Тополь-М", "💥 Перехват ПВО",
         "🛰️ Баллистика", "🚀 РВСН Дежурство", "🌋 Огненный старт", "🎯 Точно в цель",
         "🚀 Комплекс Ярс", "🧭 Телеметрия", "🔥 Форсаж", "🛡️ Купол С-400",
         "⚡ Удар с неба", "🚀 Залп РСЗО", "🛰️ Орбитальный блок", "🔥 Плазма",
         "🚀 Калибр", "⏱️ Пуск 3..2..1", "💥 Ударная волна", "🚀 Щит МСБ"
-    ),
-    cosmic: Array.of(
+    ],
+    cosmic: [
         "🌌 Глубокий космос", "🛰️ Станция МКС", "👨‍🚀 Космонавт", "🌟 Сверхновая",
         "🛸 Варп-прыжок", "🪐 Сатурн", "☄️ Метеориты", "🌌 Андромеда",
         "🛰️ Спутник ВКС", "🌑 Лунная база", "⚡ Солнечный шторм", "🕳️ Черная дыра",
         "🚀 Стыковка", "🌠 Звездный флот", "🪐 Марс", "🛰️ Лазерная орбита",
         "🌌 Галактика", "👨‍🚀 Невесомость", "🌟 Пульсар", "🌌 Космос МСБ"
-    )
+    ]
 };
 
 var gifCacheStore = {};
@@ -1668,9 +1601,9 @@ function makeAnimatedSvgGif(cat, idx, title) {
     const cacheKey = cat + '_' + idx;
     if (gifCacheStore[cacheKey]) return gifCacheStore[cacheKey];
     const palettes = {
-        military: Array.of('#051f10', '#14532d', '#22c55e', '#facc15'),
-        rocket: Array.of('#260804', '#7c2d12', '#f97316', '#fde047'),
-        cosmic: Array.of('#090422', '#3b0764', '#38bdf8', '#c084fc')
+        military: ['#051f10', '#14532d', '#22c55e', '#facc15'],
+        rocket: ['#260804', '#7c2d12', '#f97316', '#fde047'],
+        cosmic: ['#090422', '#3b0764', '#38bdf8', '#c084fc']
     };
     const pal = palettes[cat] || palettes.military;
     const parts = String(title || '').split(' ');
@@ -1687,8 +1620,8 @@ function makeAnimatedSvgGif(cat, idx, title) {
     for (let y = 20; y < 200; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke(); }
     ctx.strokeStyle = pal.at(2); ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(160, 78, 52, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = pal.at(3); ctx.lineWidth = 2; ctx.setLineDash(Array.of(8, 6));
-    ctx.beginPath(); ctx.arc(160, 78, 36, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash(new Array());
+    ctx.strokeStyle = pal.at(3); ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.arc(160, 78, 36, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     ctx.font = '46px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(icon, 160, 78);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.78)'; ctx.fillRect(14, 144, 292, 42);
@@ -1699,7 +1632,6 @@ function makeAnimatedSvgGif(cat, idx, title) {
     gifCacheStore[cacheKey] = dataUrl;
     return dataUrl;
 }
-
 function setAppTheme(themeName) {
     const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
     document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
@@ -1800,9 +1732,6 @@ function changeMsgImageZoom(delta) {
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
 }
-// ... выше твоя старая функция changeMsgImageZoom(delta) { ... }
-
-// 👇 УДАЛИ СТАРУЮ ВСТАВКУ И ВСТАВЬ ЭТОТ ГОТОВЫЙ БЛОК 👇
 let isNetworkPoor = false;
 let initialConnectionDone = false;
 let fastProbeTimer = null;
@@ -1848,7 +1777,6 @@ function setPoorNetworkState(poor, reasonText) {
     isNetworkPoor = poor;
     const overlay = document.getElementById('poor-net-overlay');
     const sub = document.getElementById('poor-net-sub');
-
     if (poor) {
         if (sub && reasonText) sub.innerText = reasonText;
         if (!initialConnectionDone || !navigator.onLine) {
@@ -1861,7 +1789,6 @@ function setPoorNetworkState(poor, reasonText) {
         stopAggressiveReconnect();
         syncAllDataAfterReconnect();
     }
-
     if (typeof refreshChatHeaderStatusUI === 'function') {
         refreshChatHeaderStatusUI();
     }
@@ -1885,7 +1812,6 @@ function probeTinySignal() {
     }
     const ctrl = new AbortController();
     const tid = setTimeout(function() { ctrl.abort(); }, 3500);
-
     fetch('/manifest.json?ping=' + Date.now(), { cache: 'no-store', signal: ctrl.signal })
         .then(function(r) {
             clearTimeout(tid);
@@ -1935,37 +1861,5 @@ window.addEventListener('load', function() {
 window.addEventListener('offline', function() {
     setPoorNetworkState(true, '📡 Потеря сети! Ищем доступный канал...');
 });
-
-const _origConnectWS = connectWS;
-connectWS = function(forceReconnect) {
-    _origConnectWS(forceReconnect);
-    if (!ws || ws._msbHooked) return;
-    ws._msbHooked = true;
-
-    ws.addEventListener('open', function() {
-        setPoorNetworkState(false);
-    });
-
-    ws.addEventListener('message', function(ev) {
-        try {
-            const d = JSON.parse(ev.data);
-            if (d.type === 'init' || d.type === 'pong') {
-                if (isNetworkPoor || !initialConnectionDone) setPoorNetworkState(false);
-            }
-            if (d.type === 'user_typing' && typeof handleIncomingTypingWS === 'function') {
-                handleIncomingTypingWS(d.room, d.sender);
-            }
-        } catch (e) {}
-    });
-
-    ws.addEventListener('close', function() {
-        isNetworkPoor = true;
-        if (typeof refreshChatHeaderStatusUI === 'function') refreshChatHeaderStatusUI();
-        startAggressiveReconnect();
-    });
-};
-// 👆 КОНЕЦ ГОТОВОГО БЛОКА 👆
-
-initApp(); // <-- ЭТА СТРОКА ОСТАЕТСЯ САМОЙ ПОСЛЕДНЕЙ В ФАЙЛЕ!
 
 initApp();
