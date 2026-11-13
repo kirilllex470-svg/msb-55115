@@ -62,7 +62,6 @@ function makeDirectRoomId(u1, u2) {
     var pair = sorted.join(',');
     return pair + '_' + pair;
 }
-
 function escapeEdgeHtml(str) {
     return String(str || '')
         .replace(/&/g, '&amp;')
@@ -220,7 +219,6 @@ function renderPendingBubbles() {
         mDiv.scrollTop = mDiv.scrollHeight;
     }
 }
-
 function flushOutboxQueue() {
     renderPendingBubbles();
     if (msbIsFlushing || msbOutboxQueue.length === 0) return;
@@ -293,7 +291,6 @@ function flushOutboxQueue() {
 function flushRetryQueue() {
     flushOutboxQueue();
 }
-
 function syncMessengerAuth() {
     ensureCleanMessengerTopbar();
     chatUser = getActiveChatIdentity();
@@ -326,6 +323,7 @@ function syncMessengerAuth() {
     }
     loadFriendsAndRequests();
 }
+
 function openMessengerWindow(targetPartnerName) {
     ensureCleanMessengerTopbar();
     chatUser = getActiveChatIdentity();
@@ -413,6 +411,7 @@ function renderAvatarElement(el, name, avatarDataUrl) {
     }
 }
 
+
 function uploadMyAvatar(inputEl) {
     chatUser = getActiveChatIdentity();
     if (!inputEl.files || inputEl.files.length === 0 || !chatUser) return;
@@ -468,10 +467,10 @@ document.addEventListener('DOMContentLoaded', function() {
         setAppTheme(savedTheme, true);
     }
     syncMessengerAuth();
-    var pAv = document.getElementById('partner-avatar');
+	    var pAv = document.getElementById('partner-avatar');
     if (pAv && !currentPartner) renderAvatarElement(pAv, '', '');
-});
 
+});
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
@@ -536,6 +535,7 @@ function renderRequests() {
         box.appendChild(item);
     });
 }
+
 function renderFriends() {
     chatUser = getActiveChatIdentity();
     var box = document.getElementById('friends-box');
@@ -622,7 +622,6 @@ function submitCreateGroup() {
         }
     });
 }
-
 function deleteFriend(friendObj, event) {
     chatUser = getActiveChatIdentity();
     if (event) event.stopPropagation();
@@ -900,6 +899,7 @@ function uploadAnyFile(inputElement) {
         quoteSender: qSnd
     });
 }
+
 function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     var container = rowElement.querySelector('.swipe-container');
     var leftIndicator = rowElement.querySelector('.left-indicator');
@@ -938,7 +938,6 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
             rightIndicator.style.opacity = (currentX < -35) ? '1' : '0';
         }
     }, { passive: false });
-
     container.addEventListener('touchend', function() {
         isSwiping = false;
         container.style.transition = 'transform 0.2s cubic-bezier(0.1, 0.8, 0.3, 1)';
@@ -1060,9 +1059,13 @@ function fetchMessages() {
     .then(function(resp) {
         var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
         var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
-        lastKnownPartnerOnline = partnerOnline;
         if (!isCurrentGroup && currentPartner) {
-            refreshChatHeaderStatusUI();
+            var stEl = document.getElementById('chat-status');
+            if (stEl) {
+                stEl.style.display = 'block';
+                stEl.textContent = partnerOnline ? '🟢 в сети' : '⚫ не в сети';
+                stEl.style.color = partnerOnline ? '#4ade80' : '#94a3b8';
+            }
         }
         if (data.length === 0) {
             var hasLocalPending = msbOutboxQueue.some(function(p) { return p && p.room === currentRoomId; });
@@ -1116,7 +1119,6 @@ function fetchMessages() {
         }
     }).catch(function() {});
 }
-
 function renderSingleRow(mDiv, msg, isMy, checkIcon) {
     if (msg.clientMsgId) {
         var tempDup = mDiv.querySelector('.msb-pending-row[data-lid="' + msg.clientMsgId + '"]');
@@ -1158,6 +1160,7 @@ function renderSingleRow(mDiv, msg, isMy, checkIcon) {
     mDiv.appendChild(row);
     setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
 }
+
 function playVideoWithSound(v) {
     document.querySelectorAll('#messages video.video-round').forEach(function(other) {
         if (other !== v) { other.muted = true; other.pause(); }
@@ -1197,73 +1200,8 @@ function updateTotalUnreadBadge() {
     if (total > 0) badge.innerText = total;
 }
 
-var partnerTypingMap = {};
-var lastTypingSentAt = 0;
-var lastKnownPartnerOnline = false;
-
-function buildMiniJumpText(str) {
-    return Array.from(String(str)).map(function(ch, idx) {
-        if (ch === ' ') return '&nbsp;';
-        return '<span class="mini-jump-char" style="animation-delay:' + (idx * 0.06).toFixed(2) + 's">' + ch + '</span>';
-    }).join('');
-}
-
-function sendTypingSignal() {
-    chatUser = getActiveChatIdentity();
-    if (!chatUser || !currentRoomId) return;
-    var curTime = new Date().getTime();
-    if ((curTime - lastTypingSentAt)  new Date().getTime()) {
-        stEl.className = 'partner-status status-typing-now';
-        var label = isCurrentGroup ? (typingInfo.sender + ' набирает сообщение...') : '✍️ набирает сообщение...';
-        stEl.innerHTML = buildMiniJumpText(label);
-        return;
-    }
-    stEl.className = 'partner-status';
-    if (isCurrentGroup) {
-        stEl.textContent = '👥 конференция';
-        stEl.style.color = '#38bdf8';
-    } else {
-        stEl.textContent = lastKnownPartnerOnline ? '🟢 в сети' : '⚫ не в сети';
-        stEl.style.color = lastKnownPartnerOnline ? '#4ade80' : '#94a3b8';
-    }
-}
-
-function renderFriendsTypingPreview() {
-    chatUser = getActiveChatIdentity();
-    if (!chatUser) return;
-    var items = document.querySelectorAll('#friends-box .friend-item');
-    items.forEach(function(item, idx) {
-        var f = friendsList[idx];
-        if (!f) return;
-        var rId = f.isGroup ? f.id : makeDirectRoomId(chatUser, f.name);
-        var lastMsgEl = item.querySelector('.friend-last-msg');
-        var nameEl = item.querySelector('.friend-name');
-        if (isServerDisconnectedNow() && nameEl && !f.isGroup) {
-            var unitTag = f.unit ? (' <span style="color:#38bdf8;font-size:12px;">(' + f.unit + ')</span>') : '';
-            nameEl.innerHTML = '📡 ' + f.name + unitTag + ' <span style="color:#fbbf24;font-size:11px;">(ищем сеть...)</span>';
-        }
-        if (!lastMsgEl) return;
-        var tInfo = partnerTypingMap[rId];
-        if (tInfo && tInfo.until > new Date().getTime()) {
-            lastMsgEl.innerHTML = '<span style="color:#38bdf8;font-weight:bold;">' + buildMiniJumpText('✍️ набирает сообщение...') + '</span>';
-        } else {
-            lastMsgEl.textContent = f.lastMessage || 'Нет сообщений';
-        }
-    });
-}
-
-function bindTypingInputField() {
-    var ti = document.getElementById('text-input');
-    if (ti && !ti._msbTypingBound) {
-        ti._msbTypingBound = true;
-        ti.addEventListener('input', sendTypingSignal);
-        ti.addEventListener('keydown', function(e) { if (e.key !== 'Enter') sendTypingSignal(); });
-    }
-}
-
 window.addEventListener('online', function() { clearNetworkErrorBanner(); flushOutboxQueue(); if (currentRoomId) { fetchMessages(); markChatAsRead(currentRoomId); } });
 setInterval(function() { renderPendingBubbles(); flushOutboxQueue(); }, 3500);
-setInterval(function() { bindTypingInputField(); refreshChatHeaderStatusUI(); renderFriendsTypingPreview(); }, 900);
 
 window.openMessengerWindow = openMessengerWindow;
 window.closeMessengerWindow = closeMessengerWindow;
@@ -1286,5 +1224,3 @@ window.inlineDeleteMessage = inlineDeleteMessage;
 window.playVideoWithSound = playVideoWithSound;
 window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
-window.handleIncomingTypingWS = handleIncomingTypingWS;
-window.refreshChatHeaderStatusUI = refreshChatHeaderStatusUI;

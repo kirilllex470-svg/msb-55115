@@ -234,84 +234,8 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v1';",
-    "const MEDIA_CACHE = 'msb55115-media-v1';",
-    "const SHELL_ASSETS = [",
-    "    '/',",
-    "    '/index.html',",
-    "    '/style.css',",
-    "    '/journal.js',",
-    "    '/messenger.js',",
-    "    '/manifest.json',",
-    "    '/icon-192.png',",
-    "    '/icon-512.png'",
-    "];",
-    "",
-    "self.addEventListener('install', function(e) {",
-    "    self.skipWaiting();",
-    "    e.waitUntil(caches.open(SHELL_CACHE).then(function(cache) { return cache.addAll(SHELL_ASSETS); }));",
-    "});",
-    "self.addEventListener('activate', function(e) {",
-    "    e.waitUntil(caches.keys().then(function(keys) {",
-    "        return Promise.all(keys.map(function(k) {",
-    "            if (k !== SHELL_CACHE && k !== MEDIA_CACHE) return caches.delete(k);",
-    "        }));",
-    "    }).then(function() { return clients.claim(); }));",
-    "});",
-    "",
-    "function buildRangeResponse(request, cachedResponse) {",
-    "    const rangeHeader = request.headers.get('range');",
-    "    if (!rangeHeader) return Promise.resolve(cachedResponse);",
-    "    return cachedResponse.arrayBuffer().then(function(buf) {",
-    "        const bytes = /^bytes=(\\d+)-(\\d+)?$/.exec(rangeHeader);",
-    "        if (!bytes) return cachedResponse;",
-    "        const start = Number(bytes.at(1));",
-    "        const end = bytes.at(2) ? Number(bytes.at(2)) : buf.byteLength - 1;",
-    "        const slice = buf.slice(start, end + 1);",
-    "        return new Response(slice, {",
-    "            status: 206,",
-    "            statusText: 'Partial Content',",
-    "            headers: {",
-    "                'Content-Range': 'bytes ' + start + '-' + end + '/' + buf.byteLength,",
-    "                'Accept-Ranges': 'bytes',",
-    "                'Content-Length': String(slice.byteLength),",
-    "                'Content-Type': cachedResponse.headers.get('Content-Type') || 'application/octet-stream'",
-    "            }",
-    "        });",
-    "    });",
-    "}",
-    "",
-    "self.addEventListener('fetch', function(event) {",
-    "    const url = new URL(event.request.url);",
-    "    if (event.request.method !== 'GET') return;",
-    "    if (url.pathname.startsWith('/uploads/')) {",
-    "        event.respondWith(caches.open(MEDIA_CACHE).then(function(cache) {",
-    "            return cache.match(url.pathname).then(function(cachedRes) {",
-    "                if (cachedRes) return buildRangeResponse(event.request, cachedRes);",
-    "                return fetch(url.pathname).then(function(networkRes) {",
-    "                    if (networkRes && networkRes.status === 200) {",
-    "                        cache.put(url.pathname, networkRes.clone());",
-    "                        return buildRangeResponse(event.request, networkRes);",
-    "                    }",
-    "                    return networkRes;",
-    "                });",
-    "            });",
-    "        }));",
-    "        return;",
-    "    }",
-    "    if (url.pathname.startsWith('/api/') || url.pathname === '/maps-list' || url.pathname === '/archive-data') return;",
-    "    event.respondWith(caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
-    "        if (cachedRes) return cachedRes;",
-    "        return fetch(event.request).then(function(networkRes) {",
-    "            if (networkRes && networkRes.status === 200) {",
-    "                const resClone = networkRes.clone();",
-    "                caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
-    "            }",
-    "            return networkRes;",
-    "        });",
-    "    }));",
-    "});",
-    "",
+    "self.addEventListener('install', function(e) { self.skipWaiting(); });",
+    "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!', tag: 'msb-alert' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -319,7 +243,7 @@ const SW_CODE = [
     "        body: data.body,",
     "        icon: '/icon-192.png',",
     "        badge: '/icon-192.png',",
-    "        vibrate: Array.of(400, 100, 400, 100, 400, 200, 600),",
+    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
@@ -327,18 +251,18 @@ const SW_CODE = [
     "        data: { url: '/' }",
     "    }));",
     "});",
-    "",
     "self.addEventListener('notificationclick', function(event) {",
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
-    "            var cl = clientList.at(i);",
+    "            var cl = clientList[i];",
     "            if (cl && 'focus' in cl) return cl.focus();",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
 ].join('\n');
+
 function readBodyJSON(req, cb) {
     let body = '';
     req.on('data', function(chunk) {
@@ -494,7 +418,6 @@ const server = http.createServer(function(req, res) {
             }));
         });
     }
-
     if (req.method === 'GET' && urlPath === '/api/user/me') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
@@ -573,7 +496,6 @@ const server = http.createServer(function(req, res) {
             approved: approved
         }));
     }
-
     if (req.method === 'POST' && urlPath === '/api/admin/users/action') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.key && usersDB[data.key]) {
@@ -671,6 +593,7 @@ const server = http.createServer(function(req, res) {
         });
         return res.end(JSON.stringify(listData));
     }
+
     if (urlPath === '/api/friends/request/send' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.from || !data.to) {
@@ -745,7 +668,6 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
-
     if (urlPath === '/api/friends/save' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && Array.isArray(data.friends)) {
@@ -757,6 +679,7 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
+
     if (urlPath === '/api/groups/create' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.creator || !data.groupName || !Array.isArray(data.members)) {
@@ -950,7 +873,7 @@ const server = http.createServer(function(req, res) {
         } else {
             res.writeHead(200, {
                 'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-cache'
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
             });
             res.end(data);
         }
@@ -992,7 +915,6 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         online: isOnline
     };
 }
-
 function handleMultipartSend(req, res) {
     const contentType = req.headers['content-type'] || '';
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
@@ -1283,15 +1205,6 @@ wss.on('connection', function(ws) {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
-                return;
-            }
-                  if (msg.type === 'typing' && msg.room && msg.sender) {
-                markUserOnline(msg.sender);
-                broadcastWS({
-                    type: 'user_typing',
-                    room: msg.room,
-                    sender: msg.sender
-                });
                 return;
             }
             if (msg.type === 'save_sub' && msg.sub) {
