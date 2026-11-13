@@ -785,6 +785,7 @@ function sendMessage() {
 
     textInput.value = '';
     cancelReply();
+     notifyTypingState(false);
 
     enqueueChatPayload({
         sender: chatUser,
