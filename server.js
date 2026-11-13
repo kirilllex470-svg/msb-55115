@@ -234,8 +234,65 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "self.addEventListener('install', function(e) { self.skipWaiting(); });",
-    "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
+    "const CACHE_NAME = 'msb55115-shell-v1';",
+    "const SHELL_ASSETS = [",
+    "    '/',",
+    "    '/index.html',",
+    "    '/style.css',",
+    "    '/journal.js',",
+    "    '/messenger.js',",
+    "    '/manifest.json',",
+    "    '/icon-192.png',",
+    "    '/icon-512.png'",
+    "];",
+    "",
+    "// 1. При установке сохраняем весь интерфейс в память устройства",
+    "self.addEventListener('install', function(e) {",
+    "    self.skipWaiting();",
+    "    e.waitUntil(",
+    "        caches.open(CACHE_NAME).then(function(cache) {",
+    "            return cache.addAll(SHELL_ASSETS);",
+    "        })",
+    "    );",
+    "});",
+    "",
+    "// 2. При обновлении версии удаляем старый кэш",
+    "self.addEventListener('activate', function(e) {",
+    "    e.waitUntil(",
+    "        caches.keys().then(function(keys) {",
+    "            return Promise.all(keys.map(function(k) {",
+    "                if (k !== CACHE_NAME) return caches.delete(k);",
+    "            }));",
+    "        }).then(function() {",
+    "            return clients.claim();",
+    "        })",
+    "    );",
+    "});",
+    "",
+    "// 3. Перехват запросов: интерфейс берем из памяти, данные — с сервера",
+    "self.addEventListener('fetch', function(event) {",
+    "    const url = new URL(event.request.url);",
+    "    if (event.request.method !== 'GET') return;",
+    "    // API, загрузки, карты и архив всегда идут напрямую на сервер Amvera",
+    "    if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/') || url.pathname === '/maps-list' || url.pathname === '/archive-data') {",
+    "        return;",
+    "    }",
+    "    // Оболочку приложения отдаем мгновенно из кэша устройства",
+    "    event.respondWith(",
+    "        caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
+    "            if (cachedRes) return cachedRes;",
+    "            return fetch(event.request).then(function(networkRes) {",
+    "                if (networkRes && networkRes.status === 200) {",
+    "                    const resClone = networkRes.clone();",
+    "                    caches.open(CACHE_NAME).then(function(cache) { cache.put(event.request, resClone); });",
+    "                }",
+    "                return networkRes;",
+    "            });",
+    "        })",
+    "    );",
+    "});",
+    "",
+    "// 4. Обработка Push-уведомлений (сохраняем ваш текущий функционал)",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!', tag: 'msb-alert' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -251,6 +308,7 @@ const SW_CODE = [
     "        data: { url: '/' }",
     "    }));",
     "});",
+    "",
     "self.addEventListener('notificationclick', function(event) {",
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
@@ -262,6 +320,7 @@ const SW_CODE = [
     "    }));",
     "});"
 ].join('\n');
+
 
 function readBodyJSON(req, cb) {
     let body = '';
@@ -873,7 +932,7 @@ const server = http.createServer(function(req, res) {
         } else {
             res.writeHead(200, {
                 'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+                'Cache-Control': 'no-cache' // Заменили no-store на no-cache
             });
             res.end(data);
         }
