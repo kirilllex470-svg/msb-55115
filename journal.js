@@ -1800,6 +1800,9 @@ function changeMsgImageZoom(delta) {
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
 }
+// ... выше твоя старая функция changeMsgImageZoom(delta) { ... }
+
+// 👇 УДАЛИ СТАРУЮ ВСТАВКУ И ВСТАВЬ ЭТОТ ГОТОВЫЙ БЛОК 👇
 let isNetworkPoor = false;
 let initialConnectionDone = false;
 let fastProbeTimer = null;
@@ -1848,7 +1851,6 @@ function setPoorNetworkState(poor, reasonText) {
 
     if (poor) {
         if (sub && reasonText) sub.innerText = reasonText;
-        // Перед входом в главное меню или при полном обрыве показываем экран
         if (!initialConnectionDone || !navigator.onLine) {
             if (overlay) overlay.style.display = 'flex';
         }
@@ -1882,15 +1884,15 @@ function probeTinySignal() {
         return;
     }
     const ctrl = new AbortController();
-    const tid = setTimeout(function() { ctrl.abort(); }, 2800);
+    const tid = setTimeout(function() { ctrl.abort(); }, 3500);
 
     fetch('/manifest.json?ping=' + Date.now(), { cache: 'no-store', signal: ctrl.signal })
         .then(function(r) {
             clearTimeout(tid);
             if (r.ok) {
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
-                    connectWS(true);
-                } else {
+                if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+                    connectWS(false);
+                } else if (ws.readyState === WebSocket.OPEN) {
                     setPoorNetworkState(false);
                 }
             }
@@ -1904,12 +1906,12 @@ function probeTinySignal() {
 function startAggressiveReconnect() {
     if (fastProbeTimer) return;
     fastProbeTimer = setInterval(function() {
-        if (ws && ws.readyState === WebSocket.OPEN && (Date.now() - lastPongTime < 7000)) {
+        if (ws && ws.readyState === WebSocket.OPEN && (Date.now() - lastPongTime < 10000)) {
             setPoorNetworkState(false);
             return;
         }
         probeTinySignal();
-    }, 1800);
+    }, 3500);
 }
 
 function stopAggressiveReconnect() {
@@ -1919,7 +1921,6 @@ function stopAggressiveReconnect() {
     }
 }
 
-// Проверка связи сразу при старте приложения (после заставки)
 window.addEventListener('load', function() {
     ensurePoorNetOverlay();
     setTimeout(function() {
@@ -1928,14 +1929,13 @@ window.addEventListener('load', function() {
         } else {
             initialConnectionDone = true;
         }
-    }, 2200);
+    }, 3000);
 });
 
 window.addEventListener('offline', function() {
     setPoorNetworkState(true, '📡 Потеря сети! Ищем доступный канал...');
 });
 
-// Подключаемся к WebSocket-событиям для мгновенного снятия экрана и передачи "печатает"
 const _origConnectWS = connectWS;
 connectWS = function(forceReconnect) {
     _origConnectWS(forceReconnect);
@@ -1964,5 +1964,8 @@ connectWS = function(forceReconnect) {
         startAggressiveReconnect();
     });
 };
+// 👆 КОНЕЦ ГОТОВОГО БЛОКА 👆
+
+initApp(); // <-- ЭТА СТРОКА ОСТАЕТСЯ САМОЙ ПОСЛЕДНЕЙ В ФАЙЛЕ!
 
 initApp();
