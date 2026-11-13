@@ -1285,6 +1285,15 @@ wss.on('connection', function(ws) {
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
+                  if (msg.type === 'typing' && msg.room && msg.sender) {
+                markUserOnline(msg.sender);
+                broadcastWS({
+                    type: 'user_typing',
+                    room: msg.room,
+                    sender: msg.sender
+                });
+                return;
+            }
             if (msg.type === 'save_sub' && msg.sub) {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; });
