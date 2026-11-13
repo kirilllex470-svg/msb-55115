@@ -1114,16 +1114,34 @@ function fetchMessages() {
     .then(function(res) { return res.json(); })
     .then(function(resp) {
         var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
-        try {
-            localStorage.setItem('msb_cache_room_' + currentRoomId, JSON.stringify(data));
-        } catch (e) {}
-        var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
-        if (!isCurrentGroup && currentPartner) {
+            var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
+        var partnerTyping = (resp && typeof resp.partnerTyping === 'boolean') ? resp.partnerTyping : false;
+        var typingUsers = (resp && Array.isArray(resp.typingUsers)) ? resp.typingUsers : [];
+
+        if (currentPartner) {
             var stEl = document.getElementById('chat-status');
             if (stEl) {
                 stEl.style.display = 'block';
-                stEl.textContent = partnerOnline ? '🟢 в сети' : '⚫ не в сети';
-                stEl.style.color = partnerOnline ? '#4ade80' : '#94a3b8';
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    stEl.className = 'partner-status searching-net';
+                    stEl.textContent = '📡 Ищем сеть...';
+                } else if (partnerTyping) {
+                    stEl.className = 'partner-status typing-active jump-wave-text';
+                    var label = isCurrentGroup && typingUsers.length > 0
+                        ? (typingUsers.join(', ') + ' набирает сообщение...')
+                        : 'набирает сообщение...';
+                    stEl.innerHTML = typeof renderJumpingText === 'function'
+                        ? renderJumpingText(label)
+                        : label;
+                } else if (isCurrentGroup) {
+                    stEl.className = 'partner-status';
+                    stEl.textContent = '👥 конференция';
+                    stEl.style.color = '#38bdf8';
+                } else {
+                    stEl.className = 'partner-status';
+                    stEl.textContent = partnerOnline ? '🟢 в сети' : '⚫ не в сети';
+                    stEl.style.color = partnerOnline ? '#4ade80' : '#94a3b8';
+                }
             }
         }
         if (data.length === 0) {
@@ -1176,7 +1194,14 @@ function fetchMessages() {
         if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) {
             fetch('/api/messages/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user: chatUser, room: currentRoomId }) });
         }
-    }).catch(function() {});
+    }).catch(function() {
+        var stEl = document.getElementById('chat-status');
+        if (stEl && currentPartner) {
+            stEl.style.display = 'block';
+            stEl.className = 'partner-status searching-net';
+            stEl.textContent = '📡 Ищем сеть...';
+        }
+    });
 }
 
 function renderSingleRow(mDiv, msg, isMy, checkIcon) {
