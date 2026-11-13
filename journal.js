@@ -870,6 +870,13 @@ function connectWS(forceReconnect) {
     ws.onmessage = function(event) {
         lastPongTime = Date.now();
         const msg = JSON.parse(event.data);
+		       if (typeof window.markMsbServerAlive === 'function') {
+            window.markMsbServerAlive(msg.type === 'init');
+        }
+        if (msg.type === 'chat_typing' && typeof window.handleIncomingTypingWS === 'function') {
+            window.handleIncomingTypingWS(msg);
+            return;
+        }
         if (msg.serverBootId) {
             checkServerVersionChange(msg.serverBootId, msg.serverBootTime);
         }
@@ -1800,5 +1807,144 @@ function changeMsgImageZoom(delta) {
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
 }
+var msbInitialSyncDone = false;
+var msbIsWeakNetwork = false;
+var msbLastPingRtt = 0;
+var msbPingSentAt = 0;
+var msbBootWaitTimer = null;
 
+function getMsbWeakPhraseHTML() {
+    return '📡 (ищем сеть, закрытый протокол <span class="msb-jumping-word">МСБ55115</span>, обновляемся... ждите)';
+}
+window.getMsbWeakPhraseHTML = getMsbWeakPhraseHTML;
+
+function ensureWeakBootOverlay() {
+    if (document.getElementById('msb-weak-boot-overlay')) return;
+    var ov = document.createElement('div');
+    ov.id = 'msb-weak-boot-overlay';
+    ov.innerHTML =
+        '<div class="msb-weak-boot-card">' +
+            '<div class="msb-weak-spinner"></div>' +
+            '<div>' + getMsbWeakPhraseHTML() + '</div>' +
+        '</div>';
+    document.body.appendChild(ov);
+}
+
+function evaluateNetworkWeakness() {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn) {
+        var eff = String(conn.effectiveType || '').toLowerCase();
+        if (eff === 'slow-2g' || eff === '2g') return true;
+        if (typeof conn.downlink === 'number' && conn.downlink > 0 && conn.downlink < 0.45) return true;
+        if (typeof conn.rtt === 'number' && conn.rtt > 1400) return true;
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) return true;
+    if (msbLastPingRtt > 1800) return true;
+    if (Date.now() - lastPongTime > 9000) return true;
+    return false;
+}
+
+function updateWeakNetworkUI() {
+    ensureWeakBootOverlay();
+    var weakNow = evaluateNetworkWeakness();
+    msbIsWeakNetwork = weakNow;
+    window.msbIsWeakNetwork = weakNow;
+
+    var bootOv = document.getElementById('msb-weak-boot-overlay');
+    if (bootOv) {
+        if (!msbInitialSyncDone && weakNow) {
+            bootOv.style.display = 'flex';
+        } else if (msbInitialSyncDone) {
+            bootOv.style.display = 'none';
+        }
+    }
+
+    if (typeof window.syncMessengerWeakBanner === 'function') {
+        window.syncMessengerWeakBanner(weakNow);
+    }
+}
+
+function triggerImmediateEdgePull() {
+    connectWS(false);
+    fetchMapsFromServer();
+    fetchArchiveFromServer();
+    refreshMyPermissionsFromServer();
+    if (typeof flushOutboxQueue === 'function') flushOutboxQueue();
+    if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests();
+    if (typeof fetchMessages === 'function') fetchMessages();
+
+    fetch('/maps-list?t=' + Date.now())
+        .then(function(r) {
+            if (r.ok) window.markMsbServerAlive(true);
+            return r.json();
+        })
+        .then(function(list) {
+            if (Array.isArray(list)) {
+                allMaps = list;
+                saveLocalJournalCache('maps', list);
+                renderMapsGrid();
+            }
+        })
+        .catch(function() {});
+}
+
+window.markMsbServerAlive = function(isFullInit) {
+    if (msbPingSentAt > 0) {
+        msbLastPingRtt = Date.now() - msbPingSentAt;
+        msbPingSentAt = 0;
+    }
+    if (isFullInit && !msbInitialSyncDone) {
+        msbInitialSyncDone = true;
+        if (msbBootWaitTimer) {
+            clearTimeout(msbBootWaitTimer);
+            msbBootWaitTimer = null;
+        }
+    }
+    updateWeakNetworkUI();
+};
+
+(function initWeakNetworkWatcher() {
+    ensureWeakBootOverlay();
+    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+
+    if (!navigator.onLine || (conn && (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || (conn.downlink > 0 && conn.downlink < 0.45)))) {
+        document.getElementById('msb-weak-boot-overlay').style.display = 'flex';
+    }
+
+    msbBootWaitTimer = setTimeout(function() {
+        if (!msbInitialSyncDone) {
+            ensureWeakBootOverlay();
+            document.getElementById('msb-weak-boot-overlay').style.display = 'flex';
+            triggerImmediateEdgePull();
+        }
+    }, 1800);
+
+    if (conn && typeof conn.addEventListener === 'function') {
+        conn.addEventListener('change', function() {
+            updateWeakNetworkUI();
+            if (navigator.onLine) {
+                triggerImmediateEdgePull();
+            }
+        });
+    }
+
+    window.addEventListener('online', function() {
+        triggerImmediateEdgePull();
+        setTimeout(updateWeakNetworkUI, 400);
+    });
+
+    window.addEventListener('offline', function() {
+        updateWeakNetworkUI();
+    });
+
+    setInterval(function() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            msbPingSentAt = Date.now();
+        } else if (navigator.onLine) {
+            triggerImmediateEdgePull();
+        }
+        updateWeakNetworkUI();
+    }, 2200);
+})();
 initApp();

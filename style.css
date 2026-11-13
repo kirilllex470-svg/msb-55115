@@ -297,113 +297,86 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
     #send-btn { height: 38px; padding: 0 10px; font-size: 12px; }
 }
 @media (max-width: 480px) { .inputs-grid, .maps-grid { grid-template-columns: 1fr; } }
-/* === ЭКРАН ПЛОХОЙ СВЯЗИ ПРИ ЗАГРУЗКЕ === */
-#poor-connection-screen {
+/* === АНИМАЦИЯ ПРЫГАЮЩЕГО ТЕКСТА МСБ55115 И ОКНА СЛАБОЙ СЕТИ === */
+@keyframes msbJumpAnim {
+    0%, 100% { transform: translateY(0) scale(1); text-shadow: 0 0 8px rgba(56, 189, 248, 0.6); }
+    45% { transform: translateY(-9px) scale(1.08); color: #facc15; text-shadow: 0 6px 16px rgba(250, 204, 21, 0.85); }
+    75% { transform: translateY(2px) scale(0.98); }
+}
+
+.msb-jumping-word {
+    display: inline-block;
+    font-weight: 900;
+    color: #38bdf8;
+    padding: 0 4px;
+    animation: msbJumpAnim 0.85s cubic-bezier(0.28, 0.84, 0.42, 1) infinite;
+}
+
+#msb-weak-boot-overlay {
     display: none;
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: radial-gradient(circle at center, #1e293b 0%, #090d16 100%);
+    background: rgba(9, 13, 22, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     z-index: 250000;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
     padding: 20px;
     box-sizing: border-box;
-    text-align: center;
 }
 
-.poor-conn-card {
-    background: rgba(15, 23, 42, 0.92);
-    border: 2px solid #ef4444;
-    border-radius: 20px;
+.msb-weak-boot-card {
+    background: linear-gradient(145deg, #1e293b, #0f172a);
+    border: 2px solid #38bdf8;
+    border-radius: 18px;
     padding: 28px 22px;
-    max-width: 420px;
+    max-width: 440px;
     width: 100%;
-    box-shadow: 0 0 40px rgba(239, 68, 68, 0.35), inset 0 0 20px rgba(239, 68, 68, 0.12);
+    text-align: center;
+    box-shadow: 0 0 45px rgba(56, 189, 248, 0.35);
+    color: #f8fafc;
+    font-size: 16px;
+    line-height: 1.6;
+    font-weight: 700;
 }
 
-.radar-pulse-box {
-    width: 84px;
-    height: 84px;
-    margin: 0 auto 18px auto;
+.msb-weak-spinner {
+    width: 38px;
+    height: 38px;
+    border: 4px solid rgba(56, 189, 248, 0.2);
+    border-top-color: #facc15;
     border-radius: 50%;
-    border: 2px solid rgba(239, 68, 68, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 38px;
-    position: relative;
-    animation: radarRing 1.8s infinite ease-out;
+    margin: 0 auto 16px auto;
+    animation: msbSpin 0.9s linear infinite;
 }
 
-@keyframes radarRing {
-    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.65); }
-    70% { box-shadow: 0 0 0 24px rgba(239, 68, 68, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+@keyframes msbSpin {
+    to { transform: rotate(360deg); }
 }
 
-/* === АНИМАЦИЯ ПРЫГАЮЩИХ БУКВ (ВОЛНА) === */
-.jump-wave-text {
-    display: inline-flex;
-    justify-content: center;
-    align-items: baseline;
-    flex-wrap: wrap;
-}
-
-.jump-wave-text span {
-    display: inline-block;
-    animation: letterBounceWave 1.35s ease-in-out infinite;
-}
-
-@keyframes letterBounceWave {
-    0%, 60%, 100% {
-        transform: translateY(0) scale(1);
-    }
-    30% {
-        transform: translateY(-7px) scale(1.08);
-        text-shadow: 0 6px 12px rgba(56, 189, 248, 0.65);
-    }
-}
-
-.poor-conn-title {
-    font-size: 28px;
-    font-weight: 900;
-    color: #38bdf8;
-    letter-spacing: 2px;
-    margin-bottom: 12px;
-}
-
-.poor-conn-status {
-    color: #fca5a5;
-    font-size: 15px;
-    font-weight: bold;
-    line-height: 1.5;
-    margin-bottom: 14px;
-}
-
-.poor-conn-sub {
-    color: #94a3b8;
-    font-family: monospace;
+#msb-chat-weak-banner {
+    display: none;
+    background: linear-gradient(90deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+    border-bottom: 1.5px solid #facc15;
+    border-left: 4px solid #ef4444;
+    color: #f8fafc;
+    padding: 9px 12px;
     font-size: 13px;
-    background: #090d16;
-    padding: 10px;
-    border-radius: 10px;
-    border: 1px solid #334155;
-}
-
-/* === СТАТУСЫ В ШАПКЕ ЧАТА (НАБИРАЕТ / ИЩЕМ СЕТЬ) === */
-.partner-status.typing-active {
-    color: #38bdf8 !important;
     font-weight: 700;
+    text-align: center;
+    z-index: 20;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
-.partner-status.typing-active span {
-    animation-duration: 1.05s;
+@keyframes typingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
 }
 
-.partner-status.searching-net {
+.msb-typing-active {
     color: #facc15 !important;
-    font-weight: 700;
-    animation: pulseLive 1.2s infinite;
+    font-weight: 700 !important;
+    animation: typingPulse 1.1s infinite;
 }

@@ -90,13 +90,28 @@ let requestsDB = readJSON(REQUESTS_FILE, {});
 const db = {
     lastRead: readJSON(READS_FILE, {})
 };
-const lastSeenDB = {};
+
+const LAST_SEEN_FILE = path.join(storagePath, 'last_seen.json');
+const lastSeenDB = readJSON(LAST_SEEN_FILE, {});
+const typingDB = {};
+
+function formatTimestampRu(ts) {
+    if (!ts) return '';
+    const d = new Date(Number(ts) + 3 * 3600 * 1000);
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = d.getUTCFullYear();
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const min = String(d.getUTCMinutes()).padStart(2, '0');
+    return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min;
+}
 
 function markUserOnline(name) {
     if (!name) return;
     const key = String(name).trim().toLowerCase();
     if (!key || key === 'гость' || key === 'просмотр') return;
     lastSeenDB[key] = Date.now();
+    writeJSON(LAST_SEEN_FILE, lastSeenDB);
 }
 
 function isUserOnlineNow(name) {
@@ -104,6 +119,13 @@ function isUserOnlineNow(name) {
     const key = String(name).trim().toLowerCase();
     const t = lastSeenDB[key] || 0;
     return (Date.now() - t) < 12000;
+}
+
+function getUserLastSeenStr(name) {
+    if (!name) return '';
+    const key = String(name).trim().toLowerCase();
+    const t = lastSeenDB[key] || 0;
+    return t ? formatTimestampRu(t) : '';
 }
 
 let tableHistory = readJSON(DB_FILE, new Array());
@@ -816,6 +838,29 @@ const server = http.createServer(function(req, res) {
         });
     }
 
+    if (urlPath === '/api/typing' && req.method === 'POST') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.user && data.room) {
+                const uClean = String(data.user).trim();
+                markUserOnline(uClean);
+                if (!typingDB[data.room]) typingDB[data.room] = {};
+                if (data.typing === false) {
+                    delete typingDB[data.room][uClean];
+                } else {
+                    typingDB[data.room][uClean] = Date.now();
+                }
+                broadcastWS({
+                    type: 'chat_typing',
+                    room: data.room,
+                    user: uClean,
+                    typing: data.typing !== false
+                });
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+        });
+    }
+
     if (urlPath === '/api/messages' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const room = myUrl.searchParams.get('room');
@@ -836,7 +881,8 @@ const server = http.createServer(function(req, res) {
             'Content-Type': 'application/json; charset=utf-8',
             'Cache-Control': 'no-cache'
         });
-                let partnerOnline = false;
+        let partnerOnline = false;
+        let partnerLastSeen = '';
         let otherParticipants = new Array();
         if (room) {
             if (groupsDB[room] && Array.isArray(groupsDB[room].members)) {
@@ -856,10 +902,25 @@ const server = http.createServer(function(req, res) {
                     return p !== reqUser;
                 });
                 if (otherParticipants.length > 0) {
-                    partnerOnline = isUserOnlineNow(otherParticipants.at(0));
+                    const pKey = otherParticipants.at(0);
+                    partnerOnline = isUserOnlineNow(pKey);
+                    partnerLastSeen = getUserLastSeenStr(pKey);
                 }
             }
         }
+
+        const activeTypers = new Array();
+        if (room && typingDB[room]) {
+            const nowTs = Date.now();
+            Object.keys(typingDB[room]).forEach(function(tUser) {
+                if (nowTs - typingDB[room][tUser] < 4500) {
+                    if (tUser.toLowerCase() !== reqUser) activeTypers.push(tUser);
+                } else {
+                    delete typingDB[room][tUser];
+                }
+            });
+        }
+
         const enriched = rawList.map(function(msg) {
             const senderLow = String(msg.sender || '').trim().toLowerCase();
             const msgTs = Number(msg.timestamp || 0);
@@ -873,9 +934,12 @@ const server = http.createServer(function(req, res) {
             }
             return Object.assign({}, msg, { read: isRead });
         });
+
         return res.end(JSON.stringify({
             messages: enriched,
-            partnerOnline: partnerOnline
+            partnerOnline: partnerOnline,
+            partnerLastSeen: partnerLastSeen,
+            typingUsers: activeTypers
         }));
     }
 
@@ -989,7 +1053,8 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         time: lastMsgTime,
         unread: unreadCount,
         isGroup: isGroup,
-        online: isOnline
+        online: isOnline,
+        lastSeen: !isGroup ? getUserLastSeenStr(cleanKey) : ''
     };
 }
 
@@ -1058,6 +1123,9 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
         return res.end('Incomplete');
     }
     markUserOnline(sender);
+	    if (typingDB[room]) {
+        delete typingDB[room][sender];
+    }
     if (!Array.isArray(roomsDB[room])) {
         roomsDB[room] = new Array();
     }
