@@ -73,6 +73,10 @@ let publicVapidKey = null;
 let deferredPrompt = null;
 let knownServerBootId = sessionStorage.getItem('msb_server_boot_id') || null;
 let pendingServerBootId = null;
+var isNetworkPoor = false;
+var initialConnectionDone = false;
+var fastProbeTimer = null;
+
 
 function getStaticDateTime() {
     const d = new Date();
@@ -1620,8 +1624,10 @@ function makeAnimatedSvgGif(cat, idx, title) {
     for (let y = 20; y < 200; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke(); }
     ctx.strokeStyle = pal.at(2); ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(160, 78, 52, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = pal.at(3); ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
-    ctx.beginPath(); ctx.arc(160, 78, 36, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = pal.at(3); ctx.lineWidth = 2; ctx.setLineDash(Array.of(8, 6));
+    ctx.beginPath(); ctx.arc(160, 78, 36, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash(new Array());
+
     ctx.font = '46px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(icon, 160, 78);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.78)'; ctx.fillRect(14, 144, 292, 42);
