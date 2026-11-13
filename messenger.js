@@ -103,10 +103,30 @@ function ensureMessengerWeakBannerEl() {
     return banner;
 }
 
+var msbWeakBannerTimer = null;
+
 function syncMessengerWeakBanner(isWeak) {
     var banner = ensureMessengerWeakBannerEl();
     if (!banner) return;
-    banner.style.display = isWeak ? 'block' : 'none';
+
+    if (!isWeak) {
+        if (msbWeakBannerTimer) {
+            clearTimeout(msbWeakBannerTimer);
+            msbWeakBannerTimer = null;
+        }
+        banner.style.display = 'none';
+        return;
+    }
+
+    if (banner.style.display === 'block' || msbWeakBannerTimer) return;
+
+    msbWeakBannerTimer = setTimeout(function() {
+        msbWeakBannerTimer = null;
+        if (window.msbIsWeakNetwork || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+            var b = ensureMessengerWeakBannerEl();
+            if (b) b.style.display = 'block';
+        }
+    }, 6000);
 }
 window.syncMessengerWeakBanner = syncMessengerWeakBanner;
 
@@ -115,9 +135,10 @@ function showNetworkErrorBanner() {
 }
 
 function clearNetworkErrorBanner() {
-    var stillWeak = Boolean(window.msbIsWeakNetwork);
-    syncMessengerWeakBanner(stillWeak);
+    window.msbIsWeakNetwork = false;
+    syncMessengerWeakBanner(false);
 }
+
 
 function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsersList) {
     var stEl = document.getElementById('chat-status');
