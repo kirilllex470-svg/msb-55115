@@ -159,6 +159,8 @@ function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsers
 
     if (typers.length > 0) {
         stEl.classList.add('msb-typing-active');
+        stEl.style.color = '#4ade80';
+        stEl.style.fontWeight = 'bold';
         if (isCurrentGroup) {
             stEl.textContent = '✍️ ' + typers.join(', ') + ' набирает сообщение...';
         } else {
@@ -166,6 +168,8 @@ function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsers
         }
         return;
     }
+    stEl.style.fontWeight = 'normal';
+
 
     stEl.classList.remove('msb-typing-active');
 
@@ -213,7 +217,6 @@ window.handleIncomingTypingWS = function(msg) {
         }
     }, 4300);
 };
-
 function notifyServerTyping(isTyping) {
     var me = getActiveChatIdentity();
     if (!me || !currentRoomId) return;
@@ -221,12 +224,24 @@ function notifyServerTyping(isTyping) {
     if (isTyping && (now - myLastTypingSentAt < 1800)) return;
     myLastTypingSentAt = isTyping ? now : 0;
 
+    var payload = {
+        type: 'chat_typing',
+        user: me,
+        room: currentRoomId,
+        typing: Boolean(isTyping)
+    };
+
+    if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify(payload)); } catch (e) {}
+    }
+
     fetch('/api/typing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: me, room: currentRoomId, typing: Boolean(isTyping) })
+        body: JSON.stringify(payload)
     }).catch(function() {});
 }
+
 
 
 function ensureCleanMessengerTopbar() {
