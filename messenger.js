@@ -69,6 +69,7 @@ function escapeEdgeHtml(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
+
 function saveTextOutboxToStorage() {
     try {
         var onlyText = msbOutboxQueue.filter(function(item) {
@@ -219,6 +220,7 @@ function renderPendingBubbles() {
         mDiv.scrollTop = mDiv.scrollHeight;
     }
 }
+
 function flushOutboxQueue() {
     renderPendingBubbles();
     if (msbIsFlushing || msbOutboxQueue.length === 0) return;
@@ -291,6 +293,7 @@ function flushOutboxQueue() {
 function flushRetryQueue() {
     flushOutboxQueue();
 }
+
 function syncMessengerAuth() {
     ensureCleanMessengerTopbar();
     chatUser = getActiveChatIdentity();
@@ -323,7 +326,6 @@ function syncMessengerAuth() {
     }
     loadFriendsAndRequests();
 }
-
 function openMessengerWindow(targetPartnerName) {
     ensureCleanMessengerTopbar();
     chatUser = getActiveChatIdentity();
@@ -428,9 +430,6 @@ function uploadMyAvatar(inputEl) {
             var sy = (img.height - minSide) / 2;
             ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 160, 160);
             var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
-            try {
-                localStorage.setItem('msb_cache_my_av_' + chatUser, dataUrl);
-            } catch (err) {}
             fetch('/api/user/avatar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -449,6 +448,7 @@ function uploadMyAvatar(inputEl) {
     };
     reader.readAsDataURL(file);
 }
+
 document.addEventListener('DOMContentLoaded', function() {
     ensureCleanMessengerTopbar();
     var tInput = document.getElementById('text-input');
@@ -475,42 +475,11 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
-
-    if (friendsList.length === 0) {
-        try {
-            var rawCachedFriends = localStorage.getItem('msb_cache_friends_' + chatUser);
-            var cachedFriends = rawCachedFriends ? JSON.parse(rawCachedFriends) : new Array();
-            if (Array.isArray(cachedFriends) && cachedFriends.length > 0) {
-                friendsList = cachedFriends;
-                if (typeof myMessengerFriends !== 'undefined') {
-                    myMessengerFriends = cachedFriends;
-                }
-                if (typeof populateTargetSelect === 'function') {
-                    populateTargetSelect();
-                }
-                renderFriends();
-                updateTotalUnreadBadge();
-            }
-        } catch (e) {}
-    }
-
-    try {
-        var cachedMyAv = localStorage.getItem('msb_cache_my_av_' + chatUser);
-        if (cachedMyAv) {
-            renderAvatarElement(document.getElementById('my-avatar'), chatUser, cachedMyAv);
-            var legAvInit = document.getElementById('my-avatar-legacy');
-            if (legAvInit) renderAvatarElement(legAvInit, chatUser, cachedMyAv);
-        }
-    } catch (e) {}
-
     fetch('/api/friends/get?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (Array.isArray(data)) {
                 friendsList = data;
-                try {
-                    localStorage.setItem('msb_cache_friends_' + chatUser, JSON.stringify(data));
-                } catch (e) {}
                 if (typeof myMessengerFriends !== 'undefined') {
                     myMessengerFriends = data;
                 }
@@ -536,15 +505,13 @@ function loadFriendsAndRequests() {
         .then(function(r) { return r.json(); })
         .then(function(d) {
             if (d && d.avatar) {
-                try {
-                    localStorage.setItem('msb_cache_my_av_' + chatUser, d.avatar);
-                } catch (e) {}
                 renderAvatarElement(document.getElementById('my-avatar'), chatUser, d.avatar);
                 var legAv = document.getElementById('my-avatar-legacy');
                 if (legAv) renderAvatarElement(legAv, chatUser, d.avatar);
             }
         }).catch(function() {});
 }
+
 function renderRequests() {
     var box = document.getElementById('requests-box');
     if (!box) return;
@@ -569,7 +536,6 @@ function renderRequests() {
         box.appendChild(item);
     });
 }
-
 function renderFriends() {
     chatUser = getActiveChatIdentity();
     var box = document.getElementById('friends-box');
@@ -614,6 +580,7 @@ function renderFriends() {
         box.appendChild(item);
     });
 }
+
 function openCreateGroupModal() {
     document.getElementById('group-modal').style.display = 'flex';
 }
@@ -690,6 +657,7 @@ function deleteFriend(friendObj, event) {
         loadFriendsAndRequests();
     });
 }
+
 function resetChatArea() {
     currentPartner = null;
     currentRoomId = null;
@@ -772,6 +740,7 @@ function markChatAsRead(roomId) {
         loadFriendsAndRequests();
     });
 }
+
 function sendMessage() {
     chatUser = getActiveChatIdentity();
     var textInput = document.getElementById('text-input');
@@ -797,7 +766,6 @@ function sendMessage() {
     });
     textInput.focus();
 }
-
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
@@ -932,7 +900,6 @@ function uploadAnyFile(inputElement) {
         quoteSender: qSnd
     });
 }
-
 function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     var container = rowElement.querySelector('.swipe-container');
     var leftIndicator = rowElement.querySelector('.left-indicator');
@@ -954,6 +921,7 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
         isHorizontal = false;
         container.style.transition = 'none';
     }, { passive: true });
+
     container.addEventListener('touchmove', function(e) {
         if (!isSwiping) return;
         var touch = e.touches.item(0);
@@ -1087,44 +1055,14 @@ function fetchMessages() {
     var modal = document.getElementById('messenger-modal');
     var isModalOpen = modal && modal.style.display === 'flex';
 
-    if (renderedMsgIds.size === 0) {
-        try {
-            var rawRoomCache = localStorage.getItem('msb_cache_room_' + currentRoomId);
-            var cachedMsgs = rawRoomCache ? JSON.parse(rawRoomCache) : new Array();
-            if (Array.isArray(cachedMsgs) && cachedMsgs.length > 0) {
-                var phInit = mDiv.querySelector('.chat-placeholder');
-                if (phInit) phInit.remove();
-                cachedMsgs.forEach(function(msg) {
-                    var isMyInit = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
-                    var checkInit = isMyInit
-                        ? (msg.read
-                            ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;" title="Прочитано">✓✓</span>'
-                            : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;" title="Доставлено">✓</span>')
-                        : '';
-                    renderedMsgIds.add(msg.id);
-                    renderSingleRow(mDiv, msg, isMyInit, checkInit);
-                });
-                lastMessagesCount = cachedMsgs.length;
-                mDiv.scrollTop = mDiv.scrollHeight;
-            }
-        } catch (e) {}
-    }
-
     fetch('/api/messages?room=' + encodeURIComponent(currentRoomId) + '&user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
     .then(function(res) { return res.json(); })
     .then(function(resp) {
         var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
-        try {
-            localStorage.setItem('msb_cache_room_' + currentRoomId, JSON.stringify(data));
-        } catch (e) {}
         var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
+        lastKnownPartnerOnline = partnerOnline;
         if (!isCurrentGroup && currentPartner) {
-            var stEl = document.getElementById('chat-status');
-            if (stEl) {
-                stEl.style.display = 'block';
-                stEl.textContent = partnerOnline ? '🟢 в сети' : '⚫ не в сети';
-                stEl.style.color = partnerOnline ? '#4ade80' : '#94a3b8';
-            }
+            refreshChatHeaderStatusUI();
         }
         if (data.length === 0) {
             var hasLocalPending = msbOutboxQueue.some(function(p) { return p && p.room === currentRoomId; });
@@ -1220,7 +1158,6 @@ function renderSingleRow(mDiv, msg, isMy, checkIcon) {
     mDiv.appendChild(row);
     setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
 }
-
 function playVideoWithSound(v) {
     document.querySelectorAll('#messages video.video-round').forEach(function(other) {
         if (other !== v) { other.muted = true; other.pause(); }
@@ -1260,8 +1197,73 @@ function updateTotalUnreadBadge() {
     if (total > 0) badge.innerText = total;
 }
 
+var partnerTypingMap = {};
+var lastTypingSentAt = 0;
+var lastKnownPartnerOnline = false;
+
+function buildMiniJumpText(str) {
+    return Array.from(String(str)).map(function(ch, idx) {
+        if (ch === ' ') return '&nbsp;';
+        return '<span class="mini-jump-char" style="animation-delay:' + (idx * 0.06).toFixed(2) + 's">' + ch + '</span>';
+    }).join('');
+}
+
+function sendTypingSignal() {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser || !currentRoomId) return;
+    var curTime = new Date().getTime();
+    if ((curTime - lastTypingSentAt)  new Date().getTime()) {
+        stEl.className = 'partner-status status-typing-now';
+        var label = isCurrentGroup ? (typingInfo.sender + ' набирает сообщение...') : '✍️ набирает сообщение...';
+        stEl.innerHTML = buildMiniJumpText(label);
+        return;
+    }
+    stEl.className = 'partner-status';
+    if (isCurrentGroup) {
+        stEl.textContent = '👥 конференция';
+        stEl.style.color = '#38bdf8';
+    } else {
+        stEl.textContent = lastKnownPartnerOnline ? '🟢 в сети' : '⚫ не в сети';
+        stEl.style.color = lastKnownPartnerOnline ? '#4ade80' : '#94a3b8';
+    }
+}
+
+function renderFriendsTypingPreview() {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser) return;
+    var items = document.querySelectorAll('#friends-box .friend-item');
+    items.forEach(function(item, idx) {
+        var f = friendsList[idx];
+        if (!f) return;
+        var rId = f.isGroup ? f.id : makeDirectRoomId(chatUser, f.name);
+        var lastMsgEl = item.querySelector('.friend-last-msg');
+        var nameEl = item.querySelector('.friend-name');
+        if (isServerDisconnectedNow() && nameEl && !f.isGroup) {
+            var unitTag = f.unit ? (' <span style="color:#38bdf8;font-size:12px;">(' + f.unit + ')</span>') : '';
+            nameEl.innerHTML = '📡 ' + f.name + unitTag + ' <span style="color:#fbbf24;font-size:11px;">(ищем сеть...)</span>';
+        }
+        if (!lastMsgEl) return;
+        var tInfo = partnerTypingMap[rId];
+        if (tInfo && tInfo.until > new Date().getTime()) {
+            lastMsgEl.innerHTML = '<span style="color:#38bdf8;font-weight:bold;">' + buildMiniJumpText('✍️ набирает сообщение...') + '</span>';
+        } else {
+            lastMsgEl.textContent = f.lastMessage || 'Нет сообщений';
+        }
+    });
+}
+
+function bindTypingInputField() {
+    var ti = document.getElementById('text-input');
+    if (ti && !ti._msbTypingBound) {
+        ti._msbTypingBound = true;
+        ti.addEventListener('input', sendTypingSignal);
+        ti.addEventListener('keydown', function(e) { if (e.key !== 'Enter') sendTypingSignal(); });
+    }
+}
+
 window.addEventListener('online', function() { clearNetworkErrorBanner(); flushOutboxQueue(); if (currentRoomId) { fetchMessages(); markChatAsRead(currentRoomId); } });
 setInterval(function() { renderPendingBubbles(); flushOutboxQueue(); }, 3500);
+setInterval(function() { bindTypingInputField(); refreshChatHeaderStatusUI(); renderFriendsTypingPreview(); }, 900);
 
 window.openMessengerWindow = openMessengerWindow;
 window.closeMessengerWindow = closeMessengerWindow;
@@ -1284,101 +1286,5 @@ window.inlineDeleteMessage = inlineDeleteMessage;
 window.playVideoWithSound = playVideoWithSound;
 window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
-
-var partnerTypingMap = {};
-var lastTypingSentAt = 0;
-var lastKnownPartnerOnline = false;
-
-function buildMiniJumpText(str) {
-    return Array.from(String(str)).map(function(ch, idx) {
-        if (ch === ' ') return '&nbsp;';
-        return '<span class="mini-jump-char" style="animation-delay:' + (idx * 0.06).toFixed(2) + 's">' + ch + '</span>';
-    }).join('');
-}
-
-function sendTypingSignal() {
-    chatUser = getActiveChatIdentity();
-    if (!chatUser || !currentRoomId) return;
-    if ((Date.now() - lastTypingSentAt)  Date.now()) {
-        stEl.className = 'partner-status status-typing-now';
-        var label = isCurrentGroup
-            ? (typingInfo.sender + ' набирает сообщение...')
-            : '✍️ набирает сообщение...';
-        stEl.innerHTML = buildMiniJumpText(label);
-        return;
-    }
-
-    stEl.className = 'partner-status';
-    if (isCurrentGroup) {
-        stEl.textContent = '👥 конференция';
-        stEl.style.color = '#38bdf8';
-    } else {
-        stEl.textContent = lastKnownPartnerOnline ? '🟢 в сети' : '⚫ не в сети';
-        stEl.style.color = lastKnownPartnerOnline ? '#4ade80' : '#94a3b8';
-    }
-}
+window.handleIncomingTypingWS = handleIncomingTypingWS;
 window.refreshChatHeaderStatusUI = refreshChatHeaderStatusUI;
-
-function renderFriendsTypingPreview() {
-    chatUser = getActiveChatIdentity();
-    if (!chatUser) return;
-    var items = document.querySelectorAll('#friends-box .friend-item');
-    items.forEach(function(item, idx) {
-        var f = friendsList[idx];
-        if (!f) return;
-        var rId = f.isGroup ? f.id : makeDirectRoomId(chatUser, f.name);
-        var lastMsgEl = item.querySelector('.friend-last-msg');
-        var nameEl = item.querySelector('.friend-name');
-
-        if (isServerDisconnectedNow() && nameEl && !f.isGroup) {
-            var unitTag = f.unit ? (' <span style="color:#38bdf8;font-size:12px;">(' + f.unit + ')</span>') : '';
-            nameEl.innerHTML = '📡 ' + f.name + unitTag + ' <span style="color:#fbbf24;font-size:11px;">(ищем сеть...)</span>';
-        }
-
-        if (!lastMsgEl) return;
-        var tInfo = partnerTypingMap[rId];
-        if (tInfo && tInfo.until > Date.now()) {
-            lastMsgEl.innerHTML = '<span style="color:#38bdf8;font-weight:bold;">' +
-                buildMiniJumpText('✍️ набирает сообщение...') + '</span>';
-        } else {
-            lastMsgEl.textContent = f.lastMessage || 'Нет сообщений';
-        }
-    });
-}
-
-function bindTypingInputField() {
-    var ti = document.getElementById('text-input');
-    if (ti && !ti._msbTypingBound) {
-        ti._msbTypingBound = true;
-        ti.addEventListener('input', sendTypingSignal);
-        ti.addEventListener('keydown', function(e) {
-            if (e.key !== 'Enter') sendTypingSignal();
-        });
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bindTypingInputField);
-} else {
-    bindTypingInputField();
-}
-
-var _origFetchMessages = fetchMessages;
-fetchMessages = function() {
-    _origFetchMessages();
-    setTimeout(function() {
-        var stEl = document.getElementById('chat-status');
-        if (stEl && stEl.textContent.indexOf('в сети') !== -1 && stEl.textContent.indexOf('не в сети') === -1) {
-            lastKnownPartnerOnline = true;
-        } else if (stEl && stEl.textContent.indexOf('не в сети') !== -1) {
-            lastKnownPartnerOnline = false;
-        }
-        refreshChatHeaderStatusUI();
-    }, 120);
-};
-
-setInterval(function() {
-    bindTypingInputField();
-    refreshChatHeaderStatusUI();
-    renderFriendsTypingPreview();
-}, 900);
