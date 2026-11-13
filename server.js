@@ -91,6 +91,8 @@ const db = {
     lastRead: readJSON(READS_FILE, {})
 };
 const lastSeenDB = {};
+const typingDB = {}; // ключ: "roomId|userLower", значение: timestamp
+
 
 function markUserOnline(name) {
     if (!name) return;
@@ -872,12 +874,23 @@ const server = http.createServer(function(req, res) {
                 });
             }
             return Object.assign({}, msg, { read: isRead });
-        });
+        let typingUsers = [];
+        if (room && otherParticipants.length > 0) {
+            otherParticipants.forEach(function(part) {
+                const tStamp = typingDB[room + '|' + part] || 0;
+                if (Date.now() - tStamp < 4000) {
+                    const origName = (usersDB[part] && usersDB[part].username) ? usersDB[part].username : part;
+                    typingUsers.push(origName);
+                }
+            });
+        }
+
         return res.end(JSON.stringify({
             messages: enriched,
-            partnerOnline: partnerOnline
+            partnerOnline: partnerOnline,
+            partnerTyping: typingUsers.length > 0,
+            typingUsers: typingUsers
         }));
-    }
 
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
@@ -887,6 +900,21 @@ const server = http.createServer(function(req, res) {
                 if (!db.lastRead[myL]) db.lastRead[myL] = {};
                 db.lastRead[myL][data.room] = Date.now() + 500;
                 writeJSON(READS_FILE, db.lastRead);
+            }
+            res.writeHead(200);
+            res.end('OK');
+        });
+    }
+    if (urlPath === '/api/typing' && req.method === 'POST') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.room && data.user) {
+                const key = String(data.room).trim() + '|' + String(data.user).trim().toLowerCase();
+                if (data.typing) {
+                    typingDB[key] = Date.now();
+                } else {
+                    delete typingDB[key];
+                }
+                markUserOnline(data.user);
             }
             res.writeHead(200);
             res.end('OK');
