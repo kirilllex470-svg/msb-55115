@@ -1570,6 +1570,59 @@ function showAlert(target, text, sender, notifId, isNew) {
     currentAlertTarget = target;
     currentAlertText = text;
     currentAlertSender = sender || ADMIN_NAME;
+	const dismissedAlertIds = new Set(
+    JSON.parse(localStorage.getItem('msb_dismissed_alerts') || '[]')
+);
+
+function markAlertDismissedLocally(notifId, text, sender) {
+    const key = notifId ? String(notifId) : (String(sender) + '|' + String(text));
+    dismissedAlertIds.add(key);
+    const arr = Array.from(dismissedAlertIds).slice(-200);
+    localStorage.setItem('msb_dismissed_alerts', JSON.stringify(arr));
+}
+
+function isAlertDismissedLocally(notifId, text, sender) {
+    const key = notifId ? String(notifId) : (String(sender) + '|' + String(text));
+    return dismissedAlertIds.has(key);
+}
+
+function showAlert(target, text, sender, notifId, isNew) {
+    if (isAlertDismissedLocally(notifId, text, sender)) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'clear_alert',
+                target: target,
+                notifId: notifId,
+                readBy: currentCallsign || currentUser || 'Просмотр'
+            }));
+        }
+        return;
+    }
+
+    const updModal = document.getElementById('server-update-modal');
+    if (updModal && updModal.style.display === 'flex') return;
+
+    const msgModal = document.getElementById('messenger-modal');
+    const txtStr = String(text || '');
+    const isChatAlert = txtStr.indexOf('👥') === 0 || txtStr.indexOf('💬') === 0 || txtStr.indexOf('🎙️') === 0 || txtStr.indexOf('🎥') === 0 || txtStr.indexOf('📎') === 0 || txtStr.indexOf('🎬') === 0;
+    if (msgModal && msgModal.style.display === 'flex' && isChatAlert) {
+        markAlertDismissedLocally(notifId, text, sender);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'clear_alert',
+                target: target,
+                notifId: notifId,
+                readBy: currentCallsign || currentUser || 'Просмотр',
+                readTime: new Date().toLocaleTimeString().slice(0, 5)
+            }));
+        }
+        return;
+    }
+
+    currentAlertId = notifId || null;
+    currentAlertTarget = target;
+    currentAlertText = text;
+    currentAlertSender = sender || ADMIN_NAME;
     const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
     document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
     document.getElementById('alert-text').innerText = text;
@@ -1601,6 +1654,8 @@ function stopAlertVisuals() {
 
 function confirmAlert() {
     unlockMobileFeatures();
+    markAlertDismissedLocally(currentAlertId, currentAlertText, currentAlertSender);
+
     const whoConfirmed = currentCallsign || currentUser || 'Просмотр';
     const readTime = new Date().toLocaleTimeString().slice(0, 5);
     const targetToClear = currentAlertTarget;
@@ -1608,14 +1663,14 @@ function confirmAlert() {
     const alertTextCopy = String(currentAlertText || '');
     const alertSenderCopy = String(currentAlertSender || '');
 
-    // Мгновенно убираем уведомление локально, чтобы окно никогда не зависало при обрыве WS
     if (targetToClear) {
         const q = getAlertsQueue(targetToClear);
         if (targetToClear === 'ВСЕМ') {
             q.forEach(function(a) {
                 if (!idToClear || a.id === idToClear) {
-                    if (!Array.isArray(a.readList)) a.readList = new Array();
+                    if (!Array.isArray(a.readList)) a.readList = [];
                     if (a.readList.indexOf(whoConfirmed) === -1) a.readList.push(whoConfirmed);
+                    if (currentUser && a.readList.indexOf(currentUser) === -1) a.readList.push(currentUser);
                 }
             });
             pendingAlerts[targetToClear] = q;
@@ -1629,7 +1684,22 @@ function confirmAlert() {
     stopAlertVisuals();
 
     if (targetToClear && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
+        ws.send(JSON.stringify({
+            type: 'clear_alert',
+            target: targetToClear,
+            notifId: idToClear,
+            readBy: whoConfirmed,
+            readTime: readTime
+        }));
+        if (currentUser && currentUser !== whoConfirmed) {
+            ws.send(JSON.stringify({
+                type: 'clear_alert',
+                target: targetToClear,
+                notifId: idToClear,
+                readBy: currentUser,
+                readTime: readTime
+            }));
+        }
     }
 
     const isFromMessenger = alertTextCopy.indexOf('👥') === 0 || alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
