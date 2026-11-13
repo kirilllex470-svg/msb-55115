@@ -817,14 +817,14 @@ async function forceReloadApp() {
         sessionStorage.removeItem('msb_server_boot_id');
     }
     try {
-        // Сначала удаляем закэшированные старые файлы интерфейса
         if ('caches' in window) {
             const keys = await caches.keys();
             for (let k of keys) {
-                await caches.delete(k);
+                if (k !== 'msb55115-media-v1') {
+                    await caches.delete(k);
+                }
             }
         }
-        // Затем обновляем Service Worker, чтобы он скачал свежую версию с Amvera
         if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
             for (let r of regs) {
@@ -834,6 +834,7 @@ async function forceReloadApp() {
     } catch (e) {}
     window.location.href = window.location.pathname + '?v=' + Date.now();
 }
+
 
 let lastPongTime = Date.now();
 
