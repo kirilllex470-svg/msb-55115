@@ -1548,7 +1548,6 @@ const dismissedAlertIds = new Set(
     JSON.parse(localStorage.getItem('msb_dismissed_alerts') || '[]')
 );
 
-
 function markAlertDismissedLocally(notifId, text, sender) {
     const key = notifId ? String(notifId) : (String(sender) + '|' + String(text));
     dismissedAlertIds.add(key);
@@ -1685,8 +1684,8 @@ function confirmAlert() {
     checkAndShowAlerts(false);
 }
 
-
 function submitRow() {
+
     if (!currentUser) return;
     let values = new Array(), isEmpty = true;
     for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
