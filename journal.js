@@ -817,17 +817,24 @@ async function forceReloadApp() {
         sessionStorage.removeItem('msb_server_boot_id');
     }
     try {
-        if ('serviceWorker' in navigator) {
-            const regs = await navigator.serviceWorker.getRegistrations();
-            for (let r of regs) { await r.update(); }
-        }
+        // Сначала удаляем закэшированные старые файлы интерфейса
         if ('caches' in window) {
             const keys = await caches.keys();
-            for (let k of keys) { await caches.delete(k); }
+            for (let k of keys) {
+                await caches.delete(k);
+            }
+        }
+        // Затем обновляем Service Worker, чтобы он скачал свежую версию с Amvera
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (let r of regs) {
+                await r.unregister();
+            }
         }
     } catch (e) {}
     window.location.href = window.location.pathname + '?v=' + Date.now();
 }
+
 let lastPongTime = Date.now();
 
 function connectWS(forceReconnect) {
