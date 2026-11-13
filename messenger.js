@@ -474,11 +474,27 @@ document.addEventListener('DOMContentLoaded', function() {
 function loadFriendsAndRequests() {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
+
+    // Сразу показываем сохраненный список друзей из памяти телефона
+    if (friendsList.length === 0) {
+        try {
+            var cachedFriends = JSON.parse(localStorage.getItem('msb_cache_friends_' + chatUser) || '[]');
+            if (Array.isArray(cachedFriends) && cachedFriends.length > 0) {
+                friendsList = cachedFriends;
+                if (typeof myMessengerFriends !== 'undefined') myMessengerFriends = cachedFriends;
+                renderFriends();
+            }
+        } catch (e) {}
+    }
+
     fetch('/api/friends/get?user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (Array.isArray(data)) {
                 friendsList = data;
+                try {
+                    localStorage.setItem('msb_cache_friends_' + chatUser, JSON.stringify(data));
+                } catch (e) {}
                 if (typeof myMessengerFriends !== 'undefined') {
                     myMessengerFriends = data;
                 }
@@ -510,6 +526,7 @@ function loadFriendsAndRequests() {
             }
         }).catch(function() {});
 }
+
 
 function renderRequests() {
     var box = document.getElementById('requests-box');
@@ -1054,10 +1071,30 @@ function fetchMessages() {
     var modal = document.getElementById('messenger-modal');
     var isModalOpen = modal && modal.style.display === 'flex';
 
+    // Если экран чата пуст, мгновенно рисуем историю из памяти телефона
+    if (renderedMsgIds.size === 0) {
+        try {
+            var cachedMsgs = JSON.parse(localStorage.getItem('msb_cache_room_' + currentRoomId) || '[]');
+            if (Array.isArray(cachedMsgs) && cachedMsgs.length > 0) {
+                cachedMsgs.forEach(function(msg) {
+                    var isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
+                    var checkIcon = isMy ? (msg.read ? ' <span class="msg-check" style="color:#38bdf8;font-weight:900;margin-left:5px;font-size:13px;">✓✓</span>' : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;">✓</span>') : '';
+                    renderedMsgIds.add(msg.id);
+                    renderSingleRow(mDiv, msg, isMy, checkIcon);
+                });
+                mDiv.scrollTop = mDiv.scrollHeight;
+            }
+        } catch (e) {}
+    }
+
     fetch('/api/messages?room=' + encodeURIComponent(currentRoomId) + '&user=' + encodeURIComponent(chatUser) + '&t=' + Date.now())
     .then(function(res) { return res.json(); })
     .then(function(resp) {
         var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
+        try {
+            localStorage.setItem('msb_cache_room_' + currentRoomId, JSON.stringify(data));
+        } catch (e) {}
+
         var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
         if (!isCurrentGroup && currentPartner) {
             var stEl = document.getElementById('chat-status');
@@ -1119,13 +1156,7 @@ function fetchMessages() {
         }
     }).catch(function() {});
 }
-function renderSingleRow(mDiv, msg, isMy, checkIcon) {
-    if (msg.clientMsgId) {
-        var tempDup = mDiv.querySelector('.msb-pending-row[data-lid="' + msg.clientMsgId + '"]');
-        if (tempDup) tempDup.remove();
-        msbOutboxQueue = msbOutboxQueue.filter(function(item) { return item && item.lid !== msg.clientMsgId; });
-        saveTextOutboxToStorage();
-    }
+
     var row = document.createElement('div');
     row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
     row.setAttribute('data-msg-id', msg.id);
