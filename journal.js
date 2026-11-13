@@ -1545,6 +1545,27 @@ function checkAndShowAlerts(isNew) {
 }
 
 function showAlert(target, text, sender, notifId, isNew) {
+    // 1. Если вышло обновление сервера — не перекрываем его окнами тревоги
+    const updModal = document.getElementById('server-update-modal');
+    if (updModal && updModal.style.display === 'flex') return;
+
+    // 2. Если мессенджер уже открыт, не спамим окном "ДА, Я ПОНЯЛ" на каждое сообщение чата
+    const msgModal = document.getElementById('messenger-modal');
+    const txtStr = String(text || '');
+    const isChatAlert = txtStr.indexOf('👥') === 0 || txtStr.indexOf('💬') === 0 || txtStr.indexOf('🎙️') === 0 || txtStr.indexOf('🎥') === 0 || txtStr.indexOf('📎') === 0 || txtStr.indexOf('🎬') === 0;
+    if (msgModal && msgModal.style.display === 'flex' && isChatAlert) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'clear_alert',
+                target: target,
+                notifId: notifId,
+                readBy: currentCallsign || currentUser || 'Просмотр',
+                readTime: new Date().toLocaleTimeString().slice(0, 5)
+            }));
+        }
+        return;
+    }
+
     currentAlertId = notifId || null;
     currentAlertTarget = target;
     currentAlertText = text;
@@ -1566,6 +1587,7 @@ function showAlert(target, text, sender, notifId, isNew) {
     playBeep();
     if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
 }
+
 function stopAlertVisuals() {
     document.getElementById('alert-modal').style.display = 'none';
     currentAlertId = null;
@@ -1585,10 +1607,31 @@ function confirmAlert() {
     const idToClear = currentAlertId;
     const alertTextCopy = String(currentAlertText || '');
     const alertSenderCopy = String(currentAlertSender || '');
+
+    // Мгновенно убираем уведомление локально, чтобы окно никогда не зависало при обрыве WS
+    if (targetToClear) {
+        const q = getAlertsQueue(targetToClear);
+        if (targetToClear === 'ВСЕМ') {
+            q.forEach(function(a) {
+                if (!idToClear || a.id === idToClear) {
+                    if (!Array.isArray(a.readList)) a.readList = new Array();
+                    if (a.readList.indexOf(whoConfirmed) === -1) a.readList.push(whoConfirmed);
+                }
+            });
+            pendingAlerts[targetToClear] = q;
+        } else {
+            pendingAlerts[targetToClear] = idToClear
+                ? q.filter(function(a) { return a.id !== idToClear; })
+                : q.slice(1);
+        }
+    }
+
     stopAlertVisuals();
+
     if (targetToClear && ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'clear_alert', target: targetToClear, notifId: idToClear, readBy: whoConfirmed, readTime: readTime }));
     }
+
     const isFromMessenger = alertTextCopy.indexOf('👥') === 0 || alertTextCopy.indexOf('💬') === 0 || alertTextCopy.indexOf('🎙️') === 0 || alertTextCopy.indexOf('🎥') === 0 || alertTextCopy.indexOf('📎') === 0 || alertTextCopy.indexOf('🎬') === 0;
     if (isFromMessenger && typeof openMessengerWindow === 'function') {
         openMessengerWindow(alertSenderCopy);
@@ -1596,6 +1639,7 @@ function confirmAlert() {
     }
     checkAndShowAlerts(false);
 }
+
 
 function submitRow() {
     if (!currentUser) return;
