@@ -91,92 +91,6 @@ const db = {
     lastRead: readJSON(READS_FILE, {})
 };
 const lastSeenDB = {};
-const typingDB = {};
-
-function markUserOnline(name) {
-    if (!name) return;
-    const key = String(name).trim().toLowerCase();
-    if (!key || key === 'гость' || key === 'просмотр') return;
-    lastSeenDB[key] = Date.now();
-}
-
-function isUserOnlineNow(name) {
-    if (!name) return false;
-    const key = String(name).trim().toLowerCase();
-    const t = lastSeenDB[key] || 0;
-    return (Date.now() - t) < 12000;
-}
-
-let tableHistory = readJSON(DB_FILE, new Array());
-if (!Array.isArray(tableHistory)) {
-    tableHistory = new Array();
-}
-let archiveHistory = readJSON(ARCHIVE_FILE, {});
-let notificationsHistory = readJSON(NOTIFS_FILE, new Array());
-if (!Array.isArray(notificationsHistory)) {
-    notificationsHistory = new Array();
-}
-let mapsHistory = readJSON(MAPS_FILE, new Array());
-if (!Array.isArray(mapsHistory)) {
-    mapsHistory = new Array();
-}
-let activeAlerts = {};
-let streamState = {
-    active: false,
-    url: ''
-};
-
-function getServerDateTime() {
-    const d = new Date(Date.now() + 3 * 3600 * 1000);
-    const dd = String(d.getUTCDate()).padStart(2, '0');
-    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const yyyy = d.getUTCFullYear();
-    const hh = String(d.getUTCHours()).padStart(2, '0');
-    const min = String(d.getUTCMinutes()).padStart(2, '0');
-    return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min;
-}
-
-var SERVER_BOOT_ID = 'build_' + Date.now();
-var SERVER_BOOT_TIME = getServerDateTime();
-
-function makeTacticalIcon(size) {
-    const crcTable = new Uint32Array(256);
-    for (let n = 0; n < 256; n++) {
-        let c = n;
-        for (let k = 0; k < 8; k++) {
-            c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
-        }
-        crcTable.fill(c, n, n + 1);
-    }
-    function crc32(buf) {
-        let c = -1;
-        for (let i = 0; i < buf.length; i++) {
-            const b = buf.readUInt8(i);
-            const idx = (c ^ b) & 0xff;
-            const t = crcTable.subarray(idx, idx + 1).reduce(function(a, v) {
-                return v;
-            }, 0);
-            c = (c >>> 8) ^ t;
-        }
-        return (c ^ -1) >>> 0;
-    }
-    function chunk(type, data) {
-        const len = Buffer.alloc(4);
-        len.writeUInt32BE(data.length, 0);
-        const t = Buffer.from(type, 'ascii');
-        const crc = Buffer.alloc(4);
-        crc.writeUInt32BE(crc32(Buffer.concat(Array.of(t, data))), 0);
-        return Buffer.concat(Array.of(len, t, data, crc));
-    }
-let roomsDB = readJSON(CHAT_ROOMS_FILE, {});
-let friendsDB = readJSON(FRIENDS_FILE, {});
-let groupsDB = readJSON(GROUPS_FILE, {});
-let requestsDB = readJSON(REQUESTS_FILE, {});
-const db = {
-    lastRead: readJSON(READS_FILE, {})
-};
-const lastSeenDB = {};
-const typingDB = {};
 
 function markUserOnline(name) {
     if (!name) return;
@@ -320,8 +234,84 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "self.addEventListener('install', function(e) { self.skipWaiting(); });",
-    "self.addEventListener('activate', function(e) { e.waitUntil(clients.claim()); });",
+    "const SHELL_CACHE = 'msb55115-shell-v1';",
+    "const MEDIA_CACHE = 'msb55115-media-v1';",
+    "const SHELL_ASSETS = [",
+    "    '/',",
+    "    '/index.html',",
+    "    '/style.css',",
+    "    '/journal.js',",
+    "    '/messenger.js',",
+    "    '/manifest.json',",
+    "    '/icon-192.png',",
+    "    '/icon-512.png'",
+    "];",
+    "",
+    "self.addEventListener('install', function(e) {",
+    "    self.skipWaiting();",
+    "    e.waitUntil(caches.open(SHELL_CACHE).then(function(cache) { return cache.addAll(SHELL_ASSETS); }));",
+    "});",
+    "self.addEventListener('activate', function(e) {",
+    "    e.waitUntil(caches.keys().then(function(keys) {",
+    "        return Promise.all(keys.map(function(k) {",
+    "            if (k !== SHELL_CACHE && k !== MEDIA_CACHE) return caches.delete(k);",
+    "        }));",
+    "    }).then(function() { return clients.claim(); }));",
+    "});",
+    "",
+    "function buildRangeResponse(request, cachedResponse) {",
+    "    const rangeHeader = request.headers.get('range');",
+    "    if (!rangeHeader) return Promise.resolve(cachedResponse);",
+    "    return cachedResponse.arrayBuffer().then(function(buf) {",
+    "        const bytes = /^bytes=(\\d+)-(\\d+)?$/.exec(rangeHeader);",
+    "        if (!bytes) return cachedResponse;",
+    "        const start = Number(bytes.at(1));",
+    "        const end = bytes.at(2) ? Number(bytes.at(2)) : buf.byteLength - 1;",
+    "        const slice = buf.slice(start, end + 1);",
+    "        return new Response(slice, {",
+    "            status: 206,",
+    "            statusText: 'Partial Content',",
+    "            headers: {",
+    "                'Content-Range': 'bytes ' + start + '-' + end + '/' + buf.byteLength,",
+    "                'Accept-Ranges': 'bytes',",
+    "                'Content-Length': String(slice.byteLength),",
+    "                'Content-Type': cachedResponse.headers.get('Content-Type') || 'application/octet-stream'",
+    "            }",
+    "        });",
+    "    });",
+    "}",
+    "",
+    "self.addEventListener('fetch', function(event) {",
+    "    const url = new URL(event.request.url);",
+    "    if (event.request.method !== 'GET') return;",
+    "    if (url.pathname.startsWith('/uploads/')) {",
+    "        event.respondWith(caches.open(MEDIA_CACHE).then(function(cache) {",
+    "            return cache.match(url.pathname).then(function(cachedRes) {",
+    "                if (cachedRes) return buildRangeResponse(event.request, cachedRes);",
+    "                return fetch(url.pathname).then(function(networkRes) {",
+    "                    if (networkRes && networkRes.status === 200) {",
+    "                        cache.put(url.pathname, networkRes.clone());",
+    "                        return buildRangeResponse(event.request, networkRes);",
+    "                    }",
+    "                    return networkRes;",
+    "                });",
+    "            });",
+    "        }));",
+    "        return;",
+    "    }",
+    "    if (url.pathname.startsWith('/api/') || url.pathname === '/maps-list' || url.pathname === '/archive-data') return;",
+    "    event.respondWith(caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
+    "        if (cachedRes) return cachedRes;",
+    "        return fetch(event.request).then(function(networkRes) {",
+    "            if (networkRes && networkRes.status === 200) {",
+    "                const resClone = networkRes.clone();",
+    "                caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
+    "            }",
+    "            return networkRes;",
+    "        });",
+    "    }));",
+    "});",
+    "",
     "self.addEventListener('push', function(event) {",
     "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!', tag: 'msb-alert' };",
     "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
@@ -329,7 +319,7 @@ const SW_CODE = [
     "        body: data.body,",
     "        icon: '/icon-192.png',",
     "        badge: '/icon-192.png',",
-    "        vibrate: [400, 100, 400, 100, 400, 200, 600],",
+    "        vibrate: Array.of(400, 100, 400, 100, 400, 200, 600),",
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
@@ -337,18 +327,18 @@ const SW_CODE = [
     "        data: { url: '/' }",
     "    }));",
     "});",
+    "",
     "self.addEventListener('notificationclick', function(event) {",
     "    event.notification.close();",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
-    "            var cl = clientList[i];",
+    "            var cl = clientList.at(i);",
     "            if (cl && 'focus' in cl) return cl.focus();",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
 ].join('\n');
-
 function readBodyJSON(req, cb) {
     let body = '';
     req.on('data', function(chunk) {
@@ -504,6 +494,7 @@ const server = http.createServer(function(req, res) {
             }));
         });
     }
+
     if (req.method === 'GET' && urlPath === '/api/user/me') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
@@ -680,7 +671,6 @@ const server = http.createServer(function(req, res) {
         });
         return res.end(JSON.stringify(listData));
     }
-
     if (urlPath === '/api/friends/request/send' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.from || !data.to) {
@@ -767,7 +757,6 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
-
     if (urlPath === '/api/groups/create' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.creator || !data.groupName || !Array.isArray(data.members)) {
@@ -847,7 +836,7 @@ const server = http.createServer(function(req, res) {
             'Content-Type': 'application/json; charset=utf-8',
             'Cache-Control': 'no-cache'
         });
-        let partnerOnline = false;
+                let partnerOnline = false;
         let otherParticipants = new Array();
         if (room) {
             if (groupsDB[room] && Array.isArray(groupsDB[room].members)) {
@@ -884,23 +873,9 @@ const server = http.createServer(function(req, res) {
             }
             return Object.assign({}, msg, { read: isRead });
         });
-
-        let typingUsers = new Array();
-        if (room && otherParticipants.length > 0) {
-            otherParticipants.forEach(function(part) {
-                const tStamp = typingDB[room + '|' + part] || 0;
-                if (Date.now() - tStamp < 4000) {
-                    const origName = (usersDB[part] && usersDB[part].username) ? usersDB[part].username : part;
-                    typingUsers.push(origName);
-                }
-            });
-        }
-
         return res.end(JSON.stringify({
             messages: enriched,
-            partnerOnline: partnerOnline,
-            partnerTyping: typingUsers.length > 0,
-            typingUsers: typingUsers
+            partnerOnline: partnerOnline
         }));
     }
 
@@ -918,21 +893,6 @@ const server = http.createServer(function(req, res) {
         });
     }
 
-    if (urlPath === '/api/typing' && req.method === 'POST') {
-        return readBodyJSON(req, function(err, data) {
-            if (!err && data && data.room && data.user) {
-                const key = String(data.room).trim() + '|' + String(data.user).trim().toLowerCase();
-                if (data.typing) {
-                    typingDB[key] = Date.now();
-                } else {
-                    delete typingDB[key];
-                }
-                markUserOnline(data.user);
-            }
-            res.writeHead(200);
-            res.end('OK');
-        });
-    }
     if (urlPath === '/api/send' && req.method === 'POST') {
         return handleMultipartSend(req, res);
     }
@@ -990,7 +950,7 @@ const server = http.createServer(function(req, res) {
         } else {
             res.writeHead(200, {
                 'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+                'Cache-Control': 'no-cache'
             });
             res.end(data);
         }
@@ -1186,6 +1146,7 @@ function getIsoDateNow() {
     const dd = String(d.getUTCDate()).padStart(2, '0');
     return yyyy + '-' + mm + '-' + dd;
 }
+
 let currentActiveDay = getIsoDateNow();
 if (tableHistory.length > 0 && !archiveHistory[currentActiveDay]) {
     archiveHistory[currentActiveDay] = tableHistory.slice();
@@ -1214,7 +1175,6 @@ notificationsHistory.forEach(function(n) {
         activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender, readList: new Array() });
     }
 });
-
 function saveAndBroadcastMap(msg) {
     const timeStr = msg.time || getServerDateTime();
     const mapItem = {
@@ -1273,6 +1233,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         text: text,
         notif: newNotif
     });
+
     const payload = JSON.stringify({
         title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
         body: sender + ': ' + text,
@@ -1303,7 +1264,6 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         }
     }
 }
-
 wss.on('connection', function(ws) {
     ws.send(JSON.stringify({
         type: 'init',
