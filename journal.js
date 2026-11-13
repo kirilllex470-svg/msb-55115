@@ -2061,4 +2061,7 @@ window.markMsbServerAlive = function(isFullInit) {
         updateWeakNetworkUI();
     }, 2200);
 })();
+	}
+
 initApp();
+
