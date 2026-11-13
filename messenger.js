@@ -1284,3 +1284,97 @@ window.inlineDeleteMessage = inlineDeleteMessage;
 window.playVideoWithSound = playVideoWithSound;
 window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
+var partnerTypingMap = {};
+var lastTypingSentAt = 0;
+var lastKnownPartnerOnline = false;
+
+function buildMiniJumpText(str) {
+    return Array.from(String(str)).map(function(ch, idx) {
+        if (ch === ' ') return '&nbsp;';
+        return '<span class="mini-jump-char" style="animation-delay:' + (idx * 0.06).toFixed(2) + 's">' + ch + '</span>';
+    }).join('');
+}
+
+function sendTypingSignal() {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser || !currentRoomId) return;
+    var now = Date.now();
+    if (now - lastTypingSentAt  Date.now()) {
+        stEl.className = 'partner-status status-typing-now';
+        var label = isCurrentGroup
+            ? (typingInfo.sender + ' набирает сообщение...')
+            : '✍️ набирает сообщение...';
+        stEl.innerHTML = buildMiniJumpText(label);
+        return;
+    }
+
+    // 3. Штатный режим: конференция / в сети / не в сети
+    stEl.className = 'partner-status';
+    if (isCurrentGroup) {
+        stEl.textContent = '👥 конференция';
+        stEl.style.color = '#38bdf8';
+    } else {
+        stEl.textContent = lastKnownPartnerOnline ? '🟢 в сети' : '⚫ не в сети';
+        stEl.style.color = lastKnownPartnerOnline ? '#4ade80' : '#94a3b8';
+    }
+}
+window.refreshChatHeaderStatusUI = refreshChatHeaderStatusUI;
+
+function renderFriendsTypingPreview() {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser) return;
+    var items = document.querySelectorAll('#friends-box .friend-item');
+    items.forEach(function(item, idx) {
+        var f = friendsList[idx];
+        if (!f) return;
+        var rId = f.isGroup ? f.id : makeDirectRoomId(chatUser, f.name);
+        var lastMsgEl = item.querySelector('.friend-last-msg');
+        var nameEl = item.querySelector('.friend-name');
+
+        // Если нет сети — помечаем поиск сети и в списке контактов
+        if (isServerDisconnectedNow() && nameEl && !f.isGroup) {
+            var unitTag = f.unit ? (' <span style="color:#38bdf8;font-size:12px;">(' + f.unit + ')</span>') : '';
+            nameEl.innerHTML = '📡 ' + f.name + unitTag + ' <span style="color:#fbbf24;font-size:11px;">(ищем сеть...)</span>';
+        }
+
+        if (!lastMsgEl) return;
+        var tInfo = partnerTypingMap[rId];
+        if (tInfo && tInfo.until > Date.now()) {
+            lastMsgEl.innerHTML = '<span style="color:#38bdf8;font-weight:bold;">' +
+                buildMiniJumpText('✍️ набирает сообщение...') + '</span>';
+        } else {
+            lastMsgEl.textContent = f.lastMessage || 'Нет сообщений';
+        }
+    });
+}
+
+// Привязываем отправку сигнала набора к полю ввода и регулярное обновление статусов
+document.addEventListener('DOMContentLoaded', function() {
+    var ti = document.getElementById('text-input');
+    if (ti) {
+        ti.addEventListener('input', sendTypingSignal);
+        ti.addEventListener('keydown', function(e) {
+            if (e.key !== 'Enter') sendTypingSignal();
+        });
+    }
+});
+
+// Перехват статуса онлайна собеседника при получении сообщений
+var _origFetchMessages = fetchMessages;
+fetchMessages = function() {
+    _origFetchMessages();
+    setTimeout(function() {
+        var stEl = document.getElementById('chat-status');
+        if (stEl && stEl.textContent.indexOf('в сети') !== -1 && stEl.textContent.indexOf('не в сети') === -1) {
+            lastKnownPartnerOnline = true;
+        } else if (stEl && stEl.textContent.indexOf('не в сети') !== -1) {
+            lastKnownPartnerOnline = false;
+        }
+        refreshChatHeaderStatusUI();
+    }, 120);
+};
+
+setInterval(function() {
+    refreshChatHeaderStatusUI();
+    renderFriendsTypingPreview();
+}, 900);
