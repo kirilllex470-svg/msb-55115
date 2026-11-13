@@ -978,11 +978,12 @@ const server = http.createServer(function(req, res) {
         } else {
             res.writeHead(200, {
                 'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-cache' // Заменили no-store на no-cache
+                'Cache-Control': 'no-cache'
             });
             res.end(data);
         }
     });
+
 });
 
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup) {
