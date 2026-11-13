@@ -1544,35 +1544,10 @@ function checkAndShowAlerts(isNew) {
     }
 }
 
-function showAlert(target, text, sender, notifId, isNew) {
-    // 1. Если вышло обновление сервера — не перекрываем его окнами тревоги
-    const updModal = document.getElementById('server-update-modal');
-    if (updModal && updModal.style.display === 'flex') return;
-
-    // 2. Если мессенджер уже открыт, не спамим окном "ДА, Я ПОНЯЛ" на каждое сообщение чата
-    const msgModal = document.getElementById('messenger-modal');
-    const txtStr = String(text || '');
-    const isChatAlert = txtStr.indexOf('👥') === 0 || txtStr.indexOf('💬') === 0 || txtStr.indexOf('🎙️') === 0 || txtStr.indexOf('🎥') === 0 || txtStr.indexOf('📎') === 0 || txtStr.indexOf('🎬') === 0;
-    if (msgModal && msgModal.style.display === 'flex' && isChatAlert) {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'clear_alert',
-                target: target,
-                notifId: notifId,
-                readBy: currentCallsign || currentUser || 'Просмотр',
-                readTime: new Date().toLocaleTimeString().slice(0, 5)
-            }));
-        }
-        return;
-    }
-
-    currentAlertId = notifId || null;
-    currentAlertTarget = target;
-    currentAlertText = text;
-    currentAlertSender = sender || ADMIN_NAME;
-	const dismissedAlertIds = new Set(
+const dismissedAlertIds = new Set(
     JSON.parse(localStorage.getItem('msb_dismissed_alerts') || '[]')
 );
+
 
 function markAlertDismissedLocally(notifId, text, sender) {
     const key = notifId ? String(notifId) : (String(sender) + '|' + String(text));
@@ -1946,18 +1921,11 @@ function ensureWeakBootOverlay() {
 
 function evaluateNetworkWeakness() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (conn) {
-        var eff = String(conn.effectiveType || '').toLowerCase();
-        if (eff === 'slow-2g' || eff === '2g') return true;
-        if (typeof conn.downlink === 'number' && conn.downlink > 0 && conn.downlink < 0.45) return true;
-        if (typeof conn.rtt === 'number' && conn.rtt > 1400) return true;
-    }
     if (!ws || ws.readyState !== WebSocket.OPEN) return true;
-    if (msbLastPingRtt > 1800) return true;
-    if (Date.now() - lastPongTime > 9000) return true;
+    if (Date.now() - lastPongTime > 15000) return true;
     return false;
 }
+
 
 function updateWeakNetworkUI() {
     ensureWeakBootOverlay();
@@ -2061,7 +2029,6 @@ window.markMsbServerAlive = function(isFullInit) {
         updateWeakNetworkUI();
     }, 2200);
 })();
-	}
 
 initApp();
 
