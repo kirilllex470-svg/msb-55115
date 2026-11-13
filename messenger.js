@@ -1284,3 +1284,50 @@ window.inlineDeleteMessage = inlineDeleteMessage;
 window.playVideoWithSound = playVideoWithSound;
 window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
+var lastTypingSentTime = 0;
+var typingStopTimer = null;
+
+function notifyTypingState(isTyping) {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser || !currentRoomId) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+    fetch('/api/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            user: chatUser,
+            room: currentRoomId,
+            typing: Boolean(isTyping)
+        })
+    }).catch(function() {});
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var tInput = document.getElementById('text-input');
+    if (tInput) {
+        tInput.addEventListener('input', function() {
+            if (!currentRoomId) return;
+            var now = Date.now();
+            if (now - lastTypingSentTime > 2000) {
+                lastTypingSentTime = now;
+                notifyTypingState(true);
+            }
+            if (typingStopTimer) clearTimeout(typingStopTimer);
+            typingStopTimer = setTimeout(function() {
+                lastTypingSentTime = 0;
+                notifyTypingState(false);
+            }, 3000);
+        });
+    }
+});
+
+// Если сеть пропала прямо во время открытого чата
+window.addEventListener('offline', function() {
+    var stEl = document.getElementById('chat-status');
+    if (stEl && currentPartner) {
+        stEl.style.display = 'block';
+        stEl.className = 'partner-status searching-net';
+        stEl.textContent = '📡 Ищем сеть...';
+    }
+});
