@@ -120,6 +120,7 @@ const db = {
 const LAST_SEEN_FILE = path.join(storagePath, 'last_seen.json');
 const lastSeenDB = readJSON(LAST_SEEN_FILE, {});
 const typingDB = {};
+const onlinePresenceCache = {};
 
 function formatTimestampRu(ts) {
     if (!ts) return '';
@@ -132,14 +133,34 @@ function formatTimestampRu(ts) {
     return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min;
 }
 
-function markUserOnline(name) {
+function hasActiveWsForUser(cleanKey) {
+    if (typeof wss === 'undefined' || !wss || !wss.clients) return false;
+    let found = false;
+    wss.clients.forEach(function(client) {
+        if (client.readyState === WebSocket.OPEN && client.userIdentity === cleanKey) {
+            found = true;
+        }
+    });
+    return found;
+}
+
+function markUserOnline(name, wsClient) {
     if (!name) return;
     const key = String(name).trim().toLowerCase();
     if (!key || key === 'гость' || key === 'просмотр') return;
+    if (wsClient) {
+        wsClient.userIdentity = key;
+    }
     const prev = lastSeenDB[key] || 0;
     const now = Date.now();
     lastSeenDB[key] = now;
-    if (now - prev > 15000) {
+    if (!onlinePresenceCache[key]) {
+        onlinePresenceCache[key] = true;
+        if (typeof broadcastWS === 'function') {
+            broadcastWS({ type: 'presence_update', user: key, online: true, lastSeen: formatTimestampRu(now) });
+        }
+    }
+    if (now - prev > 12000) {
         writeJSON(LAST_SEEN_FILE, lastSeenDB);
     }
 }
@@ -147,8 +168,9 @@ function markUserOnline(name) {
 function isUserOnlineNow(name) {
     if (!name) return false;
     const key = String(name).trim().toLowerCase();
+    if (hasActiveWsForUser(key)) return true;
     const t = lastSeenDB[key] || 0;
-    return (Date.now() - t) < 20000;
+    return (Date.now() - t) < 15000;
 }
 
 function getUserLastSeenStr(name) {
@@ -157,6 +179,7 @@ function getUserLastSeenStr(name) {
     const t = lastSeenDB[key] || 0;
     return t ? formatTimestampRu(t) : '';
 }
+
 let tableHistory = readJSON(DB_FILE, new Array());
 if (!Array.isArray(tableHistory)) tableHistory = new Array();
 let archiveHistory = readJSON(ARCHIVE_FILE, {});
@@ -1250,6 +1273,20 @@ wss.on('connection', function(ws) {
     ws.isAlive = true;
     ws.on('pong', function() { ws.isAlive = true; });
 
+    ws.on('close', function() {
+        if (ws.userIdentity) {
+            const key = ws.userIdentity;
+            setTimeout(function() {
+                if (!isUserOnlineNow(key)) {
+                    onlinePresenceCache[key] = false;
+                    lastSeenDB[key] = Date.now();
+                    writeJSON(LAST_SEEN_FILE, lastSeenDB);
+                    broadcastWS({ type: 'presence_update', user: key, online: false, lastSeen: getUserLastSeenStr(key) });
+                }
+            }, 1500);
+        }
+    });
+
     ws.send(JSON.stringify({
         type: 'init',
         serverBootId: SERVER_BOOT_ID,
@@ -1266,11 +1303,13 @@ wss.on('connection', function(ws) {
             const msg = JSON.parse(message.toString());
             ws.isAlive = true;
             if (msg.type === 'ping') {
-                if (msg.callsign) markUserOnline(msg.callsign);
-                else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
+                if (msg.callsign) markUserOnline(msg.callsign, ws);
+                else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей', ws);
+                else if (msg.user) markUserOnline(msg.user, ws);
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
+
             if (msg.type === 'chat_typing' && msg.user && msg.room) {
                 const uClean = String(msg.user).trim();
                 markUserOnline(uClean);
@@ -1367,7 +1406,14 @@ setInterval(function() {
         ws.isAlive = false;
         try { ws.ping(); } catch (e) {}
     });
-}, 7000);
+    Object.keys(onlinePresenceCache).forEach(function(key) {
+        const nowOnline = isUserOnlineNow(key);
+        if (onlinePresenceCache[key] && !nowOnline) {
+            onlinePresenceCache[key] = false;
+            broadcastWS({ type: 'presence_update', user: key, online: false, lastSeen: getUserLastSeenStr(key) });
+        }
+    });
+}, 4000);
 
 
 const PORT = process.env.PORT || 3000;

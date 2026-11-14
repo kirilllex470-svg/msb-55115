@@ -248,7 +248,7 @@ window.handleIncomingTypingWS = function(msg) {
         renderPartnerPresenceHeader(fObj ? fObj.online : false, partnerLastSeenCache, null);
     }
 
-    setTimeout(function() {
+     setTimeout(function() {
         if (currentRoomId === msg.room) {
             var fObj2 = friendsList.find(function(f) {
                 return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
@@ -257,6 +257,27 @@ window.handleIncomingTypingWS = function(msg) {
         }
     }, 4300);
 };
+window.handlePresenceUpdateWS = function(msg) {
+    if (!msg || !msg.user) return;
+    var targetKey = String(msg.user).trim().toLowerCase();
+    var changed = false;
+    friendsList.forEach(function(f) {
+        if (!f.isGroup && String(f.name || '').trim().toLowerCase() === targetKey) {
+            f.online = Boolean(msg.online);
+            if (msg.lastSeen) f.lastSeen = msg.lastSeen;
+            changed = true;
+        }
+    });
+    if (changed) {
+        lastFriendsRenderSig = '';
+        renderFriends();
+    }
+    if (currentPartner && !isCurrentGroup && currentPartner.trim().toLowerCase() === targetKey) {
+        if (msg.lastSeen) partnerLastSeenCache = msg.lastSeen;
+        renderPartnerPresenceHeader(Boolean(msg.online), partnerLastSeenCache, null);
+    }
+};
+
 
 function notifyServerTyping(isTyping) {
     var me = getActiveChatIdentity();
@@ -868,13 +889,18 @@ function renderFriends() {
         item.onclick = function() { selectChat(friend); };
         var badgeHTML = (friend.unread > 0 && !isActive) ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
         var timeHTML = friend.time ? ('<div class="friend-time-label">' + friend.time + '</div>') : '';
-        var unitTag = (!friend.isGroup && friend.unit) ? (' <span style="color:#38bdf8;font-size:12px;">(' + friend.unit + ')</span>') : '';
-        var statusDot = friend.isGroup ? '👥 ' : (friend.online ? '🟢 ' : '⚫ ');
-        var subSeen = (!friend.isGroup && !friend.online && friend.lastSeen)
-            ? (' <span style="color:#64748b;font-size:11px;font-weight:normal;">• ' + friend.lastSeen + '</span>')
-            : '';
-        var displayName = statusDot + escapeEdgeHtml(friend.name) + unitTag + subSeen;
-        var avInner = friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : escapeEdgeHtml(friend.name.substring(0, 2).toUpperCase());
+        var unitTag = (!friend.isGroup && friend.unit) ? (' <span class="friend-unit-pill">' + escapeEdgeHtml(friend.unit) + '</span>') : '';
+        var statusLine = '';
+        if (friend.isGroup) {
+            statusLine = '<span class="friend-presence-tag group">👥 конференция</span>';
+        } else if (friend.online) {
+            statusLine = '<span class="friend-presence-tag online">● в сети</span>';
+        } else {
+            statusLine = '<span class="friend-presence-tag offline">' + (friend.lastSeen ? ('был(а) ' + escapeEdgeHtml(friend.lastSeen)) : 'не в сети') + '</span>';
+        }
+        var displayName = escapeEdgeHtml(friend.name) + unitTag;
+        var dotHTML = !friend.isGroup ? ('<span class="online-dot ' + (friend.online ? 'online' : 'offline') + '"></span>') : '';
+        var avInner = (friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : escapeEdgeHtml(friend.name.substring(0, 2).toUpperCase())) + dotHTML;
         var friendDataEscaped = JSON.stringify({
             id: friend.id,
             name: friend.name,
@@ -891,9 +917,10 @@ function renderFriends() {
         var delBtnHTML = '<button class="delete-friend-btn" onclick="deleteFriend(' + friendDataEscaped + ', event)">&times;</button>';
         item.innerHTML =
             '<div class="friend-info">' +
-                '<div class="avatar" style="width:38px; height:38px; font-size:13px;" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + safeNameJs + '\')">' + avInner + '</div>' +
+                '<div class="avatar" style="width:40px; height:40px; font-size:13px;" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + safeNameJs + '\')">' + avInner + '</div>' +
                 '<div class="friend-meta">' +
                     '<div class="friend-name">' + displayName + '</div>' +
+                    '<div class="friend-sub-row">' + statusLine + '</div>' +
                     '<div class="friend-last-msg">' + escapeEdgeHtml(friend.lastMessage || '') + '</div>' +
                 '</div>' +
                 '<div class="friend-status-box">' + timeHTML + badgeHTML + '</div>' +
@@ -902,6 +929,7 @@ function renderFriends() {
     });
     box.appendChild(frag);
 }
+
 
 function openCreateGroupModal() {
     document.getElementById('group-modal').style.display = 'flex';
@@ -1527,3 +1555,129 @@ window.closeGroupModal = closeGroupModal; window.submitCreateGroup = submitCreat
 window.handleRequest = handleRequest; window.closeForwardModal = closeForwardModal; window.cancelReply = cancelReply;
 window.inlineDeleteMessage = inlineDeleteMessage; window.playVideoWithSound = playVideoWithSound; window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
+var msbExtraClockTimer = null;
+
+function ensureMessengerExtraHub() {
+    var toolsRow = document.querySelector('#messenger-modal .tools-row');
+    if (toolsRow && !document.getElementById('msb-plus-menu-btn')) {
+        toolsRow.style.position = 'relative';
+        var plusBtn = document.createElement('button');
+        plusBtn.type = 'button';
+        plusBtn.id = 'msb-plus-menu-btn';
+        plusBtn.className = 'media-btn msb-plus-btn';
+        plusBtn.title = 'Разделы МСБ-55115';
+        plusBtn.innerHTML = '➕';
+        plusBtn.onclick = function(e) {
+            e.stopPropagation();
+            toggleMsbPlusDropdown();
+        };
+        toolsRow.appendChild(plusBtn);
+    }
+
+    if (!document.getElementById('msb-plus-dropdown')) {
+        var inputContainer = document.querySelector('#messenger-modal .input-container');
+        if (inputContainer) {
+            inputContainer.style.position = 'relative';
+            var drop = document.createElement('div');
+            drop.id = 'msb-plus-dropdown';
+            drop.className = 'msb-plus-dropdown';
+            drop.innerHTML =
+                '<div class="msb-plus-item" onclick="openMsbDevTab(\'📡 Каналы\')"><span>📡</span><span>Каналы</span></div>' +
+                '<div class="msb-plus-item" onclick="openMsbDevTab(\'⭐ Избранное\')"><span>⭐</span><span>Избранное</span></div>' +
+                '<div class="msb-plus-item" onclick="openMsbDevTab(\'🆕 Новое\')"><span>🆕</span><span>Новое</span></div>' +
+                '<div class="msb-plus-item" onclick="openMsbDevTab(\'👤 Личное\')"><span>👤</span><span>Личное</span></div>' +
+                '<div class="msb-plus-item" onclick="openMsbDevTab(\'💳 Кошелек\')"><span>💳</span><span>Кошелек</span></div>';
+            inputContainer.appendChild(drop);
+        }
+    }
+
+    if (!document.getElementById('msb-dev-tab-modal')) {
+        var modal = document.createElement('div');
+        modal.id = 'msb-dev-tab-modal';
+        modal.className = 'custom-modal-overlay';
+        modal.style.zIndex = '230000';
+        modal.innerHTML =
+            '<div class="msb-dev-tab-card">' +
+                '<div class="msb-dev-tab-header">' +
+                    '<span id="msb-dev-tab-title">Раздел</span>' +
+                    '<button type="button" class="modal-close" onclick="closeMsbDevTab()">&times;</button>' +
+                '</div>' +
+                '<div class="msb-dev-clock-box">' +
+                    '<div id="msb-dev-live-clock" class="msb-dev-clock-time">00:00:00</div>' +
+                    '<div id="msb-dev-live-date" class="msb-dev-clock-date">—</div>' +
+                '</div>' +
+                '<div class="msb-dev-status-text">в разработке МСБ55115</div>' +
+                '<button type="button" class="alert-btn" style="margin-top:16px;" onclick="closeMsbDevTab()">ЗАКРЫТЬ</button>' +
+            '</div>';
+        modal.onclick = function(e) {
+            if (e.target === modal) closeMsbDevTab();
+        };
+        document.body.appendChild(modal);
+    }
+}
+
+function toggleMsbPlusDropdown() {
+    ensureMessengerExtraHub();
+    var drop = document.getElementById('msb-plus-dropdown');
+    if (!drop) return;
+    var isOpen = drop.classList.contains('open');
+    drop.classList.toggle('open', !isOpen);
+}
+
+function updateMsbDevClock() {
+    var clockEl = document.getElementById('msb-dev-live-clock');
+    var dateEl = document.getElementById('msb-dev-live-date');
+    if (!clockEl) return;
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2, '0');
+    var mm = String(now.getMinutes()).padStart(2, '0');
+    var ss = String(now.getSeconds()).padStart(2, '0');
+    clockEl.textContent = hh + ':' + mm + ':' + ss;
+    if (dateEl) {
+        var dd = String(now.getDate()).padStart(2, '0');
+        var mon = String(now.getMonth() + 1).padStart(2, '0');
+        var yyyy = now.getFullYear();
+        dateEl.textContent = dd + '.' + mon + '.' + yyyy;
+    }
+}
+
+function openMsbDevTab(tabTitle) {
+    ensureMessengerExtraHub();
+    var drop = document.getElementById('msb-plus-dropdown');
+    if (drop) drop.classList.remove('open');
+
+    var titleEl = document.getElementById('msb-dev-tab-title');
+    var modal = document.getElementById('msb-dev-tab-modal');
+    if (titleEl) titleEl.textContent = tabTitle;
+    updateMsbDevClock();
+    if (msbExtraClockTimer) clearInterval(msbExtraClockTimer);
+    msbExtraClockTimer = setInterval(updateMsbDevClock, 1000);
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeMsbDevTab() {
+    var modal = document.getElementById('msb-dev-tab-modal');
+    if (modal) modal.style.display = 'none';
+    if (msbExtraClockTimer) {
+        clearInterval(msbExtraClockTimer);
+        msbExtraClockTimer = null;
+    }
+}
+
+document.addEventListener('click', function(e) {
+    var drop = document.getElementById('msb-plus-dropdown');
+    var btn = document.getElementById('msb-plus-menu-btn');
+    if (drop && drop.classList.contains('open')) {
+        if (!drop.contains(e.target) && e.target !== btn) {
+            drop.classList.remove('open');
+        }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', ensureMessengerExtraHub);
+setTimeout(ensureMessengerExtraHub, 300);
+
+window.openMsbDevTab = openMsbDevTab;
+window.closeMsbDevTab = closeMsbDevTab;
+window.toggleMsbPlusDropdown = toggleMsbPlusDropdown;
+

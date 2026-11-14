@@ -180,19 +180,10 @@ async function subscribeToWebPush(forceRenew) {
                 sub = null;
             }
             if (!sub) {
-                try {
-                    sub = await readyReg.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-                } catch (subErr) {
-                    const oldSub = await readyReg.pushManager.getSubscription();
-                    if (oldSub) await oldSub.unsubscribe();
-                    sub = await readyReg.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                    });
-                }
+                sub = await readyReg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                });
             }
             const cleanSub = (typeof sub.toJSON === 'function') ? sub.toJSON() : sub;
             const subPayload = {
@@ -209,10 +200,9 @@ async function subscribeToWebPush(forceRenew) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(subPayload)
             }).catch(function() {});
-      }
+        }
     } catch (e) {}
 }
-
 
 
 if ('serviceWorker' in navigator) {
@@ -915,10 +905,11 @@ function handleWsIncomingEvent(event) {
     }
     if (msg.type === 'pong') return;
 
-    if (msg.type === 'chat_typing' && typeof window.handleIncomingTypingWS === 'function') {
-        window.handleIncomingTypingWS(msg);
+     if (msg.type === 'presence_update' && typeof window.handlePresenceUpdateWS === 'function') {
+        window.handlePresenceUpdateWS(msg);
         return;
     }
+
     if ((msg.type === 'chat_new_msg' || msg.type === 'chat_msg_deleted' || msg.type === 'chat_room_read' || msg.type === 'avatar_updated') && typeof window.handleIncomingChatWS === 'function') {
         window.handleIncomingChatWS(msg);
         return;
@@ -1050,10 +1041,10 @@ window.addEventListener('online', function() {
 
 document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
-        checkAndShowAlerts(false);
-        if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 3000)) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 9000)) {
             connectWS(true);
         } else {
+            checkAndShowAlerts(false);
             if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof fetchMessages === 'function') {
                 fetchMessages();
             }
@@ -1063,7 +1054,6 @@ document.addEventListener('visibilitychange', function() {
         }
     }
 });
-
 
 function handleAlertClearedMsg(msg) {
     const queue = getAlertsQueue(msg.target);
