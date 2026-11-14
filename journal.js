@@ -209,13 +209,8 @@ async function subscribeToWebPush(forceRenew) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(subPayload)
             }).catch(function() {});
-       }
-    } catch (e) {
-        console.error('PUSH SUB ERROR:', e);
-        if (currentUser) {
-            alert('⚠️ Ошибка подписки Push: ' + (e && e.message ? e.message : e));
-        }
-    }
+      }
+    } catch (e) {}
 }
 
 
@@ -1055,10 +1050,10 @@ window.addEventListener('online', function() {
 
 document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
-        if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 9000)) {
+        checkAndShowAlerts(false);
+        if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 3000)) {
             connectWS(true);
         } else {
-            checkAndShowAlerts(false);
             if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof fetchMessages === 'function') {
                 fetchMessages();
             }
@@ -1068,6 +1063,7 @@ document.addEventListener('visibilitychange', function() {
         }
     }
 });
+
 
 function handleAlertClearedMsg(msg) {
     const queue = getAlertsQueue(msg.target);
