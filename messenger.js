@@ -948,8 +948,8 @@ function renderFriends() {
             f.online ? 1 : 0,
             f.unread || 0,
             typersCount,
-            f.lastMsg || '',
-            f.lastTime || '',
+            f.lastMessage || f.lastMsg || '',
+            f.time || f.lastTime || '',
             f.avatar ? f.avatar.length : 0
         ].join(':');
     }).join(';');
@@ -969,9 +969,11 @@ function renderFriends() {
         var item = document.createElement('div');
         item.className = 'friend-item ' + (isActive ? 'active' : '');
         item.onclick = function() { selectChat(friend); };
+        var lastTextVal = friend.lastMessage || friend.lastMsg || '';
+        var lastTimeVal = friend.time || friend.lastTime || '';
         var hasUnread = (friend.unread > 0 && !isActive);
         var badgeHTML = hasUnread ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
-        var timeHTML = friend.lastTime ? ('<div class="friend-time-label">' + escapeEdgeHtml(friend.lastTime) + '</div>') : '';
+        var timeHTML = lastTimeVal ? ('<div class="friend-time-label">' + escapeEdgeHtml(lastTimeVal) + '</div>') : '';
         var unitTag = (!friend.isGroup && friend.unit) ? (' <span class="friend-unit-pill">' + escapeEdgeHtml(friend.unit) + '</span>') : '';
         var groupIcon = friend.isGroup ? '👥 ' : '';
         var displayName = groupIcon + escapeEdgeHtml(friend.name) + unitTag;
@@ -983,9 +985,9 @@ function renderFriends() {
                 ? ('✍️ ' + escapeEdgeHtml(activeTypers.join(', ')) + ' набирает...')
                 : '✍️ набирает сообщение...';
             subLineHTML = '<div class="friend-typing-green">' + typingText + '</div>';
-        } else if (friend.lastMsg) {
+        } else if (lastTextVal) {
             var msgColorStyle = hasUnread ? ' style="color:#4ade80; font-weight:700;"' : '';
-            subLineHTML = '<div class="friend-last-msg"' + msgColorStyle + '>' + escapeEdgeHtml(friend.lastMsg) + '</div>';
+            subLineHTML = '<div class="friend-last-msg"' + msgColorStyle + '>' + escapeEdgeHtml(lastTextVal) + '</div>';
         }
 
         var isOnline = !friend.isGroup && (Boolean(friend.online) || activeTypers.length > 0);
@@ -1020,6 +1022,7 @@ function renderFriends() {
     });
     box.appendChild(frag);
 }
+
 
 
 

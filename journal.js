@@ -910,10 +910,16 @@ function handleWsIncomingEvent(event) {
         return;
     }
 
+       if ((msg.type === 'chat_typing' || msg.type === 'typing') && typeof window.handleIncomingTypingWS === 'function') {
+        window.handleIncomingTypingWS(msg);
+        return;
+    }
+
     if ((msg.type === 'chat_new_msg' || msg.type === 'chat_msg_deleted' || msg.type === 'chat_room_read' || msg.type === 'avatar_updated') && typeof window.handleIncomingChatWS === 'function') {
         window.handleIncomingChatWS(msg);
         return;
     }
+
     if (msg.type === 'init') {
         const tbody = document.getElementById('table-body');
         if (tbody) {
