@@ -185,17 +185,63 @@ function clearNetworkErrorBanner() {
     window.msbIsWeakNetwork = false;
     syncMessengerWeakBanner(false);
 }
-function getActiveTypersForRoom(roomId) {
+var activeUserTypers = {};
+
+function normalizeRoomKey(r) {
+    return String(r || '').trim().toLowerCase();
+}
+
+function isSameDirectOrRoom(roomA, roomB) {
+    var a = normalizeRoomKey(roomA);
+    var b = normalizeRoomKey(roomB);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    var baseA = a.split('_')[0];
+    var baseB = b.split('_')[0];
+    return Boolean(baseA && baseB && baseA === baseB);
+}
+
+function getActiveTypersForRoom(roomId, partnerName) {
     var result = new Array();
-    if (!roomId || !activeRoomTypers[roomId]) return result;
     var now = Date.now();
-    Object.keys(activeRoomTypers[roomId]).forEach(function(u) {
-        if (now - activeRoomTypers[roomId][u] < 4500) {
-            result.push(u);
-        } else {
-            delete activeRoomTypers[roomId][u];
+    var me = String(getActiveChatIdentity() || '').trim().toLowerCase();
+
+    if (roomId && activeRoomTypers[roomId]) {
+        Object.keys(activeRoomTypers[roomId]).forEach(function(u) {
+            if (now - activeRoomTypers[roomId][u] < 4800) {
+                if (u.toLowerCase() !== me && !result.includes(u)) result.push(u);
+            } else {
+                delete activeRoomTypers[roomId][u];
+            }
+        });
+    }
+
+    Object.keys(activeRoomTypers).forEach(function(rKey) {
+        if (isSameDirectOrRoom(rKey, roomId)) {
+            Object.keys(activeRoomTypers[rKey]).forEach(function(u) {
+                if (now - activeRoomTypers[rKey][u] < 4800) {
+                    if (u.toLowerCase() !== me && !result.includes(u)) result.push(u);
+                } else {
+                    delete activeRoomTypers[rKey][u];
+                }
+            });
         }
     });
+
+    if (partnerName) {
+        var pLow = String(partnerName).trim().toLowerCase();
+        Object.keys(activeUserTypers).forEach(function(u) {
+            var info = activeUserTypers[u];
+            if (info && (now - info.ts < 4800)) {
+                if (u.toLowerCase() === pLow && isSameDirectOrRoom(info.room, roomId)) {
+                    if (!result.includes(u)) result.push(u);
+                }
+            } else {
+                delete activeUserTypers[u];
+            }
+        });
+    }
+
     return result;
 }
 
@@ -205,7 +251,7 @@ function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsers
     stEl.style.display = 'block';
 
     var typers = Array.isArray(typingUsersList) ? typingUsersList.slice() : new Array();
-    getActiveTypersForRoom(currentRoomId).forEach(function(u) {
+    getActiveTypersForRoom(currentRoomId, isCurrentGroup ? '' : currentPartner).forEach(function(u) {
         if (!typers.includes(u)) typers.push(u);
     });
 
@@ -236,23 +282,30 @@ function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsers
     stEl.classList.toggle('msb-typing-active', isTypingNow);
 }
 
-
 window.handleIncomingTypingWS = function(msg) {
-    if (!msg || !msg.room || !msg.user) return;
+    if (!msg || !msg.user) return;
     var me = String(getActiveChatIdentity() || '').trim().toLowerCase();
-    if (String(msg.user).trim().toLowerCase() === me) return;
+    var senderLow = String(msg.user).trim().toLowerCase();
+    if (!senderLow || senderLow === me) return;
 
-    if (!activeRoomTypers[msg.room]) activeRoomTypers[msg.room] = {};
+    var roomKey = msg.room || makeDirectRoomId(me, msg.user);
+    if (!activeRoomTypers[roomKey]) activeRoomTypers[roomKey] = {};
+
     if (msg.typing) {
-        activeRoomTypers[msg.room][msg.user] = Date.now();
+        activeRoomTypers[roomKey][msg.user] = Date.now();
+        activeUserTypers[msg.user] = { room: roomKey, ts: Date.now() };
     } else {
-        delete activeRoomTypers[msg.room][msg.user];
+        delete activeRoomTypers[roomKey][msg.user];
+        delete activeUserTypers[msg.user];
+        Object.keys(activeRoomTypers).forEach(function(rk) {
+            if (activeRoomTypers[rk][msg.user]) delete activeRoomTypers[rk][msg.user];
+        });
     }
 
     lastFriendsRenderSig = '';
     renderFriends();
 
-    if (currentRoomId === msg.room) {
+    if (currentRoomId && isSameDirectOrRoom(currentRoomId, roomKey)) {
         var fObj = friendsList.find(function(f) {
             return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
         });
@@ -262,25 +315,26 @@ window.handleIncomingTypingWS = function(msg) {
     setTimeout(function() {
         lastFriendsRenderSig = '';
         renderFriends();
-        if (currentRoomId === msg.room) {
+        if (currentRoomId && isSameDirectOrRoom(currentRoomId, roomKey)) {
             var fObj2 = friendsList.find(function(f) {
                 return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
             });
             renderPartnerPresenceHeader(fObj2 ? fObj2.online : false, partnerLastSeenCache, null);
         }
-    }, 4600);
+    }, 4900);
 };
 
 function notifyServerTyping(isTyping) {
     var me = getActiveChatIdentity();
     if (!me || !currentRoomId) return;
     var now = Date.now();
-    if (isTyping && (now - myLastTypingSentAt < 2000)) return;
+    if (isTyping && (now - myLastTypingSentAt < 1800)) return;
     myLastTypingSentAt = isTyping ? now : 0;
 
     var payload = {
         type: 'chat_typing',
         user: me,
+        to: !isCurrentGroup ? currentPartner : '',
         room: currentRoomId,
         typing: Boolean(isTyping)
     };
@@ -288,16 +342,16 @@ function notifyServerTyping(isTyping) {
     if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
         try {
             ws.send(JSON.stringify(payload));
-            return;
         } catch (e) {}
     }
 
     fetch('/api/typing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: me, room: currentRoomId, typing: Boolean(isTyping) })
+        body: JSON.stringify(payload)
     }).catch(function() {});
 }
+
 
 window.handleIncomingChatWS = function(packet) {
     if (!packet) return;
@@ -344,7 +398,19 @@ window.handleIncomingChatWS = function(packet) {
 
     if (packet.type === 'chat_new_msg' && packet.room && packet.msg) {
         var msg = packet.msg;
+        if (msg.sender) {
+            delete activeUserTypers[msg.sender];
+            Object.keys(activeRoomTypers).forEach(function(rk) {
+                if (activeRoomTypers[rk][msg.sender]) delete activeRoomTypers[rk][msg.sender];
+            });
+            lastFriendsRenderSig = '';
+            renderFriends();
+            if (currentRoomId && isSameDirectOrRoom(currentRoomId, packet.room)) {
+                renderPartnerPresenceHeader(true, partnerLastSeenCache, null);
+            }
+        }
         try {
+
             var rawRoom = localStorage.getItem('msb_cache_room_' + packet.room);
             var listRoom = rawRoom ? JSON.parse(rawRoom) : [];
             if (!listRoom.some(function(x) { return x.id === msg.id; })) {
@@ -858,11 +924,12 @@ function renderFriends() {
     chatUser = getActiveChatIdentity();
     var box = document.getElementById('friends-box');
     if (!box || !chatUser) return;
-
-    var sig = String(currentRoomId || '') + '||' + friendsList.map(function(f) {
+    
+	var sig = String(currentRoomId || '') + '||' + friendsList.map(function(f) {
         var rId = f.isGroup ? f.id : makeDirectRoomId(chatUser, f.name);
-        var typersCount = getActiveTypersForRoom(rId).length;
+        var typersCount = getActiveTypersForRoom(rId, f.isGroup ? '' : f.name).length;
         return [
+
             f.isGroup ? f.id : f.name,
             f.online ? 1 : 0,
             f.unread || 0,
@@ -891,7 +958,8 @@ function renderFriends() {
         var groupIcon = friend.isGroup ? '👥 ' : '';
         var displayName = groupIcon + escapeEdgeHtml(friend.name) + unitTag;
 
-        var activeTypers = getActiveTypersForRoom(activeId);
+             var activeTypers = getActiveTypersForRoom(activeId, friend.isGroup ? '' : friend.name);
+
         var typingLineHTML = '';
         if (activeTypers.length > 0) {
             var typingText = friend.isGroup
@@ -1723,3 +1791,4 @@ window.toggleMsbRadialToolbar = toggleMsbRadialToolbar;
 window.openMsbDevTab = openMsbDevTab;
 window.closeMsbDevTab = closeMsbDevTab;
 window.toggleMsbPlusDropdown = toggleMsbPlusDropdown;
+

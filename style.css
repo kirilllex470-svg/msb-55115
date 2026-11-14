@@ -397,7 +397,7 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
 #server-update-modal {
     z-index: 300000 !important;
 }
-//* === УБИРАЕМ ИКОНКУ ТЕМЫ У ВЕРХНЕЙ АВАТАРКИ === */
+/* === УБИРАЕМ ИКОНКУ ТЕМЫ У ВЕРХНЕЙ АВАТАРКИ === */
 .call-header-btn.theme,
 #msb-unified-topbar .theme-btn,
 .msb-top-avatar::after {
