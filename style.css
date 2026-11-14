@@ -387,12 +387,15 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
     font-size: 12px;
     font-weight: 800;
     margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.25;
+    word-break: break-word;
     text-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
     animation: typingPulse 1.1s infinite;
 }
+
 
 #server-update-modal {
     z-index: 300000 !important;
