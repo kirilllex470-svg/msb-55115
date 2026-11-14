@@ -358,7 +358,8 @@ const SW_CODE = [
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
-    "        tag: data.tag || ('msb-push-' + Date.now()),",
+    "                tag: (data.tag || 'msb-push') + '-' + Math.random().toString(36).slice(2, 7),
+
     "        data: { url: data.url || '/' }",
     "    }));",
     "});",
@@ -1366,7 +1367,8 @@ setInterval(function() {
         ws.isAlive = false;
         try { ws.ping(); } catch (e) {}
     });
-}, 25000);
+}, 7000);
+
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', function() {
