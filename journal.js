@@ -180,10 +180,19 @@ async function subscribeToWebPush(forceRenew) {
                 sub = null;
             }
             if (!sub) {
-                sub = await readyReg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-                });
+                try {
+                    sub = await readyReg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                    });
+                } catch (subErr) {
+                    const oldSub = await readyReg.pushManager.getSubscription();
+                    if (oldSub) await oldSub.unsubscribe();
+                    sub = await readyReg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                    });
+                }
             }
             const cleanSub = (typeof sub.toJSON === 'function') ? sub.toJSON() : sub;
             const subPayload = {
@@ -203,6 +212,7 @@ async function subscribeToWebPush(forceRenew) {
         }
     } catch (e) {}
 }
+
 
 
 if ('serviceWorker' in navigator) {
