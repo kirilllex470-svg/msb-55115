@@ -383,7 +383,7 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
 #server-update-modal {
     z-index: 300000 !important;
 }
-/* === УБИРАЕМ ИКОНКУ ТЕМЫ У ВЕРХНЕЙ АВАТАРКИ === */
+//* === УБИРАЕМ ИКОНКУ ТЕМЫ У ВЕРХНЕЙ АВАТАРКИ === */
 .call-header-btn.theme,
 #msb-unified-topbar .theme-btn,
 .msb-top-avatar::after {
@@ -448,17 +448,37 @@ body.theme-cosmic .friend-avatar-online {
     background: #64748b;
 }
 
-/* === ЦЕНТРАЛЬНАЯ КНОПКА + С РАСКРЫТИЕМ КНОПОК ВЛЕВО И ВПРАВО === */
+/* === ЦЕНТРАЛЬНАЯ КНОПКА + С ЭФФЕКТОМ ВОЛНЫ ПРИ РАСКРЫТИИ === */
+@keyframes iconWaveBreathe {
+    0%, 100% { transform: translateY(0px) scale(1); }
+    50% { transform: translateY(-3px) scale(1.06); }
+}
+
+@keyframes wingButtonWavePop {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.4);
+    }
+    65% {
+        opacity: 1;
+        transform: translateY(-5px) scale(1.12);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0px) scale(1);
+    }
+}
+
 .msb-radial-tools-row {
     display: flex !important;
     align-items: center;
     justify-content: center !important;
     gap: 0px;
     width: 100%;
-    min-height: 42px;
+    min-height: 44px;
     position: relative;
     overflow: visible;
-    transition: gap 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: gap 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .msb-radial-tools-row.expanded {
     gap: 6px;
@@ -467,29 +487,19 @@ body.theme-cosmic .friend-avatar-online {
 .msb-wing {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     max-width: 0;
     opacity: 0;
     overflow: hidden;
     pointer-events: none;
-    transition: max-width 0.38s cubic-bezier(0.22, 1, 0.36, 1),
-                opacity 0.28s ease,
-                transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.msb-wing-left {
-    justify-content: flex-end;
-    transform: translateX(18px) scale(0.85);
-}
-.msb-wing-right {
-    justify-content: flex-start;
-    transform: translateX(-18px) scale(0.85);
+    transition: max-width 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.25s ease;
 }
 
 .msb-radial-tools-row.expanded .msb-wing {
     max-width: 240px;
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(0) scale(1);
     overflow: visible;
 }
 
@@ -500,6 +510,32 @@ body.theme-cosmic .friend-avatar-online {
     flex: 0 0 38px;
     font-size: 16px;
     padding: 0;
+    opacity: 0;
+    transform: translateY(10px) scale(0.4);
+}
+
+/* Волна от центра наружу при открытии + постоянное волновое покачивание */
+.msb-radial-tools-row.expanded .msb-wing-left .media-btn:nth-child(3),
+.msb-radial-tools-row.expanded .msb-wing-right .media-btn:nth-child(1) {
+    animation: wingButtonWavePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) 0.04s forwards,
+               iconWaveBreathe 2.8s ease-in-out 0.45s infinite;
+}
+
+.msb-radial-tools-row.expanded .msb-wing-left .media-btn:nth-child(2),
+.msb-radial-tools-row.expanded .msb-wing-right .media-btn:nth-child(2) {
+    animation: wingButtonWavePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s forwards,
+               iconWaveBreathe 2.8s ease-in-out 0.65s infinite;
+}
+
+.msb-radial-tools-row.expanded .msb-wing-left .media-btn:nth-child(1),
+.msb-radial-tools-row.expanded .msb-wing-right .media-btn:nth-child(3) {
+    animation: wingButtonWavePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) 0.20s forwards,
+               iconWaveBreathe 2.8s ease-in-out 0.85s infinite;
+}
+
+.msb-wing .media-btn:hover {
+    transform: translateY(-4px) scale(1.12) !important;
+    filter: brightness(1.25) !important;
 }
 
 /* Центральная кнопка + в размере бывшей кнопки ГИФ */
@@ -512,12 +548,14 @@ body.theme-cosmic .friend-avatar-online {
     font-weight: 900 !important;
     border-radius: 12px !important;
     z-index: 5;
+    animation: iconWaveBreathe 3s ease-in-out infinite;
     transition: width 0.3s ease, min-width 0.3s ease, transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), background 0.25s ease !important;
 }
 .msb-radial-tools-row.expanded .msb-center-plus-btn {
     width: 42px !important;
     min-width: 42px !important;
     font-size: 15px !important;
+    animation: none;
 }
 
 /* Оживление и перелив кнопок в соответствии с выбранной темой */
@@ -534,7 +572,7 @@ body.theme-cosmic .friend-avatar-online {
     left: -130%;
     width: 60%;
     height: 100%;
-    background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.32) 50%, transparent 100%);
+    background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.35) 50%, transparent 100%);
     transform: skewX(-25deg);
     animation: autoShimmer 4s infinite ease-in-out;
     pointer-events: none;
