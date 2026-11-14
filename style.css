@@ -710,3 +710,27 @@ body.theme-cosmic .msb-radial-tools-row .media-btn {
     background: rgba(56, 189, 248, 0.1);
     border: 1px dashed rgba(56, 189, 248, 0.4);
 }
+@media (max-width: 768px) {
+    .friend-item {
+        padding: 8px 8px;
+    }
+    .friend-info {
+        gap: 8px;
+    }
+    .friend-meta {
+        margin-right: 4px;
+    }
+    .friend-typing-green {
+        font-size: 11px;
+        white-space: nowrap;
+        letter-spacing: -0.2px;
+    }
+    .friend-time-label {
+        font-size: 10px;
+    }
+    .friend-call-mini {
+        padding: 4px 5px;
+        font-size: 11px;
+        margin-right: 2px;
+    }
+}
