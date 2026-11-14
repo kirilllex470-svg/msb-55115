@@ -201,6 +201,9 @@ function isSameDirectOrRoom(roomA, roomB) {
     return Boolean(baseA && baseB && baseA === baseB);
 }
 
+var activeUserTypers = {};
+var typingCleanupTimers = {};
+
 function getActiveTypersForRoom(roomId, partnerName) {
     var result = new Array();
     var now = Date.now();
@@ -208,7 +211,7 @@ function getActiveTypersForRoom(roomId, partnerName) {
 
     if (roomId && activeRoomTypers[roomId]) {
         Object.keys(activeRoomTypers[roomId]).forEach(function(u) {
-            if (now - activeRoomTypers[roomId][u] < 4800) {
+            if (now - activeRoomTypers[roomId][u] < 5000) {
                 if (u.toLowerCase() !== me && !result.includes(u)) result.push(u);
             } else {
                 delete activeRoomTypers[roomId][u];
@@ -219,7 +222,7 @@ function getActiveTypersForRoom(roomId, partnerName) {
     Object.keys(activeRoomTypers).forEach(function(rKey) {
         if (isSameDirectOrRoom(rKey, roomId)) {
             Object.keys(activeRoomTypers[rKey]).forEach(function(u) {
-                if (now - activeRoomTypers[rKey][u] < 4800) {
+                if (now - activeRoomTypers[rKey][u] < 5000) {
                     if (u.toLowerCase() !== me && !result.includes(u)) result.push(u);
                 } else {
                     delete activeRoomTypers[rKey][u];
@@ -232,8 +235,8 @@ function getActiveTypersForRoom(roomId, partnerName) {
         var pLow = String(partnerName).trim().toLowerCase();
         Object.keys(activeUserTypers).forEach(function(u) {
             var info = activeUserTypers[u];
-            if (info && (now - info.ts < 4800)) {
-                if (u.toLowerCase() === pLow && isSameDirectOrRoom(info.room, roomId)) {
+            if (info && (now - info.ts < 5000)) {
+                if (u.toLowerCase() === pLow) {
                     if (!result.includes(u)) result.push(u);
                 }
             } else {
@@ -291,6 +294,11 @@ window.handleIncomingTypingWS = function(msg) {
     var roomKey = msg.room || makeDirectRoomId(me, msg.user);
     if (!activeRoomTypers[roomKey]) activeRoomTypers[roomKey] = {};
 
+    if (typingCleanupTimers[senderLow]) {
+        clearTimeout(typingCleanupTimers[senderLow]);
+        delete typingCleanupTimers[senderLow];
+    }
+
     if (msg.typing) {
         activeRoomTypers[roomKey][msg.user] = Date.now();
         activeUserTypers[msg.user] = { room: roomKey, ts: Date.now() };
@@ -305,24 +313,31 @@ window.handleIncomingTypingWS = function(msg) {
     lastFriendsRenderSig = '';
     renderFriends();
 
-    if (currentRoomId && isSameDirectOrRoom(currentRoomId, roomKey)) {
+    if (currentRoomId && (isSameDirectOrRoom(currentRoomId, roomKey) || (!isCurrentGroup && currentPartner && currentPartner.toLowerCase() === senderLow))) {
         var fObj = friendsList.find(function(f) {
             return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
         });
         renderPartnerPresenceHeader(fObj ? fObj.online : true, partnerLastSeenCache, null);
     }
 
-    setTimeout(function() {
-        lastFriendsRenderSig = '';
-        renderFriends();
-        if (currentRoomId && isSameDirectOrRoom(currentRoomId, roomKey)) {
-            var fObj2 = friendsList.find(function(f) {
-                return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
+    if (msg.typing) {
+        typingCleanupTimers[senderLow] = setTimeout(function() {
+            delete activeUserTypers[msg.user];
+            Object.keys(activeRoomTypers).forEach(function(rk) {
+                if (activeRoomTypers[rk][msg.user]) delete activeRoomTypers[rk][msg.user];
             });
-            renderPartnerPresenceHeader(fObj2 ? fObj2.online : false, partnerLastSeenCache, null);
-        }
-    }, 4900);
+            lastFriendsRenderSig = '';
+            renderFriends();
+            if (currentRoomId && (isSameDirectOrRoom(currentRoomId, roomKey) || (!isCurrentGroup && currentPartner && currentPartner.toLowerCase() === senderLow))) {
+                var fObj2 = friendsList.find(function(f) {
+                    return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
+                });
+                renderPartnerPresenceHeader(fObj2 ? fObj2.online : false, partnerLastSeenCache, null);
+            }
+        }, 5100);
+    }
 };
+
 
 function notifyServerTyping(isTyping) {
     var me = getActiveChatIdentity();
@@ -924,16 +939,17 @@ function renderFriends() {
     chatUser = getActiveChatIdentity();
     var box = document.getElementById('friends-box');
     if (!box || !chatUser) return;
-    
-	var sig = String(currentRoomId || '') + '||' + friendsList.map(function(f) {
+
+    var sig = String(currentRoomId || '') + '||' + friendsList.map(function(f) {
         var rId = f.isGroup ? f.id : makeDirectRoomId(chatUser, f.name);
         var typersCount = getActiveTypersForRoom(rId, f.isGroup ? '' : f.name).length;
         return [
-
             f.isGroup ? f.id : f.name,
             f.online ? 1 : 0,
             f.unread || 0,
             typersCount,
+            f.lastMsg || '',
+            f.lastTime || '',
             f.avatar ? f.avatar.length : 0
         ].join(':');
     }).join(';');
@@ -953,19 +969,23 @@ function renderFriends() {
         var item = document.createElement('div');
         item.className = 'friend-item ' + (isActive ? 'active' : '');
         item.onclick = function() { selectChat(friend); };
-        var badgeHTML = (friend.unread > 0 && !isActive) ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
+        var hasUnread = (friend.unread > 0 && !isActive);
+        var badgeHTML = hasUnread ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
+        var timeHTML = friend.lastTime ? ('<div class="friend-time-label">' + escapeEdgeHtml(friend.lastTime) + '</div>') : '';
         var unitTag = (!friend.isGroup && friend.unit) ? (' <span class="friend-unit-pill">' + escapeEdgeHtml(friend.unit) + '</span>') : '';
         var groupIcon = friend.isGroup ? '👥 ' : '';
         var displayName = groupIcon + escapeEdgeHtml(friend.name) + unitTag;
 
-             var activeTypers = getActiveTypersForRoom(activeId, friend.isGroup ? '' : friend.name);
-
-        var typingLineHTML = '';
+        var activeTypers = getActiveTypersForRoom(activeId, friend.isGroup ? '' : friend.name);
+        var subLineHTML = '';
         if (activeTypers.length > 0) {
             var typingText = friend.isGroup
                 ? ('✍️ ' + escapeEdgeHtml(activeTypers.join(', ')) + ' набирает...')
                 : '✍️ набирает сообщение...';
-            typingLineHTML = '<div class="friend-typing-green">' + typingText + '</div>';
+            subLineHTML = '<div class="friend-typing-green">' + typingText + '</div>';
+        } else if (friend.lastMsg) {
+            var msgColorStyle = hasUnread ? ' style="color:#4ade80; font-weight:700;"' : '';
+            subLineHTML = '<div class="friend-last-msg"' + msgColorStyle + '>' + escapeEdgeHtml(friend.lastMsg) + '</div>';
         }
 
         var isOnline = !friend.isGroup && (Boolean(friend.online) || activeTypers.length > 0);
@@ -992,9 +1012,9 @@ function renderFriends() {
                 '<div class="' + avClass + '" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + safeNameJs + '\')">' + avInner + '</div>' +
                 '<div class="friend-meta">' +
                     '<div class="friend-name">' + displayName + '</div>' +
-                    typingLineHTML +
+                    subLineHTML +
                 '</div>' +
-                '<div class="friend-status-box">' + badgeHTML + '</div>' +
+                '<div class="friend-status-box">' + timeHTML + badgeHTML + '</div>' +
             '</div>' + callBtnsHTML + delBtnHTML;
         frag.appendChild(item);
     });
