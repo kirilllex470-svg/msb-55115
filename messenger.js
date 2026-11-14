@@ -864,9 +864,6 @@ function renderFriends() {
         return [
             f.isGroup ? f.id : f.name,
             f.online ? 1 : 0,
-            f.lastSeen || '',
-            f.lastMessage || '',
-            f.time || '',
             f.unread || 0,
             f.avatar ? f.avatar.length : 0
         ].join(':');
@@ -888,25 +885,21 @@ function renderFriends() {
         item.className = 'friend-item ' + (isActive ? 'active' : '');
         item.onclick = function() { selectChat(friend); };
         var badgeHTML = (friend.unread > 0 && !isActive) ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
-        var timeHTML = friend.time ? ('<div class="friend-time-label">' + friend.time + '</div>') : '';
         var unitTag = (!friend.isGroup && friend.unit) ? (' <span class="friend-unit-pill">' + escapeEdgeHtml(friend.unit) + '</span>') : '';
-        var statusLine = '';
-        if (friend.isGroup) {
-            statusLine = '<span class="friend-presence-tag group">👥 конференция</span>';
-        } else if (friend.online) {
-            statusLine = '<span class="friend-presence-tag online">● в сети</span>';
-        } else {
-            statusLine = '<span class="friend-presence-tag offline">' + (friend.lastSeen ? ('был(а) ' + escapeEdgeHtml(friend.lastSeen)) : 'не в сети') + '</span>';
-        }
-        var displayName = escapeEdgeHtml(friend.name) + unitTag;
-        var dotHTML = !friend.isGroup ? ('<span class="online-dot ' + (friend.online ? 'online' : 'offline') + '"></span>') : '';
+        var groupIcon = friend.isGroup ? '👥 ' : '';
+        var displayName = groupIcon + escapeEdgeHtml(friend.name) + unitTag;
+
+        var isOnline = !friend.isGroup && Boolean(friend.online);
+        var dotHTML = !friend.isGroup ? ('<span class="online-dot ' + (isOnline ? 'online' : 'offline') + '"></span>') : '';
+        var avClass = 'avatar friend-list-avatar' + (isOnline ? ' friend-avatar-online' : '');
         var avInner = (friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : escapeEdgeHtml(friend.name.substring(0, 2).toUpperCase())) + dotHTML;
+
         var friendDataEscaped = JSON.stringify({
             id: friend.id,
             name: friend.name,
             isGroup: friend.isGroup,
             avatarHash: friend.avatarHash || '',
-            online: Boolean(friend.online),
+            online: isOnline,
             lastSeen: friend.lastSeen || ''
         }).replace(/"/g, '&quot;');
 
@@ -917,18 +910,17 @@ function renderFriends() {
         var delBtnHTML = '<button class="delete-friend-btn" onclick="deleteFriend(' + friendDataEscaped + ', event)">&times;</button>';
         item.innerHTML =
             '<div class="friend-info">' +
-                '<div class="avatar" style="width:40px; height:40px; font-size:13px;" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + safeNameJs + '\')">' + avInner + '</div>' +
+                '<div class="' + avClass + '" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + safeNameJs + '\')">' + avInner + '</div>' +
                 '<div class="friend-meta">' +
                     '<div class="friend-name">' + displayName + '</div>' +
-                    '<div class="friend-sub-row">' + statusLine + '</div>' +
-                    '<div class="friend-last-msg">' + escapeEdgeHtml(friend.lastMessage || '') + '</div>' +
                 '</div>' +
-                '<div class="friend-status-box">' + timeHTML + badgeHTML + '</div>' +
+                '<div class="friend-status-box">' + badgeHTML + '</div>' +
             '</div>' + callBtnsHTML + delBtnHTML;
         frag.appendChild(item);
     });
     box.appendChild(frag);
 }
+
 
 
 function openCreateGroupModal() {
@@ -1556,23 +1548,61 @@ window.handleRequest = handleRequest; window.closeForwardModal = closeForwardMod
 window.inlineDeleteMessage = inlineDeleteMessage; window.playVideoWithSound = playVideoWithSound; window.syncMessengerAuth = syncMessengerAuth;
 window.flushRetryQueue = flushRetryQueue;
 var msbExtraClockTimer = null;
+var msbToolbarExpanded = false;
+
+function buildAnimatedRadialToolsRow() {
+    var toolsRow = document.querySelector('#messenger-modal .tools-row');
+    if (!toolsRow || toolsRow.getAttribute('data-msb-radial') === '1') return;
+    toolsRow.setAttribute('data-msb-radial', '1');
+    toolsRow.classList.add('msb-radial-tools-row');
+
+    var fileInput = toolsRow.querySelector('input[type="file"]');
+
+    toolsRow.innerHTML =
+        '<div class="msb-wing msb-wing-left" id="msb-wing-left">' +
+            '<button type="button" id="video-btn" class="media-btn" onclick="toggleVideoRecord()" title="Видео-кружок">🎥</button>' +
+            '<button type="button" class="media-btn" onclick="document.getElementById(\'msb-radial-file-input\').click()" title="Прикрепить файл">📎</button>' +
+            '<button type="button" id="voice-btn" class="media-btn" onclick="toggleVoiceRecord()" title="Голосовое сообщение">🎙️</button>' +
+        '</div>' +
+        '<button type="button" id="msb-center-toggle-btn" class="media-btn gif-btn-wide msb-center-plus-btn" onclick="toggleMsbRadialToolbar()" title="Инструменты">➕</button>' +
+        '<div class="msb-wing msb-wing-right" id="msb-wing-right">' +
+            '<button type="button" class="media-btn" onclick="triggerCallInDev(\'Аудиозвонок\', currentPartner || \'\')" title="Аудиозвонок">📞</button>' +
+            '<button type="button" class="media-btn" onclick="openThemeSettingsModal()" title="Темы и Гифки">🎨</button>' +
+            '<button type="button" id="msb-plus-menu-btn" class="media-btn" onclick="event.stopPropagation(); toggleMsbPlusDropdown()" title="Разделы МСБ-55115">➕</button>' +
+        '</div>';
+
+    if (fileInput) {
+        fileInput.id = 'msb-radial-file-input';
+        toolsRow.appendChild(fileInput);
+    } else {
+        var newFile = document.createElement('input');
+        newFile.type = 'file';
+        newFile.id = 'msb-radial-file-input';
+        newFile.style.display = 'none';
+        newFile.onchange = function() { uploadAnyFile(this); };
+        toolsRow.appendChild(newFile);
+    }
+}
+
+function toggleMsbRadialToolbar(forceState) {
+    buildAnimatedRadialToolsRow();
+    var toolsRow = document.querySelector('#messenger-modal .tools-row');
+    var centerBtn = document.getElementById('msb-center-toggle-btn');
+    var drop = document.getElementById('msb-plus-dropdown');
+    if (!toolsRow || !centerBtn) return;
+
+    msbToolbarExpanded = (typeof forceState === 'boolean') ? forceState : !msbToolbarExpanded;
+    toolsRow.classList.toggle('expanded', msbToolbarExpanded);
+    centerBtn.classList.toggle('active', msbToolbarExpanded);
+    centerBtn.textContent = msbToolbarExpanded ? '✖' : '➕';
+
+    if (!msbToolbarExpanded && drop) {
+        drop.classList.remove('open');
+    }
+}
 
 function ensureMessengerExtraHub() {
-    var toolsRow = document.querySelector('#messenger-modal .tools-row');
-    if (toolsRow && !document.getElementById('msb-plus-menu-btn')) {
-        toolsRow.style.position = 'relative';
-        var plusBtn = document.createElement('button');
-        plusBtn.type = 'button';
-        plusBtn.id = 'msb-plus-menu-btn';
-        plusBtn.className = 'media-btn msb-plus-btn';
-        plusBtn.title = 'Разделы МСБ-55115';
-        plusBtn.innerHTML = '➕';
-        plusBtn.onclick = function(e) {
-            e.stopPropagation();
-            toggleMsbPlusDropdown();
-        };
-        toolsRow.appendChild(plusBtn);
-    }
+    buildAnimatedRadialToolsRow();
 
     if (!document.getElementById('msb-plus-dropdown')) {
         var inputContainer = document.querySelector('#messenger-modal .input-container');
@@ -1675,9 +1705,9 @@ document.addEventListener('click', function(e) {
 });
 
 document.addEventListener('DOMContentLoaded', ensureMessengerExtraHub);
-setTimeout(ensureMessengerExtraHub, 300);
+setTimeout(ensureMessengerExtraHub, 250);
 
+window.toggleMsbRadialToolbar = toggleMsbRadialToolbar;
 window.openMsbDevTab = openMsbDevTab;
 window.closeMsbDevTab = closeMsbDevTab;
 window.toggleMsbPlusDropdown = toggleMsbPlusDropdown;
-

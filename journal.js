@@ -1915,10 +1915,14 @@ function sendGifToCurrentChat(gifSrc) {
         closeMsgPhotoViewer();
     });
 }
-function openMsgPhotoViewer(src, title) {
+function openMsgPhotoViewer(src, title, hideSettings) {
     const modal = document.getElementById('msg-photo-viewer-modal');
     const img = document.getElementById('msg-viewer-img');
     const ttl = document.getElementById('msg-viewer-title');
+    const settingsBox = modal ? modal.querySelector('.msg-viewer-settings') : null;
+    if (settingsBox) {
+        settingsBox.style.display = hideSettings ? 'none' : 'block';
+    }
     msgImageZoom = 1;
     if (img) { img.src = src || makeAnimatedSvgGif('military', 0, '🪖 МСБ-55115'); img.style.transform = 'scale(1)'; }
     if (ttl) ttl.innerText = title || '🖼️ Просмотр и настройки темы';
@@ -1931,8 +1935,10 @@ function openMsgPhotoViewer(src, title) {
 function openAvatarInViewer(el, titleName) {
     const imgEl = el ? el.querySelector('img') : null;
     const fallback = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ ' + (titleName || currentCallsign || 'МСБ'));
-    openMsgPhotoViewer(imgEl ? imgEl.src : fallback, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'));
+    openMsgPhotoViewer(imgEl ? imgEl.src : fallback, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'), true);
 }
+
+
 
 function openThemeSettingsModal() {
     const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема МСБ-55115');
