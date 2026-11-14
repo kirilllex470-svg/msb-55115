@@ -185,22 +185,29 @@ function clearNetworkErrorBanner() {
     window.msbIsWeakNetwork = false;
     syncMessengerWeakBanner(false);
 }
+function getActiveTypersForRoom(roomId) {
+    var result = new Array();
+    if (!roomId || !activeRoomTypers[roomId]) return result;
+    var now = Date.now();
+    Object.keys(activeRoomTypers[roomId]).forEach(function(u) {
+        if (now - activeRoomTypers[roomId][u] < 4500) {
+            result.push(u);
+        } else {
+            delete activeRoomTypers[roomId][u];
+        }
+    });
+    return result;
+}
+
 function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsersList) {
     var stEl = document.getElementById('chat-status');
     if (!stEl || !currentRoomId) return;
     stEl.style.display = 'block';
 
     var typers = Array.isArray(typingUsersList) ? typingUsersList.slice() : new Array();
-    var now = Date.now();
-    if (activeRoomTypers[currentRoomId]) {
-        Object.keys(activeRoomTypers[currentRoomId]).forEach(function(u) {
-            if (now - activeRoomTypers[currentRoomId][u] < 4200) {
-                if (!typers.includes(u)) typers.push(u);
-            } else {
-                delete activeRoomTypers[currentRoomId][u];
-            }
-        });
-    }
+    getActiveTypersForRoom(currentRoomId).forEach(function(u) {
+        if (!typers.includes(u)) typers.push(u);
+    });
 
     var nextText = '';
     var nextColor = '#94a3b8';
@@ -229,6 +236,7 @@ function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsers
     stEl.classList.toggle('msb-typing-active', isTypingNow);
 }
 
+
 window.handleIncomingTypingWS = function(msg) {
     if (!msg || !msg.room || !msg.user) return;
     var me = String(getActiveChatIdentity() || '').trim().toLowerCase();
@@ -241,49 +249,33 @@ window.handleIncomingTypingWS = function(msg) {
         delete activeRoomTypers[msg.room][msg.user];
     }
 
+    lastFriendsRenderSig = '';
+    renderFriends();
+
     if (currentRoomId === msg.room) {
         var fObj = friendsList.find(function(f) {
             return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
         });
-        renderPartnerPresenceHeader(fObj ? fObj.online : false, partnerLastSeenCache, null);
+        renderPartnerPresenceHeader(fObj ? fObj.online : true, partnerLastSeenCache, null);
     }
 
-     setTimeout(function() {
+    setTimeout(function() {
+        lastFriendsRenderSig = '';
+        renderFriends();
         if (currentRoomId === msg.room) {
             var fObj2 = friendsList.find(function(f) {
                 return !f.isGroup && currentPartner && f.name.toLowerCase() === currentPartner.toLowerCase();
             });
             renderPartnerPresenceHeader(fObj2 ? fObj2.online : false, partnerLastSeenCache, null);
         }
-    }, 4300);
+    }, 4600);
 };
-window.handlePresenceUpdateWS = function(msg) {
-    if (!msg || !msg.user) return;
-    var targetKey = String(msg.user).trim().toLowerCase();
-    var changed = false;
-    friendsList.forEach(function(f) {
-        if (!f.isGroup && String(f.name || '').trim().toLowerCase() === targetKey) {
-            f.online = Boolean(msg.online);
-            if (msg.lastSeen) f.lastSeen = msg.lastSeen;
-            changed = true;
-        }
-    });
-    if (changed) {
-        lastFriendsRenderSig = '';
-        renderFriends();
-    }
-    if (currentPartner && !isCurrentGroup && currentPartner.trim().toLowerCase() === targetKey) {
-        if (msg.lastSeen) partnerLastSeenCache = msg.lastSeen;
-        renderPartnerPresenceHeader(Boolean(msg.online), partnerLastSeenCache, null);
-    }
-};
-
 
 function notifyServerTyping(isTyping) {
     var me = getActiveChatIdentity();
     if (!me || !currentRoomId) return;
     var now = Date.now();
-    if (isTyping && (now - myLastTypingSentAt < 2200)) return;
+    if (isTyping && (now - myLastTypingSentAt < 2000)) return;
     myLastTypingSentAt = isTyping ? now : 0;
 
     var payload = {
@@ -299,7 +291,14 @@ function notifyServerTyping(isTyping) {
             return;
         } catch (e) {}
     }
+
+    fetch('/api/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: me, room: currentRoomId, typing: Boolean(isTyping) })
+    }).catch(function() {});
 }
+
 window.handleIncomingChatWS = function(packet) {
     if (!packet) return;
     chatUser = getActiveChatIdentity();
@@ -861,10 +860,13 @@ function renderFriends() {
     if (!box || !chatUser) return;
 
     var sig = String(currentRoomId || '') + '||' + friendsList.map(function(f) {
+        var rId = f.isGroup ? f.id : makeDirectRoomId(chatUser, f.name);
+        var typersCount = getActiveTypersForRoom(rId).length;
         return [
             f.isGroup ? f.id : f.name,
             f.online ? 1 : 0,
             f.unread || 0,
+            typersCount,
             f.avatar ? f.avatar.length : 0
         ].join(':');
     }).join(';');
@@ -889,7 +891,16 @@ function renderFriends() {
         var groupIcon = friend.isGroup ? '👥 ' : '';
         var displayName = groupIcon + escapeEdgeHtml(friend.name) + unitTag;
 
-        var isOnline = !friend.isGroup && Boolean(friend.online);
+        var activeTypers = getActiveTypersForRoom(activeId);
+        var typingLineHTML = '';
+        if (activeTypers.length > 0) {
+            var typingText = friend.isGroup
+                ? ('✍️ ' + escapeEdgeHtml(activeTypers.join(', ')) + ' набирает...')
+                : '✍️ набирает сообщение...';
+            typingLineHTML = '<div class="friend-typing-green">' + typingText + '</div>';
+        }
+
+        var isOnline = !friend.isGroup && (Boolean(friend.online) || activeTypers.length > 0);
         var dotHTML = !friend.isGroup ? ('<span class="online-dot ' + (isOnline ? 'online' : 'offline') + '"></span>') : '';
         var avClass = 'avatar friend-list-avatar' + (isOnline ? ' friend-avatar-online' : '');
         var avInner = (friend.avatar ? ('<img src="' + friend.avatar + '" alt="av">') : escapeEdgeHtml(friend.name.substring(0, 2).toUpperCase())) + dotHTML;
@@ -913,6 +924,7 @@ function renderFriends() {
                 '<div class="' + avClass + '" onclick="event.stopPropagation(); openAvatarInViewer(this, \'' + safeNameJs + '\')">' + avInner + '</div>' +
                 '<div class="friend-meta">' +
                     '<div class="friend-name">' + displayName + '</div>' +
+                    typingLineHTML +
                 '</div>' +
                 '<div class="friend-status-box">' + badgeHTML + '</div>' +
             '</div>' + callBtnsHTML + delBtnHTML;
