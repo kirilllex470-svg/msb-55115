@@ -171,7 +171,7 @@ async function subscribeToWebPush(forceRenew) {
             : await Notification.requestPermission();
         if (permission !== 'granted') return;
 
-        const reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         const readyReg = await navigator.serviceWorker.ready;
         if ('PushManager' in window && publicVapidKey) {
             let sub = await readyReg.pushManager.getSubscription();
@@ -185,11 +185,12 @@ async function subscribeToWebPush(forceRenew) {
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                 });
             }
+            const cleanSub = (typeof sub.toJSON === 'function') ? sub.toJSON() : sub;
             const subPayload = {
                 type: 'save_sub',
                 user: currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ',
                 callsign: currentCallsign || localStorage.getItem('journal_callsign') || '',
-                sub: sub
+                sub: cleanSub
             };
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify(subPayload));
@@ -202,6 +203,7 @@ async function subscribeToWebPush(forceRenew) {
         }
     } catch (e) {}
 }
+
 
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', function(ev) {

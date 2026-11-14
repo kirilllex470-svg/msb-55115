@@ -84,7 +84,8 @@ if (!vapidKeys || !vapidKeys.publicKey) {
     vapidKeys = webpush.generateVAPIDKeys();
     writeJSON(VAPID_FILE, vapidKeys, true);
 }
-webpush.setVapidDetails('mailto:admin@msb55115.local', vapidKeys.publicKey, vapidKeys.privateKey);
+webpush.setVapidDetails('mailto:support@msb55115.ru', vapidKeys.publicKey, vapidKeys.privateKey);
+
 
 let pushSubscriptions = readJSON(SUBS_FILE, new Array());
 if (!Array.isArray(pushSubscriptions)) {
@@ -1216,8 +1217,13 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     const pushOptions = {
         TTL: 86400,
         urgency: 'high',
-        headers: { 'Urgency': 'high' }
+        topic: 'msb-' + String(notifId).slice(-8),
+        headers: {
+            'Urgency': 'high',
+            'TTL': '86400'
+        }
     };
+
     const tLow = String(target).trim().toLowerCase();
     const sLow = String(sender).trim().toLowerCase();
     const isUnitTarget = Array.of('шр', 'рота-1', 'рота-2', 'рота-3', 'админ').includes(tLow);
