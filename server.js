@@ -52,9 +52,33 @@ function writeJSON(filePath, data, immediate) {
     writeTimers[filePath] = setTimeout(function() {
         delete writeTimers[filePath];
         fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8', function() {});
-    }, 150);
+    }, 250);
 }
 
+function sendJsonCompressed(req, res, statusCode, payloadObj, cacheHeader) {
+    const jsonStr = JSON.stringify(payloadObj);
+    const headers = {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': cacheHeader || 'no-cache'
+    };
+    const acceptEnc = (req.headers && req.headers['accept-encoding']) ? req.headers['accept-encoding'] : '';
+    if (jsonStr.length > 1024 && acceptEnc.includes('gzip')) {
+        zlib.gzip(Buffer.from(jsonStr, 'utf-8'), function(err, zipped) {
+            if (!err && zipped) {
+                headers['Content-Encoding'] = 'gzip';
+                headers['Content-Length'] = zipped.length;
+                res.writeHead(statusCode, headers);
+                res.end(zipped);
+            } else {
+                res.writeHead(statusCode, headers);
+                res.end(jsonStr);
+            }
+        });
+    } else {
+        res.writeHead(statusCode, headers);
+        res.end(jsonStr);
+    }
+}
 let vapidKeys = fs.existsSync(VAPID_FILE) ? readJSON(VAPID_FILE, null) : null;
 if (!vapidKeys || !vapidKeys.publicKey) {
     vapidKeys = webpush.generateVAPIDKeys();
@@ -83,6 +107,7 @@ usersDB['муравей'] = {
     }
 };
 writeJSON(USERS_FILE, usersDB, true);
+
 let roomsDB = readJSON(CHAT_ROOMS_FILE, {});
 let friendsDB = readJSON(FRIENDS_FILE, {});
 let groupsDB = readJSON(GROUPS_FILE, {});
@@ -110,15 +135,19 @@ function markUserOnline(name) {
     if (!name) return;
     const key = String(name).trim().toLowerCase();
     if (!key || key === 'гость' || key === 'просмотр') return;
-    lastSeenDB[key] = Date.now();
-    writeJSON(LAST_SEEN_FILE, lastSeenDB);
+    const prev = lastSeenDB[key] || 0;
+    const now = Date.now();
+    lastSeenDB[key] = now;
+    if (now - prev > 15000) {
+        writeJSON(LAST_SEEN_FILE, lastSeenDB);
+    }
 }
 
 function isUserOnlineNow(name) {
     if (!name) return false;
     const key = String(name).trim().toLowerCase();
     const t = lastSeenDB[key] || 0;
-    return (Date.now() - t) < 12000;
+    return (Date.now() - t) < 20000;
 }
 
 function getUserLastSeenStr(name) {
@@ -127,25 +156,16 @@ function getUserLastSeenStr(name) {
     const t = lastSeenDB[key] || 0;
     return t ? formatTimestampRu(t) : '';
 }
-
 let tableHistory = readJSON(DB_FILE, new Array());
-if (!Array.isArray(tableHistory)) {
-    tableHistory = new Array();
-}
+if (!Array.isArray(tableHistory)) tableHistory = new Array();
 let archiveHistory = readJSON(ARCHIVE_FILE, {});
 let notificationsHistory = readJSON(NOTIFS_FILE, new Array());
-if (!Array.isArray(notificationsHistory)) {
-    notificationsHistory = new Array();
-}
+if (!Array.isArray(notificationsHistory)) notificationsHistory = new Array();
 let mapsHistory = readJSON(MAPS_FILE, new Array());
-if (!Array.isArray(mapsHistory)) {
-    mapsHistory = new Array();
-}
+if (!Array.isArray(mapsHistory)) mapsHistory = new Array();
+
 let activeAlerts = {};
-let streamState = {
-    active: false,
-    url: ''
-};
+let streamState = { active: false, url: '' };
 
 function getServerDateTime() {
     const d = new Date(Date.now() + 3 * 3600 * 1000);
@@ -174,9 +194,7 @@ function makeTacticalIcon(size) {
         for (let i = 0; i < buf.length; i++) {
             const b = buf.readUInt8(i);
             const idx = (c ^ b) & 0xff;
-            const t = crcTable.subarray(idx, idx + 1).reduce(function(a, v) {
-                return v;
-            }, 0);
+            const t = crcTable.subarray(idx, idx + 1).reduce(function(a, v) { return v; }, 0);
             c = (c >>> 8) ^ t;
         }
         return (c ^ -1) >>> 0;
@@ -205,27 +223,19 @@ function makeTacticalIcon(size) {
             const dx = x - half;
             const dy = y - half;
             const r = Math.sqrt(dx * dx + dy * dy);
-            let red = 15;
-            let green = 23;
-            let blue = 42;
+            let red = 15, green = 23, blue = 42;
             if (r <= half * 0.88) {
                 if (r >= half * 0.82) {
-                    red = 56;
-                    green = 189;
-                    blue = 248;
+                    red = 56; green = 189; blue = 248;
                 } else {
-                    red = 30;
-                    green = 41;
-                    blue = 59;
+                    red = 30; green = 41; blue = 59;
                     const c1 = Math.abs(dy - (-half * 0.32 + Math.abs(dx) * 0.75));
                     const c2 = Math.abs(dy - (-half * 0.05 + Math.abs(dx) * 0.75));
                     const c3 = Math.abs(dy - (half * 0.22 + Math.abs(dx) * 0.75));
                     if ((c1 <= size * 0.045 && Math.abs(dx) <= half * 0.52) ||
                         (c2 <= size * 0.045 && Math.abs(dx) <= half * 0.46) ||
                         (c3 <= size * 0.045 && Math.abs(dx) <= half * 0.38)) {
-                        red = 250;
-                        green = 204;
-                        blue = 21;
+                        red = 250; green = 204; blue = 21;
                     }
                 }
             }
@@ -238,7 +248,6 @@ function makeTacticalIcon(size) {
     const sig = Buffer.from('89504e470d0a1a0a', 'hex');
     return Buffer.concat(Array.of(sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))));
 }
-
 const TACTICAL_ICON_192 = makeTacticalIcon(192);
 const TACTICAL_ICON_512 = makeTacticalIcon(512);
 
@@ -256,7 +265,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v1';",
+    "const SHELL_CACHE = 'msb55115-shell-v2';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -306,6 +315,7 @@ const SW_CODE = [
     "self.addEventListener('fetch', function(event) {",
     "    const url = new URL(event.request.url);",
     "    if (event.request.method !== 'GET') return;",
+    "    if (url.pathname.startsWith('/api/') || url.pathname === '/maps-list' || url.pathname === '/archive-data') return;",
     "    if (url.pathname.startsWith('/uploads/')) {",
     "        event.respondWith(caches.open(MEDIA_CACHE).then(function(cache) {",
     "            return cache.match(url.pathname).then(function(cachedRes) {",
@@ -320,33 +330,41 @@ const SW_CODE = [
     "            });",
     "        }));",
     "        return;",
-    "    }",
-    "    if (url.pathname.startsWith('/api/') || url.pathname === '/maps-list' || url.pathname === '/archive-data') return;",
+    "    }"
+].join('\n') + '\n' + [
     "    event.respondWith(caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
-    "        if (cachedRes) return cachedRes;",
-    "        return fetch(event.request).then(function(networkRes) {",
+    "        const netFetch = fetch(event.request).then(function(networkRes) {",
     "            if (networkRes && networkRes.status === 200) {",
     "                const resClone = networkRes.clone();",
     "                caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
     "            }",
     "            return networkRes;",
-    "        });",
+    "        }).catch(function() { return cachedRes; });",
+    "        return cachedRes || netFetch;",
     "    }));",
     "});",
     "",
     "self.addEventListener('push', function(event) {",
-    "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Срочное сообщение!', tag: 'msb-alert' };",
-    "    if (event.data) { try { data = event.data.json(); } catch (e) {} }",
-    "    event.waitUntil(self.registration.showNotification(data.title, {",
-    "        body: data.body,",
+    "    var data = { title: '🛑 ТРЕВОГА В МСБ-55115!', body: 'Новое сообщение в системе!', tag: 'msb-alert-' + Date.now() };",
+    "    if (event.data) {",
+    "        try { data = event.data.json(); } catch (e) { data.body = event.data.text() || data.body; }",
+    "    }",
+    "    event.waitUntil(self.registration.showNotification(data.title || '🛑 МСБ-55115', {",
+    "        body: data.body || 'Откройте приложение',",
     "        icon: '/icon-192.png',",
     "        badge: '/icon-192.png',",
-    "        vibrate: Array.of(400, 100, 400, 100, 400, 200, 600),",
+    "        vibrate: Array.of(400, 100, 400, 100, 600),",
     "        silent: false,",
     "        requireInteraction: true,",
     "        renotify: true,",
-    "        tag: data.tag || 'msb-alert',",
-    "        data: { url: '/' }",
+    "        tag: data.tag || ('msb-push-' + Date.now()),",
+    "        data: { url: data.url || '/' }",
+    "    }));",
+    "});",
+    "",
+    "self.addEventListener('pushsubscriptionchange', function(event) {",
+    "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(list) {",
+    "        list.forEach(function(cl) { cl.postMessage({ type: 'resubscribe_push' }); });",
     "    }));",
     "});",
     "",
@@ -355,26 +373,27 @@ const SW_CODE = [
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {",
     "        for (var i = 0; i < clientList.length; i++) {",
     "            var cl = clientList.at(i);",
-    "            if (cl && 'focus' in cl) return cl.focus();",
+    "            if (cl && 'focus' in cl) {",
+    "                cl.postMessage({ type: 'wake_sync' });",
+    "                return cl.focus();",
+    "            }",
     "        }",
     "        if (clients.openWindow) return clients.openWindow('/');",
     "    }));",
     "});"
 ].join('\n');
+
 function readBodyJSON(req, cb) {
-    let body = '';
-    req.on('data', function(chunk) {
-        body += chunk.toString();
-    });
+    const chunks = [];
+    req.on('data', function(chunk) { chunks.push(chunk); });
     req.on('end', function() {
         try {
-            cb(null, JSON.parse(body));
+            cb(null, JSON.parse(Buffer.concat(chunks).toString('utf8')));
         } catch (e) {
             cb(e, null);
         }
     });
 }
-
 const server = http.createServer(function(req, res) {
     const urlPath = (req.url || '/').split('?').at(0);
 
@@ -382,29 +401,23 @@ const server = http.createServer(function(req, res) {
         res.writeHead(200, {
             'Content-Type': 'application/javascript; charset=utf-8',
             'Service-Worker-Allowed': '/',
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
         });
         return res.end(SW_CODE);
     }
 
     if (urlPath === '/manifest.json') {
-        res.writeHead(200, {
-            'Content-Type': 'application/manifest+json; charset=utf-8'
-        });
+        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
         return res.end(MANIFEST_JSON);
     }
 
     if (urlPath === '/icon-192.png' || urlPath === '/favicon.ico') {
-        res.writeHead(200, {
-            'Content-Type': 'image/png'
-        });
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
         return res.end(TACTICAL_ICON_192);
     }
 
     if (urlPath === '/icon-512.png') {
-        res.writeHead(200, {
-            'Content-Type': 'image/png'
-        });
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
         return res.end(TACTICAL_ICON_512);
     }
 
@@ -415,31 +428,63 @@ const server = http.createServer(function(req, res) {
                 res.writeHead(404);
                 return res.end('Not Found');
             }
-            res.writeHead(200, {
-                'Content-Type': cType,
-                'Cache-Control': 'no-cache'
-            });
-            res.end(data);
+            const acceptEnc = (req.headers && req.headers['accept-encoding']) ? req.headers['accept-encoding'] : '';
+            if (acceptEnc.includes('gzip')) {
+                zlib.gzip(data, function(zErr, zipped) {
+                    if (!zErr && zipped) {
+                        res.writeHead(200, {
+                            'Content-Type': cType,
+                            'Content-Encoding': 'gzip',
+                            'Cache-Control': 'no-cache'
+                        });
+                        return res.end(zipped);
+                    }
+                    res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-cache' });
+                    res.end(data);
+                });
+            } else {
+                res.writeHead(200, { 'Content-Type': cType, 'Cache-Control': 'no-cache' });
+                res.end(data);
+            }
         });
         return;
     }
 
+    if (req.method === 'GET' && urlPath === '/api/ping') {
+        return sendJsonCompressed(req, res, 200, { ok: true, bootId: SERVER_BOOT_ID, ts: Date.now() }, 'no-store');
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/push/subscribe') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.sub && data.sub.endpoint) {
+                if (data.callsign) markUserOnline(data.callsign);
+                const idx = pushSubscriptions.findIndex(function(s) {
+                    return s.sub && s.sub.endpoint === data.sub.endpoint;
+                });
+                if (idx !== -1) {
+                    pushSubscriptions[idx].user = data.user || 'ГОСТЬ';
+                    pushSubscriptions[idx].callsign = data.callsign || '';
+                    pushSubscriptions[idx].sub = data.sub;
+                } else {
+                    pushSubscriptions.push({
+                        user: data.user || 'ГОСТЬ',
+                        callsign: data.callsign || '',
+                        sub: data.sub
+                    });
+                }
+                writeJSON(SUBS_FILE, pushSubscriptions);
+            }
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
     if (req.method === 'POST' && urlPath === '/api/auth/register') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.username || !data.password || !data.unit) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'Заполните все поля'
-                }));
+                return sendJsonCompressed(req, res, 400, { success: false, message: 'Заполните все поля' });
             }
             const key = data.username.trim().toLowerCase();
             if (usersDB[key]) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'Этот позывной уже занят!'
-                }));
+                return sendJsonCompressed(req, res, 200, { success: false, message: 'Этот позывной уже занят!' });
             }
             usersDB[key] = {
                 username: data.username.trim(),
@@ -447,13 +492,7 @@ const server = http.createServer(function(req, res) {
                 unit: data.unit,
                 approved: false,
                 avatar: '',
-                permissions: {
-                    row: false,
-                    stream: false,
-                    maps: false,
-                    archive: false,
-                    table: false
-                }
+                permissions: { row: false, stream: false, maps: false, archive: false, table: false }
             };
             writeJSON(USERS_FILE, usersDB);
             broadcastWS({ type: 'users_updated' });
@@ -464,101 +503,69 @@ const server = http.createServer(function(req, res) {
                 'АДМИН',
                 '📝 НОВАЯ ЗАЯВКА НА РЕГИСТРАЦИЮ: Позывной (' + data.username.trim() + ') (' + data.unit + '). Откройте "Пользователи и заявки"!'
             );
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true }));
+            return sendJsonCompressed(req, res, 200, { success: true });
         });
     }
 
     if (req.method === 'POST' && urlPath === '/api/auth/login') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.username || !data.password) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'Пустые поля'
-                }));
+                return sendJsonCompressed(req, res, 400, { success: false, message: 'Пустые поля' });
             }
             const u = usersDB[data.username.trim().toLowerCase()];
             if (!u) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'Позывной не найден. Нажмите "Регистрация"!'
-                }));
+                return sendJsonCompressed(req, res, 200, { success: false, message: 'Позывной не найден. Нажмите "Регистрация"!' });
             }
             if (u.password !== data.password.trim()) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'Неверный пароль!'
-                }));
+                return sendJsonCompressed(req, res, 200, { success: false, message: 'Неверный пароль!' });
             }
             if (u.approved === false) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: '⏳ Заявка еще не одобрена АДМИНОМ!'
-                }));
+                return sendJsonCompressed(req, res, 200, { success: false, message: '⏳ Заявка еще не одобрена АДМИНОМ!' });
             }
             markUserOnline(u.username);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
+            return sendJsonCompressed(req, res, 200, {
                 success: true,
                 username: u.username,
                 unit: u.unit,
-                permissions: u.permissions || {
-                    row: false,
-                    stream: false,
-                    maps: false,
-                    archive: false,
-                    table: false
-                }
-            }));
+                permissions: u.permissions || { row: false, stream: false, maps: false, archive: false, table: false }
+            });
         });
     }
 
     if (req.method === 'GET' && urlPath === '/api/user/me') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
+        const skipAv = myUrl.searchParams.get('noav') === '1';
         const u = usersDB[user] || {};
-        if (user) {
-            markUserOnline(user);
-        }
-        res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-cache'
-        });
-        return res.end(JSON.stringify({
-            avatar: u.avatar || '',
+        if (user) markUserOnline(user);
+        const avHash = u.avatar ? String(u.avatar.length) : '';
+        return sendJsonCompressed(req, res, 200, {
+            avatar: skipAv ? undefined : (u.avatar || ''),
+            avatarHash: avHash,
             unit: u.unit || '',
-            permissions: u.permissions || {
-                row: false,
-                stream: false,
-                maps: false,
-                archive: false,
-                table: false
-            }
-        }));
+            permissions: u.permissions || { row: false, stream: false, maps: false, archive: false, table: false }
+        });
     }
 
+    if (req.method === 'GET' && urlPath === '/api/user/avatar') {
+        const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        const user = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
+        const u = usersDB[user] || {};
+        return sendJsonCompressed(req, res, 200, { user: user, avatar: u.avatar || '' });
+    }
     if (req.method === 'POST' && urlPath === '/api/user/avatar') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && data.avatar) {
                 const k = data.user.trim().toLowerCase();
                 if (!usersDB[k]) {
-                    usersDB[k] = {
-                        username: data.user.trim(),
-                        password: '',
-                        unit: '',
-                        approved: true
-                    };
+                    usersDB[k] = { username: data.user.trim(), password: '', unit: '', approved: true };
                 }
                 usersDB[k].avatar = data.avatar;
                 writeJSON(USERS_FILE, usersDB);
+                broadcastWS({ type: 'avatar_updated', user: k });
                 broadcastWS({ type: 'users_updated' });
             }
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true }));
+            return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
 
@@ -572,89 +579,52 @@ const server = http.createServer(function(req, res) {
                 username: u.username,
                 password: u.password,
                 unit: u.unit || '—',
-                permissions: u.permissions || {
-                    row: false,
-                    stream: false,
-                    maps: false,
-                    archive: false,
-                    table: false
-                }
+                permissions: u.permissions || { row: false, stream: false, maps: false, archive: false, table: false }
             };
-            if (u.approved === false) {
-                pending.push(item);
-            } else {
-                approved.push(item);
-            }
+            if (u.approved === false) pending.push(item);
+            else approved.push(item);
         });
-        res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-cache'
-        });
-        return res.end(JSON.stringify({
-            pending: pending,
-            approved: approved
-        }));
+        return sendJsonCompressed(req, res, 200, { pending: pending, approved: approved });
     }
 
     if (req.method === 'POST' && urlPath === '/api/admin/users/action') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.key && usersDB[data.key]) {
-                if (data.action === 'approve') {
-                    usersDB[data.key].approved = true;
-                } else if (data.action === 'delete') {
-                    delete usersDB[data.key];
-                } else if (data.action === 'set_perm' && data.permName) {
+                if (data.action === 'approve') usersDB[data.key].approved = true;
+                else if (data.action === 'delete') delete usersDB[data.key];
+                else if (data.action === 'set_perm' && data.permName) {
                     if (!usersDB[data.key].permissions) {
-                        usersDB[data.key].permissions = {
-                            row: false,
-                            stream: false,
-                            maps: false,
-                            archive: false,
-                            table: false
-                        };
+                        usersDB[data.key].permissions = { row: false, stream: false, maps: false, archive: false, table: false };
                     }
                     usersDB[data.key].permissions[data.permName] = Boolean(data.permVal);
                 }
                 writeJSON(USERS_FILE, usersDB);
                 broadcastWS({ type: 'users_updated' });
             }
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true }));
+            return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
 
     if (req.method === 'GET' && urlPath === '/maps-list') {
-        res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-store'
-        });
-        return res.end(JSON.stringify(mapsHistory));
+        return sendJsonCompressed(req, res, 200, mapsHistory, 'no-store');
     }
 
     if (req.method === 'GET' && urlPath === '/archive-data') {
-        res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-store'
-        });
-        return res.end(JSON.stringify(archiveHistory));
+        return sendJsonCompressed(req, res, 200, archiveHistory, 'no-store');
     }
 
     if (req.method === 'POST' && urlPath === '/upload-map') {
         const chunks = new Array();
-        req.on('data', function(chunk) {
-            chunks.push(chunk);
-        });
+        req.on('data', function(chunk) { chunks.push(chunk); });
         req.on('end', function() {
             try {
                 const msg = JSON.parse(Buffer.concat(chunks).toString('utf8'));
                 if (msg && msg.image) {
                     saveAndBroadcastMap(msg);
-                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({ ok: true, maps: mapsHistory }));
-                } else {
-                    res.writeHead(400);
-                    res.end(JSON.stringify({ ok: false }));
+                    return sendJsonCompressed(req, res, 200, { ok: true, maps: mapsHistory });
                 }
+                res.writeHead(400);
+                res.end(JSON.stringify({ ok: false }));
             } catch (e) {
                 res.writeHead(500);
                 res.end(JSON.stringify({ ok: false }));
@@ -662,16 +632,12 @@ const server = http.createServer(function(req, res) {
         });
         return;
     }
-
     if (urlPath === '/api/friends/get' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
-        res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-cache'
-        });
+        const omitAvatars = myUrl.searchParams.get('noav') === '1';
         if (!user) {
-            return res.end(JSON.stringify(new Array()));
+            return sendJsonCompressed(req, res, 200, new Array());
         }
         const myLowerName = String(user).trim().toLowerCase();
         markUserOnline(myLowerName);
@@ -681,39 +647,30 @@ const server = http.createServer(function(req, res) {
             const sortedRoom = Array.of(myLowerName, String(friendName).trim().toLowerCase()).sort();
             const pair = sortedRoom.join(',');
             const roomId = pair + '_' + pair;
-            return buildChatPreviewItem(friendName, roomId, myLowerName, myReads[roomId] || 0, false);
+            return buildChatPreviewItem(friendName, roomId, myLowerName, myReads[roomId] || 0, false, omitAvatars);
         });
         Object.keys(groupsDB).forEach(function(groupId) {
             const group = groupsDB[groupId];
             if (group && Array.isArray(group.members) && group.members.some(function(m) {
                 return String(m).trim().toLowerCase() === myLowerName;
             })) {
-                listData.push(buildChatPreviewItem(group.name, groupId, myLowerName, myReads[groupId] || 0, true));
+                listData.push(buildChatPreviewItem(group.name, groupId, myLowerName, myReads[groupId] || 0, true, omitAvatars));
             }
         });
-        return res.end(JSON.stringify(listData));
+        return sendJsonCompressed(req, res, 200, listData);
     }
+
     if (urlPath === '/api/friends/request/send' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.from || !data.to) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'Неполные данные'
-                }));
+                return sendJsonCompressed(req, res, 400, { success: false, message: 'Неполные данные' });
             }
             const targetKey = data.to.trim().toLowerCase();
             const stdUnits = Array.of('шр', 'рота-1', 'рота-2', 'рота-3', 'админ');
             if (!usersDB[targetKey] && !stdUnits.includes(targetKey)) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
-                    success: false,
-                    message: 'Позывной или Подразделение не найдены в системе!'
-                }));
+                return sendJsonCompressed(req, res, 200, { success: false, message: 'Позывной или Подразделение не найдены в системе!' });
             }
-            if (!Array.isArray(requestsDB[targetKey])) {
-                requestsDB[targetKey] = new Array();
-            }
+            if (!Array.isArray(requestsDB[targetKey])) requestsDB[targetKey] = new Array();
             const alreadyRequested = requestsDB[targetKey].some(function(n) {
                 return n.toLowerCase() === data.from.trim().toLowerCase();
             });
@@ -722,17 +679,15 @@ const server = http.createServer(function(req, res) {
                 writeJSON(REQUESTS_FILE, requestsDB);
             }
             broadcastWS({ type: 'users_updated' });
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true }));
+            return sendJsonCompressed(req, res, 200, { success: true });
         });
     }
 
     if (urlPath === '/api/friends/requests' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         const list = (user && Array.isArray(requestsDB[user.toLowerCase()])) ? requestsDB[user.toLowerCase()] : new Array();
-        return res.end(JSON.stringify(list));
+        return sendJsonCompressed(req, res, 200, list);
     }
 
     if (urlPath === '/api/friends/request/respond' && req.method === 'POST') {
@@ -744,22 +699,16 @@ const server = http.createServer(function(req, res) {
             const myL = data.user.toLowerCase();
             const fromL = data.from.toLowerCase();
             if (Array.isArray(requestsDB[myL])) {
-                requestsDB[myL] = requestsDB[myL].filter(function(n) {
-                    return n.toLowerCase() !== fromL;
-                });
+                requestsDB[myL] = requestsDB[myL].filter(function(n) { return n.toLowerCase() !== fromL; });
                 writeJSON(REQUESTS_FILE, requestsDB);
             }
             if (data.action === 'accept') {
                 const tMy = usersDB[myL] ? usersDB[myL].username : data.user;
                 const tFr = usersDB[fromL] ? usersDB[fromL].username : data.from;
                 if (!Array.isArray(friendsDB[myL])) friendsDB[myL] = new Array();
-                if (!friendsDB[myL].some(function(n) { return n.toLowerCase() === fromL; })) {
-                    friendsDB[myL].push(tFr);
-                }
+                if (!friendsDB[myL].some(function(n) { return n.toLowerCase() === fromL; })) friendsDB[myL].push(tFr);
                 if (!Array.isArray(friendsDB[fromL])) friendsDB[fromL] = new Array();
-                if (!friendsDB[fromL].some(function(n) { return n.toLowerCase() === myL; })) {
-                    friendsDB[fromL].push(tMy);
-                }
+                if (!friendsDB[fromL].some(function(n) { return n.toLowerCase() === myL; })) friendsDB[fromL].push(tMy);
                 writeJSON(FRIENDS_FILE, friendsDB);
             }
             broadcastWS({ type: 'users_updated' });
@@ -767,7 +716,6 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
-
     if (urlPath === '/api/friends/save' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && Array.isArray(data.friends)) {
@@ -779,6 +727,7 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
+
     if (urlPath === '/api/groups/create' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (err || !data || !data.creator || !data.groupName || !Array.isArray(data.members)) {
@@ -789,15 +738,10 @@ const server = http.createServer(function(req, res) {
             if (!data.members.map(function(m) { return m.toLowerCase(); }).includes(data.creator.toLowerCase())) {
                 data.members.push(data.creator);
             }
-            groupsDB[groupId] = {
-                name: data.groupName,
-                members: data.members,
-                creator: data.creator
-            };
+            groupsDB[groupId] = { name: data.groupName, members: data.members, creator: data.creator };
             writeJSON(GROUPS_FILE, groupsDB);
             broadcastWS({ type: 'users_updated' });
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, groupId: groupId }));
+            return sendJsonCompressed(req, res, 200, { success: true, groupId: groupId });
         });
     }
 
@@ -828,10 +772,9 @@ const server = http.createServer(function(req, res) {
     if (urlPath === '/api/messages/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.room && data.messageId && Array.isArray(roomsDB[data.room])) {
-                roomsDB[data.room] = roomsDB[data.room].filter(function(m) {
-                    return m.id !== data.messageId;
-                });
+                roomsDB[data.room] = roomsDB[data.room].filter(function(m) { return m.id !== data.messageId; });
                 writeJSON(CHAT_ROOMS_FILE, roomsDB);
+                broadcastWS({ type: 'chat_msg_deleted', room: data.room, messageId: data.messageId });
             }
             res.writeHead(200);
             res.end('OK');
@@ -844,27 +787,18 @@ const server = http.createServer(function(req, res) {
                 const uClean = String(data.user).trim();
                 markUserOnline(uClean);
                 if (!typingDB[data.room]) typingDB[data.room] = {};
-                if (data.typing === false) {
-                    delete typingDB[data.room][uClean];
-                } else {
-                    typingDB[data.room][uClean] = Date.now();
-                }
-                broadcastWS({
-                    type: 'chat_typing',
-                    room: data.room,
-                    user: uClean,
-                    typing: data.typing !== false
-                });
+                if (data.typing === false) delete typingDB[data.room][uClean];
+                else typingDB[data.room][uClean] = Date.now();
+                broadcastWS({ type: 'chat_typing', room: data.room, user: uClean, typing: data.typing !== false });
             }
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true }));
+            return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
-
     if (urlPath === '/api/messages' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const room = myUrl.searchParams.get('room');
         const reqUser = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
+        const sinceTs = Number(myUrl.searchParams.get('since') || 0);
         const rawList = (room && Array.isArray(roomsDB[room])) ? roomsDB[room] : new Array();
         if (reqUser) {
             markUserOnline(reqUser);
@@ -874,33 +808,20 @@ const server = http.createServer(function(req, res) {
                 if ((db.lastRead[reqUser][room] || 0) < lastMsgTs) {
                     db.lastRead[reqUser][room] = Date.now();
                     writeJSON(READS_FILE, db.lastRead);
+                    broadcastWS({ type: 'chat_room_read', room: room, reader: reqUser, readAt: db.lastRead[reqUser][room] });
                 }
             }
         }
-        res.writeHead(200, {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Cache-Control': 'no-cache'
-        });
         let partnerOnline = false;
         let partnerLastSeen = '';
         let otherParticipants = new Array();
         if (room) {
             if (groupsDB[room] && Array.isArray(groupsDB[room].members)) {
-                otherParticipants = groupsDB[room].members.map(function(m) {
-                    return String(m).trim().toLowerCase();
-                }).filter(function(m) {
-                    return m !== reqUser;
-                });
-                partnerOnline = otherParticipants.some(function(m) {
-                    return isUserOnlineNow(m);
-                });
+                otherParticipants = groupsDB[room].members.map(function(m) { return String(m).trim().toLowerCase(); }).filter(function(m) { return m !== reqUser; });
+                partnerOnline = otherParticipants.some(function(m) { return isUserOnlineNow(m); });
             } else {
                 const pairParts = room.split('_').at(0).split(',');
-                otherParticipants = pairParts.map(function(p) {
-                    return String(p).trim().toLowerCase();
-                }).filter(function(p) {
-                    return p !== reqUser;
-                });
+                otherParticipants = pairParts.map(function(p) { return String(p).trim().toLowerCase(); }).filter(function(p) { return p !== reqUser; });
                 if (otherParticipants.length > 0) {
                     const pKey = otherParticipants.at(0);
                     partnerOnline = isUserOnlineNow(pKey);
@@ -908,7 +829,6 @@ const server = http.createServer(function(req, res) {
                 }
             }
         }
-
         const activeTypers = new Array();
         if (room && typingDB[room]) {
             const nowTs = Date.now();
@@ -920,8 +840,8 @@ const server = http.createServer(function(req, res) {
                 }
             });
         }
-
-        const enriched = rawList.map(function(msg) {
+        const filteredRaw = sinceTs > 0 ? rawList.filter(function(m) { return Number(m.timestamp || 0) >= sinceTs; }) : rawList;
+        const enriched = filteredRaw.map(function(msg) {
             const senderLow = String(msg.sender || '').trim().toLowerCase();
             const msgTs = Number(msg.timestamp || 0);
             let isRead = false;
@@ -934,23 +854,25 @@ const server = http.createServer(function(req, res) {
             }
             return Object.assign({}, msg, { read: isRead });
         });
-
-        return res.end(JSON.stringify({
+        return sendJsonCompressed(req, res, 200, {
             messages: enriched,
+            totalCount: rawList.length,
+            isDelta: sinceTs > 0,
             partnerOnline: partnerOnline,
             partnerLastSeen: partnerLastSeen,
             typingUsers: activeTypers
-        }));
+        });
     }
-
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && data.room) {
                 const myL = String(data.user).trim().toLowerCase();
                 markUserOnline(myL);
                 if (!db.lastRead[myL]) db.lastRead[myL] = {};
-                db.lastRead[myL][data.room] = Date.now() + 500;
+                const ts = Date.now() + 500;
+                db.lastRead[myL][data.room] = ts;
                 writeJSON(READS_FILE, db.lastRead);
+                broadcastWS({ type: 'chat_room_read', room: data.room, reader: myL, readAt: ts });
             }
             res.writeHead(200);
             res.end('OK');
@@ -1012,16 +934,12 @@ const server = http.createServer(function(req, res) {
             res.writeHead(500);
             res.end('Error loading index.html');
         } else {
-            res.writeHead(200, {
-                'Content-Type': 'text/html; charset=utf-8',
-                'Cache-Control': 'no-cache'
-            });
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
             res.end(data);
         }
     });
 });
-
-function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup) {
+function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup, omitAvatars) {
     const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
     let lastMsgText = "Нет сообщений";
     let lastMsgTime = "";
@@ -1044,11 +962,13 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
     const cleanKey = String(name || '').trim().toLowerCase();
     const uInfo = !isGroup ? (usersDB[cleanKey] || {}) : {};
     const isOnline = isGroup ? true : isUserOnlineNow(cleanKey);
+    const avStr = uInfo.avatar || '';
     return {
         id: isGroup ? roomId : undefined,
         name: name,
         unit: uInfo.unit || '',
-        avatar: uInfo.avatar || '',
+        avatar: omitAvatars ? undefined : avStr,
+        avatarHash: avStr ? String(avStr.length) : '',
         lastMessage: lastMsgText,
         time: lastMsgTime,
         unread: unreadCount,
@@ -1060,6 +980,15 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
 
 function handleMultipartSend(req, res) {
     const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('application/json')) {
+        return readBodyJSON(req, function(err, fields) {
+            if (err || !fields) {
+                res.writeHead(400);
+                return res.end('Bad JSON');
+            }
+            saveMultipartChatMsg(fields, null, '', '', req, res);
+        });
+    }
     const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/);
     const boundaryStr = boundaryMatch ? (boundaryMatch.at(1) || boundaryMatch.at(2)) : null;
     if (!boundaryStr) {
@@ -1068,9 +997,7 @@ function handleMultipartSend(req, res) {
     }
     const boundary = Buffer.from('--' + boundaryStr);
     const chunks = new Array();
-    req.on('data', function(chunk) {
-        chunks.push(chunk);
-    });
+    req.on('data', function(chunk) { chunks.push(chunk); });
     req.on('end', function() {
         const buffer = Buffer.concat(chunks);
         let fields = {};
@@ -1095,9 +1022,7 @@ function handleMultipartSend(req, res) {
                             const fnMatch = headerStr.match(/filename="([^"]+)"/);
                             if (fnMatch) {
                                 originalFileName = fnMatch.at(1);
-                                if (originalFileName.includes('.')) {
-                                    fileExt = originalFileName.split('.').pop();
-                                }
+                                if (originalFileName.includes('.')) fileExt = originalFileName.split('.').pop();
                                 fileBuffer = part.subarray(bodyStart, bodyEnd);
                             }
                         } else {
@@ -1109,11 +1034,10 @@ function handleMultipartSend(req, res) {
             start = end + boundary.length;
             end = buffer.indexOf(boundary, start);
         }
-        saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res);
+        saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req, res);
     });
 }
-
-function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res) {
+function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req, res) {
     const sender = fields.sender;
     const room = fields.room;
     const type = fields.type || 'text';
@@ -1123,16 +1047,16 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
         return res.end('Incomplete');
     }
     markUserOnline(sender);
-	    if (typingDB[room]) {
-        delete typingDB[room][sender];
+    if (typingDB[room]) delete typingDB[room][sender];
+    if (!Array.isArray(roomsDB[room])) roomsDB[room] = new Array();
+
+    if (clientMsgId) {
+        const dup = roomsDB[room].find(function(m) { return m.clientMsgId === clientMsgId; });
+        if (dup) {
+            return sendJsonCompressed(req, res, 200, { ok: true, msg: dup });
+        }
     }
-    if (!Array.isArray(roomsDB[room])) {
-        roomsDB[room] = new Array();
-    }
-    if (clientMsgId && roomsDB[room].some(function(m) { return m.clientMsgId === clientMsgId; })) {
-        res.writeHead(200);
-        return res.end('OK');
-    }
+
     let finalContent = fields.text || '';
     if ((type === 'audio' || type === 'video' || type === 'file') && fileBuffer && fileBuffer.length > 0) {
         const fileName = type + '_' + crypto.randomBytes(8).toString('hex') + '.' + fileExt;
@@ -1142,7 +1066,7 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
             : ('/uploads/' + fileName);
     }
     const timeStr = getServerDateTime();
-    roomsDB[room].push({
+    const newMsgObj = {
         id: crypto.randomBytes(8).toString('hex'),
         clientMsgId: clientMsgId,
         sender: sender,
@@ -1154,14 +1078,14 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, res
         quoteId: fields.quoteId || null,
         quoteText: fields.quoteText || null,
         quoteSender: fields.quoteSender || null
-    });
-    if (roomsDB[room].length > 150) {
-        roomsDB[room].shift();
-    }
+    };
+    roomsDB[room].push(newMsgObj);
+    if (roomsDB[room].length > 150) roomsDB[room].shift();
     writeJSON(CHAT_ROOMS_FILE, roomsDB);
+
+    broadcastWS({ type: 'chat_new_msg', room: room, msg: newMsgObj });
     notifyJournalFromMessenger(room, sender, finalContent, type, timeStr);
-    res.writeHead(200);
-    res.end('OK');
+    return sendJsonCompressed(req, res, 200, { ok: true, msg: newMsgObj });
 }
 
 function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
@@ -1195,14 +1119,13 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         broadcastAlert(alertSender, '#00a884', timeStr, realTarget, cleanText);
     });
 }
-
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
     const str = JSON.stringify(obj);
     wss.clients.forEach(function(client) {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(str);
+            try { client.send(str); } catch (e) {}
         }
     });
 }
@@ -1237,12 +1160,11 @@ setInterval(function() {
 
 notificationsHistory.forEach(function(n) {
     if (!n.read) {
-        if (!Array.isArray(activeAlerts[n.target])) {
-            activeAlerts[n.target] = new Array();
-        }
+        if (!Array.isArray(activeAlerts[n.target])) activeAlerts[n.target] = new Array();
         activeAlerts[n.target].push({ id: n.id, text: n.text, sender: n.sender, readList: new Array() });
     }
 });
+
 function saveAndBroadcastMap(msg) {
     const timeStr = msg.time || getServerDateTime();
     const mapItem = {
@@ -1253,9 +1175,7 @@ function saveAndBroadcastMap(msg) {
         image: msg.image
     };
     mapsHistory.push(mapItem);
-    if (mapsHistory.length > 18) {
-        mapsHistory = mapsHistory.slice(-18);
-    }
+    if (mapsHistory.length > 18) mapsHistory = mapsHistory.slice(-18);
     writeJSON(MAPS_FILE, mapsHistory);
     broadcastWS({ type: 'new_map', target: mapItem.target });
     broadcastAlert(
@@ -1280,36 +1200,23 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         readBy: ''
     };
     notificationsHistory.push(newNotif);
-    if (notificationsHistory.length > 200) {
-        notificationsHistory = notificationsHistory.slice(-200);
-    }
+    if (notificationsHistory.length > 200) notificationsHistory = notificationsHistory.slice(-200);
     writeJSON(NOTIFS_FILE, notificationsHistory);
 
-    if (!Array.isArray(activeAlerts[target])) {
-        activeAlerts[target] = new Array();
-    }
-    activeAlerts[target].push({
-        id: notifId,
-        text: text,
-        sender: sender,
-        readList: new Array()
-    });
-    broadcastWS({
-        type: 'admin_alert',
-        sender: sender,
-        target: target,
-        text: text,
-        notif: newNotif
-    });
+    if (!Array.isArray(activeAlerts[target])) activeAlerts[target] = new Array();
+    activeAlerts[target].push({ id: notifId, text: text, sender: sender, readList: new Array() });
+    broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
     const payload = JSON.stringify({
         title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
         body: sender + ': ' + text,
-        tag: 'msb-alert-' + notifId
+        tag: 'msb-alert-' + notifId,
+        url: '/'
     });
     const pushOptions = {
-        TTL: 3600,
-        headers: { 'Urgency': 'high', 'Topic': 'admin-alert' }
+        TTL: 86400,
+        urgency: 'high',
+        headers: { 'Urgency': 'high' }
     };
     const tLow = String(target).trim().toLowerCase();
     const sLow = String(sender).trim().toLowerCase();
@@ -1317,6 +1224,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
 
     for (let i = pushSubscriptions.length - 1; i >= 0; i--) {
         const item = pushSubscriptions[i];
+        if (!item || !item.sub) continue;
         const uLow = String(item.user || '').trim().toLowerCase();
         const cLow = String(item.callsign || '').trim().toLowerCase();
         if (cLow && (sLow === cLow || sLow.includes('(' + cLow + ')'))) continue;
@@ -1324,15 +1232,21 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         const matchUnit = isUnitTarget && uLow === tLow;
         if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
             webpush.sendNotification(item.sub, payload, pushOptions).catch(function(err) {
-                if (err.statusCode === 410 || err.statusCode === 404) {
-                    pushSubscriptions.splice(i, 1);
-                    writeJSON(SUBS_FILE, pushSubscriptions);
+                if (err && (err.statusCode === 410 || err.statusCode === 404)) {
+                    const curIdx = pushSubscriptions.indexOf(item);
+                    if (curIdx !== -1) {
+                        pushSubscriptions.splice(curIdx, 1);
+                        writeJSON(SUBS_FILE, pushSubscriptions);
+                    }
                 }
             });
         }
     }
 }
 wss.on('connection', function(ws) {
+    ws.isAlive = true;
+    ws.on('pong', function() { ws.isAlive = true; });
+
     ws.send(JSON.stringify({
         type: 'init',
         serverBootId: SERVER_BOOT_ID,
@@ -1347,10 +1261,20 @@ wss.on('connection', function(ws) {
     ws.on('message', function(message) {
         try {
             const msg = JSON.parse(message.toString());
+            ws.isAlive = true;
             if (msg.type === 'ping') {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей');
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
+                return;
+            }
+            if (msg.type === 'chat_typing' && msg.user && msg.room) {
+                const uClean = String(msg.user).trim();
+                markUserOnline(uClean);
+                if (!typingDB[msg.room]) typingDB[msg.room] = {};
+                if (msg.typing === false) delete typingDB[msg.room][uClean];
+                else typingDB[msg.room][uClean] = Date.now();
+                broadcastWS({ type: 'chat_typing', room: msg.room, user: uClean, typing: msg.typing !== false });
                 return;
             }
             if (msg.type === 'save_sub' && msg.sub) {
@@ -1433,6 +1357,14 @@ wss.on('connection', function(ws) {
         } catch (e) { console.error("WS error:", e); }
     });
 });
+
+setInterval(function() {
+    wss.clients.forEach(function(ws) {
+        if (ws.isAlive === false) return ws.terminate();
+        ws.isAlive = false;
+        try { ws.ping(); } catch (e) {}
+    });
+}, 25000);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', function() {

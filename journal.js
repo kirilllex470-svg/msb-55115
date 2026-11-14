@@ -43,6 +43,7 @@ const COLUMNS_CONFIG = Array.of(
     )},
     { label: "ПРИМЕЧАНИЯ", options: new Array() }
 );
+
 let ws = null;
 let currentUser = null;
 let currentCallsign = "";
@@ -68,11 +69,10 @@ let titleInterval = null;
 let soundInterval = null;
 let audioCtx = null;
 let sirenAudio = null;
-let publicVapidKey = null;
+let publicVapidKey = localStorage.getItem('msb_vapid_pub') || null;
 let deferredPrompt = null;
 let knownServerBootId = sessionStorage.getItem('msb_server_boot_id') || null;
 let pendingServerBootId = null;
-
 function saveLocalJournalCache(key, data) {
     try {
         localStorage.setItem('msb_jcache_' + key, JSON.stringify(data));
@@ -97,6 +97,7 @@ function getStaticDateTime() {
     const min = String(d.getMinutes()).padStart(2, '0');
     return dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min;
 }
+
 const SPLASH_FILES = Array.of(
     "boot/kernel_msb55115.sys", "crypto/cipher_channel_v4.dat", "net/websocket_sync_protocol.dll",
     "maps/tactical_forest_sectors.db", "auth/unit_credentials_guard.bin", "push/vapid_service_worker.js",
@@ -113,7 +114,8 @@ function runSplash() {
     if (!s) return;
     let cur = 0;
     const timer = setInterval(function() {
-        cur++;
+        cur += 4;
+        if (cur > 100) cur = 100;
         if (b) b.style.width = cur + '%';
         if (p) p.innerText = 'ЗАГРУЗКА СИСТЕМЫ: ' + cur + '%';
         const idx = Math.min(Math.floor((cur / 100) * SPLASH_FILES.length), SPLASH_FILES.length - 1);
@@ -122,9 +124,9 @@ function runSplash() {
         if (cur >= 100) {
             clearInterval(timer);
             s.style.opacity = '0';
-            setTimeout(function() { s.style.display = 'none'; }, 500);
+            setTimeout(function() { s.style.display = 'none'; }, 250);
         }
-    }, 20);
+    }, 25);
 }
 
 window.addEventListener('beforeinstallprompt', function(e) {
@@ -160,33 +162,57 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-async function subscribeToWebPush() {
+async function subscribeToWebPush(forceRenew) {
     if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
     try {
         if (Notification.permission === 'denied') return;
-        const permission = await Notification.requestPermission();
+        const permission = (Notification.permission === 'granted')
+            ? 'granted'
+            : await Notification.requestPermission();
         if (permission !== 'granted') return;
+
         const reg = await navigator.serviceWorker.register('/sw.js');
-        await reg.update();
         const readyReg = await navigator.serviceWorker.ready;
         if ('PushManager' in window && publicVapidKey) {
             let sub = await readyReg.pushManager.getSubscription();
+            if (sub && forceRenew) {
+                try { await sub.unsubscribe(); } catch (e) {}
+                sub = null;
+            }
             if (!sub) {
                 sub = await readyReg.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                 });
             }
+            const subPayload = {
+                type: 'save_sub',
+                user: currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ',
+                callsign: currentCallsign || localStorage.getItem('journal_callsign') || '',
+                sub: sub
+            };
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'save_sub',
-                    user: currentUser || 'ГОСТЬ',
-                    callsign: currentCallsign || '',
-                    sub: sub
-                }));
+                ws.send(JSON.stringify(subPayload));
             }
+            fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subPayload)
+            }).catch(function() {});
         }
     } catch (e) {}
+}
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', function(ev) {
+        if (!ev || !ev.data) return;
+        if (ev.data.type === 'resubscribe_push') subscribeToWebPush(true);
+        if (ev.data.type === 'wake_sync') {
+            connectWS(true);
+            if (typeof fetchMessages === 'function') fetchMessages();
+            if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests(true);
+        }
+    });
 }
 
 function createWavUrl(freq, durationSec, volume) {
@@ -218,7 +244,7 @@ function unlockMobileFeatures() {
             sirenAudio = new Audio(createWavUrl(880, 1, 0.9));
             sirenAudio.loop = true;
         }
-    } catch(e) {}
+    } catch (e) {}
     if ('wakeLock' in navigator) {
         navigator.wakeLock.request('screen').catch(function() {});
     }
@@ -246,15 +272,18 @@ function playToneNotes(notes, waveType) {
             osc.frequency.setValueAtTime(n.f, now + n.t);
             if (n.fEnd) osc.frequency.exponentialRampToValueAtTime(n.fEnd, now + n.t + n.d);
             gain.gain.setValueAtTime(0.001, now + n.t);
+            gain.gain.setValueAtTime(0.001, now + n.t);
             gain.gain.linearRampToValueAtTime(n.v || 0.35, now + n.t + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.d);
             osc.connect(gain);
+
             gain.connect(audioCtx.destination);
             osc.start(now + n.t);
             osc.stop(now + n.t + n.d + 0.02);
         });
     } catch (e) {}
 }
+
 function playSoundById(soundId, isPreview) {
     const id = soundId || selectedSoundId || 'alarm1';
     try {
@@ -376,6 +405,7 @@ function openStreamExternalFallback() {
     const url = (activeStream && activeStream.url) ? activeStream.url : document.getElementById('stream-url-input').value.trim();
     if (url) window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
 }
+
 function openActiveStreamWindow() {
     if (activeStream && activeStream.url) {
         window.open(activeStream.url, '_blank', 'noopener,noreferrer,width=1100,height=750');
@@ -389,11 +419,7 @@ function startVideoStream() {
     const now = new Date();
     const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5);
     ws.send(JSON.stringify({
-        type: 'stream_start',
-        url: url,
-        sender: currentUser,
-        color: userColor,
-        time: timeString
+        type: 'stream_start', url: url, sender: currentUser, color: userColor, time: timeString
     }));
     window.open(url, '_blank', 'noopener,noreferrer,width=1100,height=750');
 }
@@ -411,27 +437,25 @@ function updateStreamUI() {
     const urlInput = document.getElementById('stream-url-input');
     if (activeStream && activeStream.active && activeStream.url) {
         if (urlInput && currentUser !== ADMIN_NAME) urlInput.value = activeStream.url;
-        if (mainBtn) {
-            mainBtn.classList.add('live');
-            mainBtn.innerText = '🔴 ИДЕТ ВИДЕОСТРИМ МСБ-55115';
-        }
+        if (mainBtn) { mainBtn.classList.add('live'); mainBtn.innerText = '🔴 ИДЕТ ВИДЕОСТРИМ МСБ-55115'; }
         if (currentUser && currentUser !== ADMIN_NAME && userBox) userBox.style.display = 'block';
         if (!currentUser && viewerPanel) viewerPanel.style.display = 'block';
     } else {
-        if (mainBtn) {
-            mainBtn.classList.remove('live');
-            mainBtn.innerText = '🎥 ВИДЕОСТРИМ МСБ-55115';
-        }
+        if (mainBtn) { mainBtn.classList.remove('live'); mainBtn.innerText = '🎥 ВИДЕОСТРИМ МСБ-55115'; }
         if (userBox) userBox.style.display = 'none';
         if (viewerPanel) viewerPanel.style.display = 'none';
     }
 }
+let mapsLastFetchedAt = 0;
+let archiveLastFetchedAt = 0;
 
 function toggleMapsSection() {
     const box = document.getElementById('maps-section-box');
     if (!box) return;
-    box.style.display = (box.style.display === 'block') ? 'none' : 'block';
-    renderMapsGrid();
+    const isOpening = (box.style.display !== 'block');
+    box.style.display = isOpening ? 'block' : 'none';
+    if (isOpening) fetchMapsFromServer(true);
+    else renderMapsGrid();
 }
 
 function isMapVisibleForMe(m) {
@@ -442,6 +466,7 @@ function isMapVisibleForMe(m) {
     if (currentCallsign && (m.target === currentCallsign || m.sender === currentCallsign)) return true;
     return false;
 }
+
 let photoZoom = 1, photoPanX = 0, photoPanY = 0, isDraggingPhoto = false, dragStartX = 0, dragStartY = 0, zoomEventsBound = false;
 
 function applyPhotoTransform() {
@@ -513,7 +538,7 @@ function renderMapsGrid() {
         const badge = (idx === 0) ? '<span class="map-tile-fresh">СВЕЖЕЕ</span>' : '';
         tile.innerHTML =
             badge +
-            '<img src="' + m.image + '" alt="Карта">' +
+            '<img src="' + m.image + '" loading="lazy" alt="Карта">' +
             '<div class="map-tile-overlay">' +
                 '<span class="map-tile-time">🕒 ' + m.time + '</span>' +
                 '<span class="map-tile-target">' + m.target + '</span>' +
@@ -525,7 +550,7 @@ function renderMapsGrid() {
     });
 }
 
-function fetchMapsFromServer() {
+function fetchMapsFromServer(force) {
     if (allMaps.length === 0) {
         const cachedMaps = loadLocalJournalCache('maps', new Array());
         if (Array.isArray(cachedMaps) && cachedMaps.length > 0) {
@@ -533,6 +558,8 @@ function fetchMapsFromServer() {
             renderMapsGrid();
         }
     }
+    if (!force && (Date.now() - mapsLastFetchedAt < 45000)) return;
+    mapsLastFetchedAt = Date.now();
     fetch('/maps-list?t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(list) {
@@ -544,10 +571,9 @@ function fetchMapsFromServer() {
         })
         .catch(function() {});
 }
+
 function uploadMapPhoto() {
-    if (currentUser !== ADMIN_NAME) {
-        return alert('Загружать карты может только АДМИН!');
-    }
+    if (currentUser !== ADMIN_NAME) return alert('Загружать карты может только АДМИН!');
     const fileInput = document.getElementById('map-file-input');
     const targetSelect = document.getElementById('map-target-select');
     if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
@@ -560,21 +586,13 @@ function uploadMapPhoto() {
         const img = new Image();
         img.onload = function() {
             const canvas = document.createElement('canvas');
-            const maxW = 750;
-            const maxH = 750;
-            let w = img.width || 600;
-            let h = img.height || 600;
-            if (w > maxW || h > maxH) {
-                if (w > h) {
-                    h = Math.round(h * (maxW / w));
-                    w = maxW;
-                } else {
-                    w = Math.round(w * (maxH / h));
-                    h = maxH;
-                }
+            let w = img.width || 600, h = img.height || 600;
+            const maxS = 750;
+            if (w > maxS || h > maxS) {
+                if (w > h) { h = Math.round(h * (maxS / w)); w = maxS; }
+                else { w = Math.round(w * (maxS / h)); h = maxS; }
             }
-            canvas.width = w;
-            canvas.height = h;
+            canvas.width = w; canvas.height = h;
             canvas.getContext('2d').drawImage(img, 0, 0, w, h);
             const finalDataUrl = canvas.toDataURL('image/jpeg', 0.65);
             const now = new Date();
@@ -582,13 +600,7 @@ function uploadMapPhoto() {
             fetch('/upload-map', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sender: currentUser,
-                    color: userColor,
-                    target: target,
-                    time: timeStr,
-                    image: finalDataUrl
-                })
+                body: JSON.stringify({ sender: currentUser, color: userColor, target: target, time: timeStr, image: finalDataUrl })
             })
             .then(function(res) { return res.json(); })
             .then(function(data) {
@@ -597,13 +609,9 @@ function uploadMapPhoto() {
                     allMaps = data.maps;
                     saveLocalJournalCache('maps', data.maps);
                     renderMapsGrid();
-                } else {
-                    fetchMapsFromServer();
-                }
+                } else fetchMapsFromServer(true);
             })
-            .catch(function() {
-                alert('Ошибка при отправке фото на сервер!');
-            });
+            .catch(function() { alert('Ошибка при отправке фото на сервер!'); });
         };
         img.src = e.target.result;
     };
@@ -624,7 +632,7 @@ function formatRuDateFromIso(iso) {
     return (parts.length === 3) ? (parts.at(2) + '.' + parts.at(1) + '.' + parts.at(0)) : iso;
 }
 
-function fetchArchiveFromServer(cb) {
+function fetchArchiveFromServer(force) {
     if (Object.keys(archiveData).length === 0) {
         const cachedArch = loadLocalJournalCache('archive', {});
         if (cachedArch && typeof cachedArch === 'object' && Object.keys(cachedArch).length > 0) {
@@ -633,6 +641,8 @@ function fetchArchiveFromServer(cb) {
             if (selectedArchiveDate) selectArchiveDate(selectedArchiveDate);
         }
     }
+    if (!force && (Date.now() - archiveLastFetchedAt < 60000)) return;
+    archiveLastFetchedAt = Date.now();
     fetch('/archive-data?t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -640,10 +650,7 @@ function fetchArchiveFromServer(cb) {
                 archiveData = data;
                 saveLocalJournalCache('archive', data);
                 renderArchiveCalendar();
-                if (selectedArchiveDate) {
-                    selectArchiveDate(selectedArchiveDate);
-                }
-                if (cb) cb();
+                if (selectedArchiveDate) selectArchiveDate(selectedArchiveDate);
             }
         }).catch(function() {});
 }
@@ -655,13 +662,11 @@ function openArchivePage() {
     calYear = now.getFullYear();
     calMonth = now.getMonth();
     const todayKey = formatIsoDate(calYear, calMonth, now.getDate());
-    if (!selectedArchiveDate) {
-        selectedArchiveDate = todayKey;
-    }
+    if (!selectedArchiveDate) selectedArchiveDate = todayKey;
     page.style.display = 'flex';
     renderArchiveCalendar();
     selectArchiveDate(selectedArchiveDate);
-    fetchArchiveFromServer();
+    fetchArchiveFromServer(true);
 }
 
 function closeArchivePage() {
@@ -675,6 +680,7 @@ function changeArchiveMonth(delta) {
     if (calMonth > 11) { calMonth = 0; calYear++; }
     renderArchiveCalendar();
 }
+
 function renderArchiveCalendar() {
     const titleEl = document.getElementById('cal-month-label');
     const gridEl = document.getElementById('cal-days-grid');
@@ -696,13 +702,10 @@ function renderArchiveCalendar() {
         const cell = document.createElement('div');
         cell.className = 'cal-day' + (count > 0 ? ' has-data' : '') + (selectedArchiveDate === dateKey ? ' selected' : '');
         cell.innerHTML = '<span>' + d + '</span>' + (count > 0 ? '<span class="cal-dot">' + count + ' зап.</span>' : '');
-        cell.onclick = function() {
-            selectArchiveDate(dateKey);
-        };
+        cell.onclick = function() { selectArchiveDate(dateKey); };
         gridEl.appendChild(cell);
     }
 }
-
 function selectArchiveDate(dateKey) {
     selectedArchiveDate = dateKey;
     renderArchiveCalendar();
@@ -721,6 +724,7 @@ function selectArchiveDate(dateKey) {
         tbody.innerHTML = '<tr><td colspan="' + (COLUMNS_CONFIG.length + 2) + '" style="color:#64748b; padding:20px;">За ' + ruDate + ' записей в архиве нет</td></tr>';
         return;
     }
+    const frag = document.createDocumentFragment();
     rows.forEach(function(row) {
         const tr = document.createElement('tr');
         let html = '<td class="time-cell">' + (row.time || '-') + '</td><td class="user-cell" style="color:' + (row.color || '#fff') + '">' + (row.user || '-') + '</td>';
@@ -729,9 +733,11 @@ function selectArchiveDate(dateKey) {
             html += '<td>' + (val || '-') + '</td>';
         }
         tr.innerHTML = html;
-        tbody.appendChild(tr);
+        frag.appendChild(tr);
     });
+    tbody.appendChild(frag);
 }
+
 function isNotificationVisibleForMe(notif) {
     if (!notif) return false;
     if (notif.target === "ВСЕМ") return true;
@@ -753,6 +759,7 @@ function renderNotificationsWindow() {
     if (myNotifs.length === 0) {
         list.innerHTML = '<div style="color:#64748b; font-size:13px;" id="no-notif-placeholder">Нет уведомлений</div>';
     } else {
+        const frag = document.createDocumentFragment();
         myNotifs.forEach(function(notif) {
             const item = document.createElement('div');
             item.className = 'notif-item' + (notif.read ? ' read' : '');
@@ -766,8 +773,9 @@ function renderNotificationsWindow() {
             item.onclick = function() {
                 openMessengerWindow(notif.sender);
             };
-            list.appendChild(item);
+            frag.appendChild(item);
         });
+        list.appendChild(frag);
         list.scrollTop = list.scrollHeight;
     }
     updateBroadcastTicker();
@@ -835,23 +843,25 @@ async function forceReloadApp() {
         if ('caches' in window) {
             const keys = await caches.keys();
             for (let k of keys) {
-                if (k !== 'msb55115-media-v1') {
-                    await caches.delete(k);
-                }
+                if (k !== 'msb55115-media-v1') await caches.delete(k);
             }
         }
         if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
-            for (let r of regs) {
-                await r.unregister();
-            }
+            for (let r of regs) await r.unregister();
         }
     } catch (e) {}
     window.location.href = window.location.pathname + '?v=' + Date.now();
 }
+
 let lastPongTime = Date.now();
+let wsReconnectTimer = null;
 
 function connectWS(forceReconnect) {
+    if (wsReconnectTimer) {
+        clearTimeout(wsReconnectTimer);
+        wsReconnectTimer = null;
+    }
     if (forceReconnect && ws) {
         try {
             ws.onclose = null;
@@ -860,152 +870,188 @@ function connectWS(forceReconnect) {
         ws = null;
     }
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-    ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
+    try {
+        ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
+    } catch (e) {
+        wsReconnectTimer = setTimeout(function() { connectWS(false); }, 2000);
+        return;
+    }
 
     ws.onopen = function() {
         lastPongTime = Date.now();
-        subscribeToWebPush();
+        subscribeToWebPush(false);
+        if (typeof flushOutboxQueue === 'function') flushOutboxQueue();
     };
 
-    ws.onmessage = function(event) {
-        lastPongTime = Date.now();
-        const msg = JSON.parse(event.data);
-		       if (typeof window.markMsbServerAlive === 'function') {
-            window.markMsbServerAlive(msg.type === 'init');
-        }
-        if (msg.type === 'chat_typing' && typeof window.handleIncomingTypingWS === 'function') {
-            window.handleIncomingTypingWS(msg);
-            return;
-        }
-        if (msg.serverBootId) {
-            checkServerVersionChange(msg.serverBootId, msg.serverBootTime);
-        }
-        if (msg.type === 'pong') return;
-        if (msg.type === 'init') {
-            document.getElementById('table-body').innerHTML = '';
-            msg.data.forEach(appendRow);
-            saveLocalJournalCache('table_rows', msg.data);
-            allNotifications = msg.notifications || new Array();
-            saveLocalJournalCache('notifs', allNotifications);
-            renderNotificationsWindow();
-            fetchMapsFromServer();
-            fetchArchiveFromServer();
-            if (msg.streamState) {
-                activeStream = msg.streamState;
-                updateStreamUI();
-            }
-            if (msg.vapidPublicKey) {
-                publicVapidKey = msg.vapidPublicKey;
-                subscribeToWebPush();
-            }
-            if (msg.alerts) {
-                pendingAlerts = msg.alerts;
-                checkAndShowAlerts(true);
-            }
-            if (currentUser === ADMIN_NAME) fetchAdminUsersList();
-            refreshMyPermissionsFromServer();
-        }
-        if (msg.type === 'new_row') {
-            appendRow(msg.row);
-            const curRows = loadLocalJournalCache('table_rows', new Array());
-            curRows.push(msg.row);
-            saveLocalJournalCache('table_rows', curRows);
-            fetchArchiveFromServer();
-        }
-        if (msg.type === 'daily_archived') {
-            document.getElementById('table-body').innerHTML = '';
-            saveLocalJournalCache('table_rows', new Array());
-            fetchArchiveFromServer();
-        }
-        if (msg.type === 'new_map') {
-            fetchMapsFromServer();
-            if (!msg.target || msg.target === 'ВСЕМ' || currentUser === ADMIN_NAME || msg.target === currentUser || msg.target === currentCallsign) {
-                const box = document.getElementById('maps-section-box');
-                if (box && (currentUser === ADMIN_NAME || myPermissions.maps)) box.style.display = 'block';
-            }
-        }
-        if (msg.type === 'stream_state') {
-            activeStream = msg.streamState || { active: false, url: '' };
-            updateStreamUI();
-        }
-        if (msg.type === 'users_updated') {
-            if (currentUser === ADMIN_NAME) fetchAdminUsersList();
-            refreshMyPermissionsFromServer();
-            if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests();
-        }
-        if (msg.type === 'history_cleared') {
-            document.getElementById('table-body').innerHTML = '';
-            allNotifications = new Array();
-            allMaps = new Array();
-            pendingAlerts = {};
-            saveLocalJournalCache('table_rows', new Array());
-            saveLocalJournalCache('notifs', new Array());
-            saveLocalJournalCache('maps', new Array());
-            stopAlertVisuals();
-            renderNotificationsWindow();
-            renderMapsGrid();
-        }
-        if (msg.type === 'admin_alert') {
-            if (msg.notif) {
-                const exists = allNotifications.some(function(n) { return n.id === msg.notif.id; });
-                if (!exists) {
-                    allNotifications.push(msg.notif);
-                    saveLocalJournalCache('notifs', allNotifications);
-                }
-                renderNotificationsWindow();
-            }
-            const queue = getAlertsQueue(msg.target);
-            const alertId = msg.notif ? msg.notif.id : Date.now();
-            if (!queue.some(function(a) { return a.id === alertId; })) {
-                queue.push({
-                    id: alertId,
-                    text: msg.text,
-                    sender: msg.sender || ADMIN_NAME,
-                    readList: new Array()
-                });
-            }
-            pendingAlerts[msg.target] = queue;
-            checkAndShowAlerts(true);
-        }
-        if (msg.type === 'alert_cleared') {
-            handleAlertClearedMsg(msg);
-        }
-    };
+    ws.onmessage = handleWsIncomingEvent;
 
     ws.onclose = function() {
-        setTimeout(function() { connectWS(false); }, 1500);
+        wsReconnectTimer = setTimeout(function() { connectWS(false); }, 1800);
     };
 }
+function handleWsIncomingEvent(event) {
+    lastPongTime = Date.now();
+    let msg = null;
+    try { msg = JSON.parse(event.data); } catch (e) { return; }
+    if (!msg) return;
 
+    if (typeof window.markMsbServerAlive === 'function') {
+        window.markMsbServerAlive(msg.type === 'init');
+    }
+    if (msg.serverBootId) {
+        checkServerVersionChange(msg.serverBootId, msg.serverBootTime);
+    }
+    if (msg.type === 'pong') return;
+
+    if (msg.type === 'chat_typing' && typeof window.handleIncomingTypingWS === 'function') {
+        window.handleIncomingTypingWS(msg);
+        return;
+    }
+    if ((msg.type === 'chat_new_msg' || msg.type === 'chat_msg_deleted' || msg.type === 'chat_room_read' || msg.type === 'avatar_updated') && typeof window.handleIncomingChatWS === 'function') {
+        window.handleIncomingChatWS(msg);
+        return;
+    }
+    if (msg.type === 'init') {
+        const tbody = document.getElementById('table-body');
+        if (tbody) {
+            tbody.innerHTML = '';
+            const frag = document.createDocumentFragment();
+            (msg.data || []).forEach(function(r) { appendRowToContainer(frag, r, false); });
+            tbody.appendChild(frag);
+            if (tbody.lastElementChild) {
+                requestAnimationFrame(function() {
+                    tbody.lastElementChild.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+                });
+            }
+        }
+        saveLocalJournalCache('table_rows', msg.data || []);
+        allNotifications = msg.notifications || new Array();
+        saveLocalJournalCache('notifs', allNotifications);
+        renderNotificationsWindow();
+        fetchMapsFromServer(false);
+        if (msg.streamState) {
+            activeStream = msg.streamState;
+            updateStreamUI();
+        }
+        if (msg.vapidPublicKey) {
+            publicVapidKey = msg.vapidPublicKey;
+            localStorage.setItem('msb_vapid_pub', publicVapidKey);
+            subscribeToWebPush(false);
+        }
+        if (msg.alerts) {
+            pendingAlerts = msg.alerts;
+            checkAndShowAlerts(true);
+        }
+        if (currentUser === ADMIN_NAME) fetchAdminUsersList();
+        refreshMyPermissionsFromServer();
+        if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests(true);
+        if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof fetchMessages === 'function') {
+            fetchMessages();
+        }
+        return;
+    }
+    if (msg.type === 'new_row') {
+        appendRow(msg.row);
+        const curRows = loadLocalJournalCache('table_rows', new Array());
+        curRows.push(msg.row);
+        saveLocalJournalCache('table_rows', curRows);
+        return;
+    }
+    if (msg.type === 'daily_archived') {
+        document.getElementById('table-body').innerHTML = '';
+        saveLocalJournalCache('table_rows', new Array());
+        fetchArchiveFromServer(true);
+        return;
+    }
+    if (msg.type === 'new_map') {
+        fetchMapsFromServer(true);
+        if (!msg.target || msg.target === 'ВСЕМ' || currentUser === ADMIN_NAME || msg.target === currentUser || msg.target === currentCallsign) {
+            const box = document.getElementById('maps-section-box');
+            if (box && (currentUser === ADMIN_NAME || myPermissions.maps)) box.style.display = 'block';
+        }
+        return;
+    }
+    if (msg.type === 'stream_state') {
+        activeStream = msg.streamState || { active: false, url: '' };
+        updateStreamUI();
+        return;
+    }
+    if (msg.type === 'users_updated') {
+        if (currentUser === ADMIN_NAME) fetchAdminUsersList();
+        refreshMyPermissionsFromServer();
+        if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests(true);
+        return;
+    }
+    if (msg.type === 'history_cleared') {
+        document.getElementById('table-body').innerHTML = '';
+        allNotifications = new Array(); allMaps = new Array(); pendingAlerts = {};
+        saveLocalJournalCache('table_rows', new Array());
+        saveLocalJournalCache('notifs', new Array());
+        saveLocalJournalCache('maps', new Array());
+        stopAlertVisuals(); renderNotificationsWindow(); renderMapsGrid();
+        return;
+    }
+    if (msg.type === 'admin_alert') {
+        if (msg.notif) {
+            const exists = allNotifications.some(function(n) { return n.id === msg.notif.id; });
+            if (!exists) {
+                allNotifications.push(msg.notif);
+                saveLocalJournalCache('notifs', allNotifications);
+            }
+            renderNotificationsWindow();
+        }
+        const queue = getAlertsQueue(msg.target);
+        const alertId = msg.notif ? msg.notif.id : Date.now();
+        if (!queue.some(function(a) { return a.id === alertId; })) {
+            queue.push({ id: alertId, text: msg.text, sender: msg.sender || ADMIN_NAME, readList: new Array() });
+        }
+        pendingAlerts[msg.target] = queue;
+        checkAndShowAlerts(true);
+        return;
+    }
+    if (msg.type === 'alert_cleared') {
+        handleAlertClearedMsg(msg);
+    }
+}
 setInterval(function() {
     if (ws && ws.readyState === WebSocket.OPEN) {
-        if (Date.now() - lastPongTime > 12000) {
+        if (Date.now() - lastPongTime > 16000) {
             connectWS(true);
             return;
         }
-        ws.send(JSON.stringify({
-            type: 'ping',
-            user: currentUser || '',
-            callsign: currentCallsign || ''
-        }));
-    } else {
+        try {
+            ws.send(JSON.stringify({
+                type: 'ping',
+                user: currentUser || '',
+                callsign: currentCallsign || ''
+            }));
+        } catch (e) {}
+    } else if (navigator.onLine !== false) {
         connectWS(false);
     }
-}, 4000);
+}, 5000);
 
 window.addEventListener('online', function() {
     connectWS(true);
+    subscribeToWebPush(false);
 });
 
 document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
-        if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 8000)) {
+        if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 9000)) {
             connectWS(true);
         } else {
             checkAndShowAlerts(false);
+            if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof fetchMessages === 'function') {
+                fetchMessages();
+            }
+            if (typeof loadFriendsAndRequests === 'function') {
+                loadFriendsAndRequests(true);
+            }
         }
     }
 });
+
 function handleAlertClearedMsg(msg) {
     const queue = getAlertsQueue(msg.target);
     if (msg.target === 'ВСЕМ') {
@@ -1056,7 +1102,6 @@ function handleAlertClearedMsg(msg) {
     }
     checkAndShowAlerts(false);
 }
-
 function populateTargetSelect() {
     const adminSelect = document.getElementById('admin-target');
     const miniSelect = document.getElementById('mini-notif-target');
@@ -1100,6 +1145,7 @@ function populateTargetSelect() {
         });
     }
 }
+
 function applyPermissionsUI() {
     const isAdmin = (currentUser === ADMIN_NAME);
     const canRow = isAdmin || (myPermissions && myPermissions.row);
@@ -1175,7 +1221,7 @@ function initApp() {
     }
     document.body.addEventListener('click', function firstTouch() {
         unlockMobileFeatures();
-        subscribeToWebPush();
+        subscribeToWebPush(false);
         document.body.removeEventListener('click', firstTouch);
     }, { once: true });
 
@@ -1202,6 +1248,7 @@ function initApp() {
     headerRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
     if (archHeaderRow) archHeaderRow.innerHTML = '<th style="width: 130px;">🕒 Время</th><th style="width: 110px;">👤 Кто</th>';
     inputContainer.innerHTML = '';
+    const inputsFrag = document.createDocumentFragment();
     COLUMNS_CONFIG.forEach(function(col, index) {
         let th = document.createElement('th');
         th.innerText = col.label;
@@ -1223,13 +1270,17 @@ function initApp() {
             inputHtml = '<input type="text" id="in-' + index + '" placeholder="...">';
         }
         div.innerHTML = '<label>' + col.label + '</label>' + inputHtml;
-        inputContainer.appendChild(div);
+        inputsFrag.appendChild(div);
     });
+    inputContainer.appendChild(inputsFrag);
 
     const cachedRows = loadLocalJournalCache('table_rows', new Array());
     if (Array.isArray(cachedRows) && cachedRows.length > 0) {
-        document.getElementById('table-body').innerHTML = '';
-        cachedRows.forEach(appendRow);
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+        const rFrag = document.createDocumentFragment();
+        cachedRows.forEach(function(r) { appendRowToContainer(rFrag, r, false); });
+        tbody.appendChild(rFrag);
     }
     const cachedNotifs = loadLocalJournalCache('notifs', new Array());
     if (Array.isArray(cachedNotifs) && cachedNotifs.length > 0) {
@@ -1247,7 +1298,7 @@ function initApp() {
         userColor = savedColor || '#fff';
         applyUserUI();
     }
-    fetchMapsFromServer();
+    fetchMapsFromServer(false);
     connectWS(false);
 }
 function hideAuthMessages() {
@@ -1303,7 +1354,7 @@ function refreshMyPermissionsFromServer() {
         applyPermissionsUI();
         return;
     }
-    fetch('/api/user/me?user=' + encodeURIComponent(currentCallsign) + '&t=' + Date.now())
+    fetch('/api/user/me?noav=1&user=' + encodeURIComponent(currentCallsign) + '&t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data && data.permissions) {
@@ -1368,7 +1419,7 @@ function completeLoginSuccess(unitName, callsign, color) {
     localStorage.setItem('chat_username', currentCallsign);
     applyUserUI();
     refreshMyPermissionsFromServer();
-    subscribeToWebPush();
+    subscribeToWebPush(false);
     checkAndShowAlerts(false);
 }
 
@@ -1457,7 +1508,7 @@ function loginAsViewer() {
     renderNotificationsWindow();
     renderMapsGrid();
     updateStreamUI();
-    subscribeToWebPush();
+    subscribeToWebPush(false);
     checkAndShowAlerts(false);
 }
 function sendAdminAlert() {
@@ -1559,7 +1610,6 @@ function isAlertDismissedLocally(notifId, text, sender) {
     const key = notifId ? String(notifId) : (String(sender) + '|' + String(text));
     return dismissedAlertIds.has(key);
 }
-
 function showAlert(target, text, sender, notifId, isNew) {
     if (isAlertDismissedLocally(notifId, text, sender)) {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1683,9 +1733,7 @@ function confirmAlert() {
     }
     checkAndShowAlerts(false);
 }
-
 function submitRow() {
-
     if (!currentUser) return;
     let values = new Array(), isEmpty = true;
     for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
@@ -1697,24 +1745,37 @@ function submitRow() {
     if (isEmpty) return alert("Пустая строка!");
     const now = new Date();
     const authorLabel = (currentCallsign && currentCallsign !== currentUser) ? (currentUser + ' (' + currentCallsign + ')') : currentUser;
-    ws.send(JSON.stringify({ type: 'add_row', user: authorLabel, color: userColor, time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5), values: values }));
+    ws.send(JSON.stringify({
+        type: 'add_row',
+        user: authorLabel,
+        color: userColor,
+        time: now.toLocaleDateString() + ' ' + now.toLocaleTimeString().slice(0, 5),
+        values: values
+    }));
     for (let i = 0; i < COLUMNS_CONFIG.length; i++) document.getElementById('in-' + i).value = "";
 }
 
-function appendRow(row) {
+function appendRowToContainer(container, row, doScroll) {
+    if (!container || !row) return;
     if (row.values && row.values.at(0)) {
         const firstCol = String(row.values.at(0));
         if (firstCol.indexOf("ОЗНАКОМЛЕН") !== -1 || firstCol.indexOf("УВЕДОМЛЕН") !== -1) return;
     }
-    const tbody = document.getElementById('table-body');
     const tr = document.createElement('tr');
     let html = '<td class="time-cell">' + row.time + '</td><td class="user-cell" style="color:' + row.color + '">' + row.user + '</td>';
     for (let i = 0; i < COLUMNS_CONFIG.length; i++) {
         html += '<td>' + ((row.values && row.values.at(i)) ? row.values.at(i) : '-') + '</td>';
     }
     tr.innerHTML = html;
-    tbody.appendChild(tr);
-    requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    container.appendChild(tr);
+    if (doScroll) {
+        requestAnimationFrame(function() { tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    }
+}
+
+function appendRow(row) {
+    const tbody = document.getElementById('table-body');
+    appendRowToContainer(tbody, row, true);
 }
 
 function triggerCallInDev(callType, targetName) {
@@ -1733,6 +1794,7 @@ function closeCallDevModal() {
     const m = document.getElementById('call-dev-modal');
     if (m) m.style.display = 'none';
 }
+
 const GIF_TITLES = {
     military: Array.of(
         "🪖 Спецназ МСБ", "🛡️ Броня крепка", "🚁 Вертушка", "📡 Радар ПВО",
@@ -1756,7 +1818,6 @@ const GIF_TITLES = {
         "🌌 Галактика", "👨‍🚀 Невесомость", "🌟 Пульсар", "🌌 Космос МСБ"
     )
 };
-
 var gifCacheStore = {};
 
 function makeAnimatedSvgGif(cat, idx, title) {
@@ -1777,9 +1838,6 @@ function makeAnimatedSvgGif(cat, idx, title) {
     const grad = ctx.createLinearGradient(0, 0, 320, 200);
     grad.addColorStop(0, pal.at(0)); grad.addColorStop(1, pal.at(1));
     ctx.fillStyle = grad; ctx.fillRect(0, 0, 320, 200);
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-    for (let x = 20; x < 320; x += 28) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 200); ctx.stroke(); }
-    for (let y = 20; y < 200; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke(); }
     ctx.strokeStyle = pal.at(2); ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(160, 78, 52, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = pal.at(3); ctx.lineWidth = 2; ctx.setLineDash(Array.of(8, 6));
@@ -1846,18 +1904,14 @@ function sendGifToCurrentChat(gifSrc) {
     const sender = (typeof getActiveChatIdentity === 'function') ? getActiveChatIdentity() : currentCallsign;
     if (!sender) return;
     fetch(gifSrc).then(function(r) { return r.blob(); }).then(function(blob) {
-        const formData = new FormData();
-        formData.append('sender', sender); formData.append('room', currentRoomId);
-        formData.append('type', 'file'); formData.append('media', blob, 'gif_' + Date.now() + '.png');
-        return fetch('/api/send', { method: 'POST', body: formData });
-    }).then(function() {
+        if (typeof enqueueChatPayload === 'function') {
+            enqueueChatPayload({ sender: sender, room: currentRoomId, type: 'file', blob: blob, fileName: 'gif_' + Date.now() + '.png' });
+        }
         const drawer = document.getElementById('chat-gif-drawer');
         if (drawer) drawer.style.display = 'none';
         closeMsgPhotoViewer();
-        if (typeof fetchMessages === 'function') { lastMessagesCount = -1; fetchMessages(); }
     });
 }
-
 function openMsgPhotoViewer(src, title) {
     const modal = document.getElementById('msg-photo-viewer-modal');
     const img = document.getElementById('msg-viewer-img');
@@ -1895,11 +1949,11 @@ function changeMsgImageZoom(delta) {
     if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
     if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
 }
+
 var msbInitialSyncDone = false;
 var msbIsWeakNetwork = false;
-var msbLastPingRtt = 0;
-var msbPingSentAt = 0;
 var msbBootWaitTimer = null;
+var lastEdgePullAt = 0;
 
 function getMsbWeakPhraseHTML() {
     return '📡 (ищем сеть, закрытый протокол <span class="msb-jumping-word">МСБ55115</span>, обновляемся... ждите)';
@@ -1910,124 +1964,64 @@ function ensureWeakBootOverlay() {
     if (document.getElementById('msb-weak-boot-overlay')) return;
     var ov = document.createElement('div');
     ov.id = 'msb-weak-boot-overlay';
-    ov.innerHTML =
-        '<div class="msb-weak-boot-card">' +
-            '<div class="msb-weak-spinner"></div>' +
-            '<div>' + getMsbWeakPhraseHTML() + '</div>' +
-        '</div>';
+    ov.innerHTML = '<div class="msb-weak-boot-card"><div class="msb-weak-spinner"></div><div>' + getMsbWeakPhraseHTML() + '</div></div>';
     document.body.appendChild(ov);
 }
 
 function evaluateNetworkWeakness() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
     if (!ws || ws.readyState !== WebSocket.OPEN) return true;
-    if (Date.now() - lastPongTime > 15000) return true;
+    if (Date.now() - lastPongTime > 18000) return true;
     return false;
 }
-
 
 function updateWeakNetworkUI() {
     ensureWeakBootOverlay();
     var weakNow = evaluateNetworkWeakness();
     msbIsWeakNetwork = weakNow;
     window.msbIsWeakNetwork = weakNow;
-
     var bootOv = document.getElementById('msb-weak-boot-overlay');
     if (bootOv) {
-        if (!msbInitialSyncDone && weakNow) {
-            bootOv.style.display = 'flex';
-        } else if (msbInitialSyncDone) {
-            bootOv.style.display = 'none';
-        }
+        if (!msbInitialSyncDone && weakNow) bootOv.style.display = 'flex';
+        else if (msbInitialSyncDone) bootOv.style.display = 'none';
     }
-
-    if (typeof window.syncMessengerWeakBanner === 'function') {
-        window.syncMessengerWeakBanner(weakNow);
-    }
+    if (typeof window.syncMessengerWeakBanner === 'function') window.syncMessengerWeakBanner(weakNow);
 }
 
 function triggerImmediateEdgePull() {
+    var now = Date.now();
+    if (now - lastEdgePullAt < 5000) return;
+    lastEdgePullAt = now;
     connectWS(false);
-    fetchMapsFromServer();
-    fetchArchiveFromServer();
-    refreshMyPermissionsFromServer();
     if (typeof flushOutboxQueue === 'function') flushOutboxQueue();
-    if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests();
-    if (typeof fetchMessages === 'function') fetchMessages();
-
-    fetch('/maps-list?t=' + Date.now())
-        .then(function(r) {
-            if (r.ok) window.markMsbServerAlive(true);
-            return r.json();
-        })
-        .then(function(list) {
-            if (Array.isArray(list)) {
-                allMaps = list;
-                saveLocalJournalCache('maps', list);
-                renderMapsGrid();
-            }
-        })
+    fetch('/api/ping?t=' + now)
+        .then(function(r) { if (r.ok) window.markMsbServerAlive(true); })
         .catch(function() {});
 }
 
 window.markMsbServerAlive = function(isFullInit) {
-    if (msbPingSentAt > 0) {
-        msbLastPingRtt = Date.now() - msbPingSentAt;
-        msbPingSentAt = 0;
-    }
     if (isFullInit && !msbInitialSyncDone) {
         msbInitialSyncDone = true;
-        if (msbBootWaitTimer) {
-            clearTimeout(msbBootWaitTimer);
-            msbBootWaitTimer = null;
-        }
+        if (msbBootWaitTimer) { clearTimeout(msbBootWaitTimer); msbBootWaitTimer = null; }
     }
     updateWeakNetworkUI();
 };
 
 (function initWeakNetworkWatcher() {
     ensureWeakBootOverlay();
-    var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-
-    if (!navigator.onLine || (conn && (conn.effectiveType === 'slow-2g' || conn.effectiveType === '2g' || (conn.downlink > 0 && conn.downlink < 0.45)))) {
-        document.getElementById('msb-weak-boot-overlay').style.display = 'flex';
-    }
-
     msbBootWaitTimer = setTimeout(function() {
         if (!msbInitialSyncDone) {
             ensureWeakBootOverlay();
-            document.getElementById('msb-weak-boot-overlay').style.display = 'flex';
+            if (evaluateNetworkWeakness()) document.getElementById('msb-weak-boot-overlay').style.display = 'flex';
             triggerImmediateEdgePull();
         }
-    }, 1800);
-
-    if (conn && typeof conn.addEventListener === 'function') {
-        conn.addEventListener('change', function() {
-            updateWeakNetworkUI();
-            if (navigator.onLine) {
-                triggerImmediateEdgePull();
-            }
-        });
-    }
-
-    window.addEventListener('online', function() {
-        triggerImmediateEdgePull();
-        setTimeout(updateWeakNetworkUI, 400);
-    });
-
-    window.addEventListener('offline', function() {
-        updateWeakNetworkUI();
-    });
-
+    }, 2500);
+    window.addEventListener('online', function() { triggerImmediateEdgePull(); setTimeout(updateWeakNetworkUI, 400); });
+    window.addEventListener('offline', updateWeakNetworkUI);
     setInterval(function() {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            msbPingSentAt = Date.now();
-        } else if (navigator.onLine) {
-            triggerImmediateEdgePull();
-        }
+        if ((!ws || ws.readyState !== WebSocket.OPEN) && navigator.onLine !== false) triggerImmediateEdgePull();
         updateWeakNetworkUI();
-    }, 2200);
+    }, 4500);
 })();
 
 initApp();
-
