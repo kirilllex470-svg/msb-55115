@@ -1216,13 +1216,9 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     });
     const pushOptions = {
         TTL: 86400,
-        urgency: 'high',
-        topic: 'msb-' + String(notifId).slice(-8),
-        headers: {
-            'Urgency': 'high',
-            'TTL': '86400'
-        }
+        urgency: 'high'
     };
+
 
     const tLow = String(target).trim().toLowerCase();
     const sLow = String(sender).trim().toLowerCase();
