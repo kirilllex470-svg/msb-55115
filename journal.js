@@ -209,11 +209,14 @@ async function subscribeToWebPush(forceRenew) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(subPayload)
             }).catch(function() {});
-      }
-    } catch (e) {}
+       }
+    } catch (e) {
+        console.error('PUSH SUB ERROR:', e);
+        if (currentUser) {
+            alert('⚠️ Ошибка подписки Push: ' + (e && e.message ? e.message : e));
+        }
+    }
 }
-
-
 
 
 
