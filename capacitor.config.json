@@ -1,0 +1,23 @@
+{
+  "appId": "ru.msb55115.app",
+  "appName": "МСБ-55115",
+  "webDir": "www",
+  "server": {
+    "url": "https://msb-55115-kirill000000007.mia0.amvera.tech/",
+    "cleartext": false,
+    "allowNavigation": [
+      "*.amvera.io",
+      "salutejazz.ru"
+    ]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}
