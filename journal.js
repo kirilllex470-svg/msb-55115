@@ -1652,6 +1652,11 @@ function showAlert(target, text, sender, notifId, isNew) {
     const txtStr = String(text || '');
     const isChatAlert = txtStr.indexOf('👥') === 0 || txtStr.indexOf('💬') === 0 || txtStr.indexOf('🎙️') === 0 || txtStr.indexOf('🎥') === 0 || txtStr.indexOf('📎') === 0 || txtStr.indexOf('🎬') === 0;
     if (msgModal && msgModal.style.display === 'flex' && isChatAlert) {
+        // Звук и системная шторка теперь сработают и внутри мессенджера, не перекрывая чат красным окном!
+        if (isNew || document.visibilityState === 'hidden') {
+            playSoundById('nice1', true);
+            sendLocalNotification(target, text, sender || ADMIN_NAME, notifId);
+        }
         markAlertDismissedLocally(notifId, text, sender);
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
