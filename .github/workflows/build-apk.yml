@@ -13,33 +13,50 @@ jobs:
       - name: Скачивание кода проекта
         uses: actions/checkout@v4
 
-      - name: Установка Node.js
+      - name: Установка Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Установка Java 17
+      - name: Установка Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
-      - name: Установка Capacitor и создание Android-проекта
+      - name: Подготовка и установка Capacitor 8
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
-          npm install --no-save @capacitor/core @capacitor/cli @capacitor/android
+          mkdir -p www
+          if [ ! -f www/index.html ]; then echo "<html><body style='background:#0f172a;'></body></html>" > www/index.html; fi
+          npm install --no-save @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
           npx cap add android
 
       - name: Прописывание системных разрешений Android
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />|' "$MANIFEST"
+          python3 -c '
+          p = "android/app/src/main/AndroidManifest.xml"
+          s = open(p).read()
+          perms = """<uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />"""
+          s = s.replace("<uses-permission android:name=\"android.permission.INTERNET\" />", perms, 1)
+          open(p, "w").write(s)
+          '
 
       - name: Настройка фонового режима и авто-доступа к микрофону и камере
         run: |
-          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java")
-          cat << 'EOF' > "$MAIN_ACT"
-          package ru.msb55115.app;
+          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          PKG_LINE=$(grep "^package " "$MAIN_ACT")
+          cat << EOF > "$MAIN_ACT"
+          $PKG_LINE
 
           import android.Manifest;
           import android.content.Intent;
@@ -82,8 +99,8 @@ jobs:
                   List<String> perms = new ArrayList<>();
                   perms.add(Manifest.permission.CAMERA);
                   perms.add(Manifest.permission.RECORD_AUDIO);
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                      perms.add(Manifest.permission.POST_NOTIFICATIONS);
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      perms.add("android.permission.POST_NOTIFICATIONS");
                   }
                   List<String> toRequest = new ArrayList<>();
                   for (String p : perms) {
@@ -100,9 +117,11 @@ jobs:
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                       PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
                       if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
-                          Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                          intent.setData(Uri.parse("package:" + getPackageName()));
-                          startActivity(intent);
+                          try {
+                              Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                              intent.setData(Uri.parse("package:" + getPackageName()));
+                              startActivity(intent);
+                          } catch (Exception ignored) {}
                       }
                   }
               }
@@ -114,7 +133,7 @@ jobs:
           npx cap sync android
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Выгрузка готового APK-файла
         uses: actions/upload-artifact@v4
