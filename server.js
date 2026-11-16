@@ -5,6 +5,40 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const WebSocket = require('ws');
 const webpush = require('web-push');
+
+const storagePath = fs.existsSync('/data') ? '/data' : __dirname;
+const DB_FILE = path.join(storagePath, 'history.json');
+const ARCHIVE_FILE = path.join(storagePath, 'archive.json');
+const NOTIFS_FILE = path.join(storagePath, 'notifications.json');
+const MAPS_FILE = path.join(storagePath, 'maps.json');
+const SUBS_FILE = path.join(storagePath, 'subscriptions.json');
+const VAPID_FILE = path.join(storagePath, 'vapid.json');
+const FCM_FILE = path.join(storagePath, 'fcm_tokens.json');
+
+const USERS_FILE = path.join(storagePath, 'users.json');
+const CHAT_ROOMS_FILE = path.join(storagePath, 'chat_rooms.json');
+const FRIENDS_FILE = path.join(storagePath, 'friends.json');
+const GROUPS_FILE = path.join(storagePath, 'groups.json');
+const REQUESTS_FILE = path.join(storagePath, 'requests.json');
+const READS_FILE = path.join(storagePath, 'last_read.json');
+const UPLOADS_DIR = path.join(storagePath, 'uploads');
+
+if (!fs.existsSync(UPLOADS_DIR)) {
+    try {
+        fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    } catch (e) {}
+}
+
+function readJSON(filePath, defaultVal) {
+    try {
+        if (fs.existsSync(filePath)) {
+            const raw = fs.readFileSync(filePath, 'utf-8');
+            return raw.trim() ? JSON.parse(raw) : defaultVal;
+        }
+    } catch (e) {}
+    return defaultVal;
+}
+
 let fcmAdmin = null;
 try {
     const admin = require('firebase-admin');
@@ -23,9 +57,9 @@ try {
     console.log('⚠️ Firebase FCM не запущен:', e.message);
 }
 
-const FCM_FILE = path.join(storagePath, 'fcm_tokens.json');
 let fcmTokens = readJSON(FCM_FILE, []);
 if (!Array.isArray(fcmTokens)) fcmTokens = [];
+
 
 const storagePath = fs.existsSync('/data') ? '/data' : __dirname;
 const DB_FILE = path.join(storagePath, 'history.json');
