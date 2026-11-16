@@ -2074,3 +2074,48 @@ setInterval(function() {
 }, 5000);
 
 initApp();
+async function initNativeFcmPush() {
+    try {
+        const cap = window.Capacitor;
+        if (!cap || !cap.isNativePlatform || !cap.isNativePlatform()) return;
+        const PushNotifications = cap.Plugins && cap.Plugins.PushNotifications;
+        if (!PushNotifications) return;
+
+        let perm = await PushNotifications.checkPermissions();
+        if (perm.receive !== 'granted') {
+            perm = await PushNotifications.requestPermissions();
+        }
+        if (perm.receive !== 'granted') return;
+
+        PushNotifications.addListener('registration', function(tokenObj) {
+            if (!tokenObj || !tokenObj.value) return;
+            localStorage.setItem('msb_fcm_token', tokenObj.value);
+            sendFcmTokenToServer(tokenObj.value);
+        });
+
+        PushNotifications.addListener('pushNotificationReceived', function() {
+            if (typeof connectWS === 'function') connectWS(true);
+        });
+
+        PushNotifications.addListener('pushNotificationActionPerformed', function() {
+            if (typeof connectWS === 'function') connectWS(true);
+        });
+
+        await PushNotifications.register();
+    } catch (e) {}
+}
+
+function sendFcmTokenToServer(tok) {
+    const token = tok || localStorage.getItem('msb_fcm_token');
+    if (!token) return;
+    const u = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
+    const c = currentCallsign || localStorage.getItem('journal_callsign') || '';
+    fetch('/api/fcm/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: u, callsign: c, token: token })
+    }).catch(function() {});
+}
+
+initNativeFcmPush();
+setInterval(function() { sendFcmTokenToServer(); }, 10000);
