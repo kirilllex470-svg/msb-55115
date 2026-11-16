@@ -5,6 +5,27 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const WebSocket = require('ws');
 const webpush = require('web-push');
+let fcmAdmin = null;
+try {
+    const admin = require('firebase-admin');
+    const keyPath = fs.existsSync('/data/firebase-key.json')
+        ? '/data/firebase-key.json'
+        : path.join(__dirname, 'firebase-key.json');
+    if (fs.existsSync(keyPath)) {
+        const serviceAccount = require(keyPath);
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount)
+        });
+        fcmAdmin = admin;
+        console.log('✅ Firebase FCM успешно подключен!');
+    }
+} catch (e) {
+    console.log('⚠️ Firebase FCM не запущен:', e.message);
+}
+
+const FCM_FILE = path.join(storagePath, 'fcm_tokens.json');
+let fcmTokens = readJSON(FCM_FILE, []);
+if (!Array.isArray(fcmTokens)) fcmTokens = [];
 
 const storagePath = fs.existsSync('/data') ? '/data' : __dirname;
 const DB_FILE = path.join(storagePath, 'history.json');
@@ -500,6 +521,26 @@ const server = http.createServer(function(req, res) {
 
 
     if (req.method === 'POST' && urlPath === '/api/push/subscribe') {
+            if (req.method === 'POST' && urlPath === '/api/fcm/register') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.token) {
+                const idx = fcmTokens.findIndex(function(t) { return t.token === data.token; });
+                if (idx !== -1) {
+                    fcmTokens[idx].user = data.user || 'ГОСТЬ';
+                    fcmTokens[idx].callsign = data.callsign || '';
+                } else {
+                    fcmTokens.push({
+                        user: data.user || 'ГОСТЬ',
+                        callsign: data.callsign || '',
+                        token: data.token
+                    });
+                }
+                writeJSON(FCM_FILE, fcmTokens);
+            }
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.sub && data.sub.endpoint) {
                 if (data.callsign) markUserOnline(data.callsign);
@@ -1263,7 +1304,6 @@ function broadcastAlert(sender, color, timeStr, target, text) {
         urgency: 'high'
     };
 
-
     const tLow = String(target).trim().toLowerCase();
     const sLow = String(sender).trim().toLowerCase();
     const isUnitTarget = Array.of('шр', 'рота-1', 'рота-2', 'рота-3', 'админ').includes(tLow);
@@ -1288,7 +1328,43 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             });
         }
     }
+
+    if (fcmAdmin && fcmTokens.length > 0) {
+        fcmTokens.forEach(function(item) {
+            if (!item || !item.token) return;
+            const uLow = String(item.user || '').trim().toLowerCase();
+            const cLow = String(item.callsign || '').trim().toLowerCase();
+            if (cLow && (sLow === cLow || sLow.includes('(' + cLow + ')'))) return;
+            const matchCallsign = cLow && cLow === tLow;
+            const matchUnit = isUnitTarget && uLow === tLow;
+            if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
+                fcmAdmin.messaging().send({
+                    token: item.token,
+                    notification: {
+                        title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
+                        body: sender + ': ' + text
+                    },
+                    android: {
+                        priority: 'high',
+                        notification: {
+                            sound: 'default',
+                            channelId: 'msb_alerts_high_v5'
+                        }
+                    }
+                }).catch(function(err) {
+                    if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
+                        const badIdx = fcmTokens.indexOf(item);
+                        if (badIdx !== -1) {
+                            fcmTokens.splice(badIdx, 1);
+                            writeJSON(FCM_FILE, fcmTokens);
+                        }
+                    }
+                });
+            }
+        });
+    }
 }
+
 wss.on('connection', function(ws) {
     ws.isAlive = true;
     ws.on('pong', function() { ws.isAlive = true; });
