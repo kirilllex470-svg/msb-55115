@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "229834287710",
+    "firebase_url": "https://msb55115-default-rtdb.firebaseio.com",
+    "project_id": "msb55115",
+    "storage_bucket": "msb55115.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:229834287710:android:d90b60d6d5ef283b7762cf",
+        "android_client_info": {
+          "package_name": "com.mycompany.msb55115"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDO8NTKlzEcoa6uL7oncqHnANOe3wmiamg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
