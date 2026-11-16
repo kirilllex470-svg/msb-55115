@@ -1349,11 +1349,13 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                     android: {
                         priority: 'high',
                         notification: {
-                            sound: 'default',
-                            channelId: 'msb_alerts_high_v5'
+                            sound: 'default'
                         }
                     }
+                }).then(function(response) {
+                    console.log('📨 FCM пуш принят Google для', item.callsign, ':', response);
                 }).catch(function(err) {
+                    console.error('❌ Ошибка отправки FCM:', err.code, err.message);
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
                         const badIdx = fcmTokens.indexOf(item);
                         if (badIdx !== -1) {
@@ -1362,10 +1364,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                         }
                     }
                 });
-            }
-        });
-    }
-}
+
 
 wss.on('connection', function(ws) {
     ws.isAlive = true;
