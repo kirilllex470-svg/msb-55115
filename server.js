@@ -311,8 +311,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v4';",
-
+    "const SHELL_CACHE = 'msb55115-shell-v2';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -379,16 +378,16 @@ const SW_CODE = [
     "        return;",
     "    }"
 ].join('\n') + '\n' + [
-    "    event.respondWith(fetch(event.request).then(function(networkRes) {",
-    "        if (networkRes && networkRes.status === 200) {",
-    "            const resClone = networkRes.clone();",
-    "            caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
-    "        }",
-    "        return networkRes;",
-    "    }).catch(function() {",
-    "        return caches.match(event.request, { ignoreSearch: true });",
+    "    event.respondWith(caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
+    "        const netFetch = fetch(event.request).then(function(networkRes) {",
+    "            if (networkRes && networkRes.status === 200) {",
+    "                const resClone = networkRes.clone();",
+    "                caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
+    "            }",
+    "            return networkRes;",
+    "        }).catch(function() { return cachedRes; });",
+    "        return cachedRes || netFetch;",
     "    }));",
-
     "});",
     "",
     "self.addEventListener('push', function(event) {",
@@ -512,12 +511,11 @@ const server = http.createServer(function(req, res) {
         return;
     }
 
-      if (req.method === 'GET' && urlPath === '/api/bg-sync') {
+        if (req.method === 'GET' && urlPath === '/api/bg-sync') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const uLow = (myUrl.searchParams.get('unit') || '').trim().toLowerCase();
         const cLow = (myUrl.searchParams.get('callsign') || '').trim().toLowerCase();
-        if (cLow) markUserOnline(cLow);
-        else if (uLow) markUserOnline(uLow);
+
 
         const unreadAlerts = notificationsHistory.filter(function(n) {
             if (!n || n.read) return false;

@@ -414,17 +414,19 @@ window.handleIncomingChatWS = function(packet) {
 
     if (packet.type === 'chat_new_msg' && packet.room && packet.msg) {
         var msg = packet.msg;
-        if (msg.sender) {
+           if (msg.sender) {
+            var isMsgFromMe = String(msg.sender).trim().toLowerCase() === chatUser.toLowerCase();
             delete activeUserTypers[msg.sender];
             Object.keys(activeRoomTypers).forEach(function(rk) {
                 if (activeRoomTypers[rk][msg.sender]) delete activeRoomTypers[rk][msg.sender];
             });
             lastFriendsRenderSig = '';
             renderFriends();
-            if (currentRoomId && isSameDirectOrRoom(currentRoomId, packet.room)) {
+            if (!isMsgFromMe && currentRoomId && isSameDirectOrRoom(currentRoomId, packet.room)) {
                 renderPartnerPresenceHeader(true, partnerLastSeenCache, null);
             }
         }
+
         try {
 
             var rawRoom = localStorage.getItem('msb_cache_room_' + packet.room);

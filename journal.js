@@ -2095,13 +2095,11 @@ window.markMsbServerAlive = function(isFullInit) {
     }, 2500);
     window.addEventListener('online', function() { triggerImmediateEdgePull(); setTimeout(updateWeakNetworkUI, 400); });
     window.addEventListener('offline', updateWeakNetworkUI);
-    setInterval(function() {
+    
         if ((!ws || ws.readyState !== WebSocket.OPEN) && navigator.onLine !== false) triggerImmediateEdgePull();
         updateWeakNetworkUI();
     }, 4500);
 })();
-
-
 function ensurePinModals() {
     if (!document.getElementById('msb-pin-setup-modal')) {
         const m = document.createElement('div');
@@ -2272,4 +2270,4 @@ function sendFcmTokenToServer(tok) {
 }
 
 initNativeFcmPush();
-setInterval(function() { sendFcmTokenToServer(); }, 10000);
+setInterval(function() { sendFcmTokenToServer(); }, 300000);

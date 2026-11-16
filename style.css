@@ -755,3 +755,10 @@ body.theme-cosmic .msb-radial-tools-row .media-btn {
     will-change: scroll-position;
     -webkit-overflow-scrolling: touch;
 }
+
+.msg-ticker-move, .friend-avatar-online, .msb-center-plus-btn, .msb-jumping-word {
+    animation: none !important;
+}
+.msg-ticker-move {
+    padding-left: 12px !important;
+}
