@@ -475,9 +475,29 @@ const server = http.createServer(function(req, res) {
         return;
     }
 
+      if (req.method === 'GET' && urlPath === '/api/bg-sync') {
+        const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        const uLow = (myUrl.searchParams.get('unit') || '').trim().toLowerCase();
+        const cLow = (myUrl.searchParams.get('callsign') || '').trim().toLowerCase();
+        if (cLow) markUserOnline(cLow);
+        else if (uLow) markUserOnline(uLow);
+
+        const unreadAlerts = notificationsHistory.filter(function(n) {
+            if (!n || n.read) return false;
+            const tLow = String(n.target || '').trim().toLowerCase();
+            const sLow = String(n.sender || '').trim().toLowerCase();
+            if (cLow && (sLow === cLow || sLow.includes('(' + cLow + ')'))) return false;
+            if (!cLow && uLow && sLow === uLow) return false;
+            return tLow === 'всем' || (cLow && tLow === cLow) || (uLow && tLow === uLow);
+        }).slice(-10);
+
+        return sendJsonCompressed(req, res, 200, { alerts: unreadAlerts }, 'no-store');
+    }
+
     if (req.method === 'GET' && urlPath === '/api/ping') {
         return sendJsonCompressed(req, res, 200, { ok: true, bootId: SERVER_BOOT_ID, ts: Date.now() }, 'no-store');
     }
+
 
     if (req.method === 'POST' && urlPath === '/api/push/subscribe') {
         return readBodyJSON(req, function(err, data) {
