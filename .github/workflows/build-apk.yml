@@ -61,6 +61,7 @@ jobs:
             @capacitor/android@8 \
             @capacitor/push-notifications@8
           npx cap add android
+
       - name: Подключение google-services.json в Gradle
         run: |
           cp google-services.json android/app/google-services.json
@@ -78,7 +79,6 @@ jobs:
               s2 += "\napply plugin: \"com.google.gms.google-services\"\n"
               open(p2, "w", encoding="utf-8").write(s2)
           '
-
       - name: Настройка AndroidManifest.xml
         run: |
           python3 -c '
@@ -101,8 +101,13 @@ jobs:
               s = s.replace("<application", perms + "\n    <application", 1)
 
           if "usesCleartextTraffic" not in s:
-              ct = "<application android:usesCleartextTraffic=\"true\""
+              ct = "<application android:usesCleartextTraffic=\"true\" android:hardwareAccelerated=\"true\""
               s = s.replace("<application", ct, 1)
+
+          if "windowSoftInputMode" in s:
+              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:windowSoftInputMode=\"adjustResize\"")
+          else:
+              s = s.replace("<activity", "<activity android:windowSoftInputMode=\"adjustResize\"", 1)
 
           svc = "\n".join([
               "        <meta-data",
@@ -165,37 +170,16 @@ jobs:
           import android.media.AudioAttributes;
           import android.media.RingtoneManager;
           import android.net.Uri;
-          import android.net.wifi.WifiManager;
           import android.os.Build;
           import android.os.IBinder;
-          import android.os.PowerManager;
           import androidx.core.app.NotificationCompat;
 
           public class MsbKeepAliveService extends Service {
               public static final String ALERT_CH = "msb_alerts_high_v5";
-              private PowerManager.WakeLock wakeLock;
-              private WifiManager.WifiLock wifiLock;
 
               @Override
               public void onCreate() {
                   super.onCreate();
-                  try {
-                      PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                      if (pm != null) {
-                          int pLvl = PowerManager.PARTIAL_WAKE_LOCK;
-                          wakeLock = pm.newWakeLock(pLvl, "MSB55115::BgLock");
-                          wakeLock.setReferenceCounted(false);
-                          wakeLock.acquire();
-                      }
-                      WifiManager wm = (WifiManager) getApplicationContext()
-                          .getSystemService(WIFI_SERVICE);
-                      if (wm != null) {
-                          int wMode = WifiManager.WIFI_MODE_FULL_HIGH_PERF;
-                          wifiLock = wm.createWifiLock(wMode, "MSB55115::WifiLock");
-                          wifiLock.setReferenceCounted(false);
-                          wifiLock.acquire();
-                      }
-                  } catch (Exception ignored) {}
                   createChannels();
               }
 
@@ -251,10 +235,6 @@ jobs:
 
               @Override
               public void onDestroy() {
-                  try {
-                      if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-                      if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
-                  } catch (Exception ignored) {}
                   super.onDestroy();
               }
 
@@ -281,9 +261,7 @@ jobs:
           import android.os.Bundle;
           import android.os.PowerManager;
           import android.provider.Settings;
-          import android.webkit.PermissionRequest;
-          import android.webkit.ValueCallback;
-          import android.webkit.WebChromeClient;
+          import android.view.View;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import androidx.core.app.ActivityCompat;
@@ -328,30 +306,11 @@ jobs:
 
                   if (getBridge() != null && getBridge().getWebView() != null) {
                       WebView wv = getBridge().getWebView();
+                      wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                       WebSettings ws = wv.getSettings();
                       ws.setJavaScriptEnabled(true);
                       ws.setDomStorageEnabled(true);
                       ws.setMediaPlaybackRequiresUserGesture(false);
-
-                      final WebChromeClient defClient = wv.getWebChromeClient();
-                      wv.setWebChromeClient(new WebChromeClient() {
-                          @Override
-                          public void onPermissionRequest(final PermissionRequest req) {
-                              runOnUiThread(() -> req.grant(req.getResources()));
-                          }
-
-                          @Override
-                          public boolean onShowFileChooser(
-                              WebView view,
-                              ValueCallback<Uri[]> cb,
-                              FileChooserParams params
-                          ) {
-                              if (defClient != null) {
-                                  return defClient.onShowFileChooser(view, cb, params);
-                              }
-                              return super.onShowFileChooser(view, cb, params);
-                          }
-                      });
                   }
               }
 
@@ -380,6 +339,7 @@ jobs:
               }
           }
           EOF
+
       - name: Синхронизация Capacitor и компиляция APK
         run: |
           npx cap sync android
