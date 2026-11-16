@@ -3,7 +3,7 @@
   "appName": "МСБ-55115",
   "webDir": "www",
   "server": {
-    "url": "https://msb-55115-kirill000000007.mia0.amvera.tech/",
+    "url": "https://msb-55115-kirill000000007.mia0.amvera.tech",
     "cleartext": false,
     "allowNavigation": [
       "*.amvera.io",
