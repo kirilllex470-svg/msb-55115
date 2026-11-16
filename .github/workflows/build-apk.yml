@@ -24,62 +24,172 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Подготовка и установка Capacitor 8
+      - name: Установка Capacitor 8
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
           mkdir -p www
-          if [ ! -f www/index.html ]; then echo "<html><body style='background:#0f172a;'></body></html>" > www/index.html; fi
+          if [ ! -f www/index.html ]; then
+            echo "<html><body style='background:#0f172a;'></body></html>" > www/index.html
+          fi
           npm install --no-save @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
           npx cap add android
 
-      - name: Прописывание системных разрешений Android
+      - name: Прописывание разрешений и службы в Манифест
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
           python3 -c '
           p = "android/app/src/main/AndroidManifest.xml"
           s = open(p).read()
-          perms = """<uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />"""
-          s = s.replace("<uses-permission android:name=\"android.permission.INTERNET\" />", perms, 1)
+          perms = "\n    ".join([
+              "<uses-permission android:name=\"android.permission.INTERNET\" />",
+              "<uses-permission android:name=\"android.permission.CAMERA\" />",
+              "<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />",
+              "<uses-permission android:name=\"android.permission.MODIFY_AUDIO_SETTINGS\" />",
+              "<uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />",
+              "<uses-permission android:name=\"android.permission.VIBRATE\" />",
+              "<uses-permission android:name=\"android.permission.WAKE_LOCK\" />",
+              "<uses-permission android:name=\"android.permission.FOREGROUND_SERVICE\" />",
+              "<uses-permission android:name=\"android.permission.FOREGROUND_SERVICE_DATA_SYNC\" />",
+              "<uses-permission android:name=\"android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS\" />"
+          ])
+          old_p = "<uses-permission android:name=\"android.permission.INTERNET\" />"
+          s = s.replace(old_p, perms, 1)
+          svc = (
+              "<service android:name=\".MsbKeepAliveService\" "
+              "android:enabled=\"true\" android:exported=\"false\" "
+              "android:foregroundServiceType=\"dataSync\" />\n    </application>"
+          )
+          s = s.replace("</application>", svc, 1)
           open(p, "w").write(s)
           '
+      - name: Создание фоновой службы MsbKeepAliveService
+        run: |
+          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          JAVA_DIR=$(dirname "$MAIN_ACT")
+          PKG_LINE=$(grep "^package " "$MAIN_ACT")
 
-      - name: Настройка фонового режима и авто-доступа к микрофону и камере
+          cat << EOF > "$JAVA_DIR/MsbKeepAliveService.java"
+          $PKG_LINE
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Intent;
+          import android.os.Build;
+          import android.os.IBinder;
+          import android.os.PowerManager;
+          import androidx.core.app.NotificationCompat;
+
+          public class MsbKeepAliveService extends Service {
+              private PowerManager.WakeLock wakeLock;
+
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+                  PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                  if (pm != null) {
+                      int lvl = PowerManager.PARTIAL_WAKE_LOCK;
+                      wakeLock = pm.newWakeLock(lvl, "MSB55115::BgLock");
+                      wakeLock.acquire();
+                  }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationChannel ch = new NotificationChannel(
+                          "msb_bg_service",
+                          "Фоновая связь МСБ-55115",
+                          NotificationManager.IMPORTANCE_LOW
+                      );
+                      NotificationManager nm = getSystemService(NotificationManager.class);
+                      if (nm != null) nm.createNotificationChannel(ch);
+                  }
+              }
+
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  Intent openIntent = new Intent(this, MainActivity.class);
+                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+                  PendingIntent pi = PendingIntent.getActivity(this, 0, openIntent, piFlags);
+                  Notification notif = new NotificationCompat.Builder(this, "msb_bg_service")
+                      .setContentTitle("МСБ-55115 на связи")
+                      .setContentText("Защищенный канал активен в фоне")
+                      .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
+                      .setContentIntent(pi)
+                      .setOngoing(true)
+                      .build();
+                  startForeground(55115, notif);
+                  return START_STICKY;
+              }
+
+              @Override
+              public void onDestroy() {
+                  if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+                  super.onDestroy();
+              }
+
+              @Override
+              public IBinder onBind(Intent intent) { return null; }
+          }
+          EOF
+      - name: Обновление MainActivity и моста уведомлений
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           PKG_LINE=$(grep "^package " "$MAIN_ACT")
+
           cat << EOF > "$MAIN_ACT"
           $PKG_LINE
 
           import android.Manifest;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
           import android.content.Intent;
           import android.content.pm.PackageManager;
+          import android.media.AudioAttributes;
+          import android.media.RingtoneManager;
           import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
           import android.os.PowerManager;
           import android.provider.Settings;
+          import android.webkit.JavascriptInterface;
           import android.webkit.PermissionRequest;
           import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
           import androidx.core.app.ActivityCompat;
+          import androidx.core.app.NotificationCompat;
           import androidx.core.content.ContextCompat;
           import com.getcapacitor.BridgeActivity;
           import java.util.ArrayList;
           import java.util.List;
 
           public class MainActivity extends BridgeActivity {
+              private static final String ALERT_CH = "msb_alerts_high_v2";
+
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  createAlertChannel();
                   requestAllPermissions();
                   requestIgnoreBatteryOptimization();
+                  startKeepAliveService();
+
+                  if (this.bridge != null && this.bridge.getWebView() != null) {
+                      WebView wv = this.bridge.getWebView();
+                      WebSettings ws = wv.getSettings();
+                      ws.setMediaPlaybackRequiresUserGesture(false);
+                      ws.setDomStorageEnabled(true);
+                      wv.addJavascriptInterface(new MsbJsBridge(), "MsbNative");
+                  }
+              }
+
+              @Override
+              public void onPause() {
+                  super.onPause();
+                  if (this.bridge != null && this.bridge.getWebView() != null) {
+                      this.bridge.getWebView().onResume();
+                      this.bridge.getWebView().resumeTimers();
+                  }
               }
 
               @Override
@@ -88,11 +198,82 @@ jobs:
                   if (this.bridge != null && this.bridge.getWebView() != null) {
                       this.bridge.getWebView().setWebChromeClient(new WebChromeClient() {
                           @Override
-                          public void onPermissionRequest(final PermissionRequest request) {
-                              runOnUiThread(() -> request.grant(request.getResources()));
+                          public void onPermissionRequest(final PermissionRequest req) {
+                              runOnUiThread(() -> req.grant(req.getResources()));
                           }
                       });
                   }
+              }
+
+              public class MsbJsBridge {
+                  @JavascriptInterface
+                  public void notify(String title, String body, String tag) {
+                      showHighPriorityNotification(title, body, tag);
+                  }
+
+                  @JavascriptInterface
+                  public void setIdentity(String unit, String callsign) {
+                      getSharedPreferences("msb_prefs", MODE_PRIVATE)
+                          .edit()
+                          .putString("unit", unit)
+                          .putString("callsign", callsign)
+                          .apply();
+                  }
+              }
+
+              private void createAlertChannel() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      Uri snd = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                      AudioAttributes attrs = new AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                          .build();
+                      NotificationChannel ch = new NotificationChannel(
+                          ALERT_CH,
+                          "Тревоги МСБ-55115",
+                          NotificationManager.IMPORTANCE_HIGH
+                      );
+                      ch.enableVibration(true);
+                      ch.setVibrationPattern(new long[]{0, 600, 200, 600, 200, 800});
+                      ch.setSound(snd, attrs);
+                      NotificationManager nm = getSystemService(NotificationManager.class);
+                      if (nm != null) nm.createNotificationChannel(ch);
+                  }
+              }
+
+              private void showHighPriorityNotification(String title, String body, String tag) {
+                  Intent intent = new Intent(this, MainActivity.class);
+                  intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+                  int reqCode = (int) System.currentTimeMillis();
+                  PendingIntent pi = PendingIntent.getActivity(this, reqCode, intent, piFlags);
+
+                  NotificationCompat.Builder b = new NotificationCompat.Builder(this, ALERT_CH)
+                      .setSmallIcon(android.R.drawable.stat_sys_warning)
+                      .setContentTitle(title)
+                      .setContentText(body)
+                      .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                      .setPriority(NotificationCompat.PRIORITY_MAX)
+                      .setCategory(NotificationCompat.CATEGORY_ALARM)
+                      .setDefaults(NotificationCompat.DEFAULT_ALL)
+                      .setAutoCancel(true)
+                      .setContentIntent(pi);
+
+                  NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                  if (nm != null) {
+                      int id = (tag != null) ? tag.hashCode() : reqCode;
+                      nm.notify(id, b.build());
+                  }
+              }
+
+              private void startKeepAliveService() {
+                  try {
+                      Intent s = new Intent(this, MsbKeepAliveService.class);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          startForegroundService(s);
+                      } else {
+                          startService(s);
+                      }
+                  } catch (Exception ignored) {}
               }
 
               private void requestAllPermissions() {
@@ -102,14 +283,14 @@ jobs:
                   if (Build.VERSION.SDK_INT >= 33) {
                       perms.add("android.permission.POST_NOTIFICATIONS");
                   }
-                  List<String> toRequest = new ArrayList<>();
+                  List<String> toReq = new ArrayList<>();
                   for (String p : perms) {
                       if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
-                          toRequest.add(p);
+                          toReq.add(p);
                       }
                   }
-                  if (!toRequest.isEmpty()) {
-                      ActivityCompat.requestPermissions(this, toRequest.toArray(new String[0]), 101);
+                  if (!toReq.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, toReq.toArray(new String[0]), 101);
                   }
               }
 
@@ -118,9 +299,10 @@ jobs:
                       PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
                       if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
                           try {
-                              Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                              intent.setData(Uri.parse("package:" + getPackageName()));
-                              startActivity(intent);
+                              String act = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
+                              Intent i = new Intent(act);
+                              i.setData(Uri.parse("package:" + getPackageName()));
+                              startActivity(i);
                           } catch (Exception ignored) {}
                       }
                   }
