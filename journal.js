@@ -2101,6 +2101,7 @@ window.markMsbServerAlive = function(isFullInit) {
     }, 4500);
 })();
 
+
 function ensurePinModals() {
     if (!document.getElementById('msb-pin-setup-modal')) {
         const m = document.createElement('div');
