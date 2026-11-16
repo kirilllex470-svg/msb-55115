@@ -1309,6 +1309,9 @@ function initApp() {
     }
     fetchMapsFromServer(false);
     connectWS(false);
+    if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
+        window.MsbNative.setIdentity(currentUser || '', currentCallsign || '');
+    }
 }
 function hideAuthMessages() {
     const err = document.getElementById('login-error');
