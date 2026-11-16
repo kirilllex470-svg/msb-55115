@@ -2063,5 +2063,14 @@ window.markMsbServerAlive = function(isFullInit) {
         updateWeakNetworkUI();
     }, 4500);
 })();
+setInterval(function() {
+    if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
+        var u = currentUser || localStorage.getItem('journal_user') || '';
+        var c = currentCallsign || localStorage.getItem('journal_callsign') || '';
+        if (u || c) {
+            window.MsbNative.setIdentity(u, c, location.origin);
+        }
+    }
+}, 5000);
 
 initApp();
