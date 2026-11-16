@@ -1361,9 +1361,13 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                         if (badIdx !== -1) {
                             fcmTokens.splice(badIdx, 1);
                             writeJSON(FCM_FILE, fcmTokens);
-                        }
+         }
                     }
                 });
+            }
+        });
+    }
+}
 
 
 wss.on('connection', function(ws) {
