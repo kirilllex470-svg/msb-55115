@@ -29,39 +29,76 @@ jobs:
           if [ ! -f package.json ]; then npm init -y; fi
           mkdir -p www
           if [ ! -f www/index.html ]; then
-            echo "<html><body style='background:#0f172a;'></body></html>" > www/index.html
+            echo "<html><body></body></html>" > www/index.html
           fi
           npm install --no-save @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
           npx cap add android
 
-      - name: Настройка разрешений в AndroidManifest
+      - name: Настройка Манифеста и отдельного процесса
         run: |
           python3 -c '
           p = "android/app/src/main/AndroidManifest.xml"
           s = open(p).read()
-          perms = "\n    ".join([
-              "<uses-permission android:name=\"android.permission.INTERNET\" />",
-              "<uses-permission android:name=\"android.permission.CAMERA\" />",
-              "<uses-permission android:name=\"android.permission.RECORD_AUDIO\" />",
-              "<uses-permission android:name=\"android.permission.MODIFY_AUDIO_SETTINGS\" />",
-              "<uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />",
-              "<uses-permission android:name=\"android.permission.VIBRATE\" />",
-              "<uses-permission android:name=\"android.permission.WAKE_LOCK\" />",
-              "<uses-permission android:name=\"android.permission.FOREGROUND_SERVICE\" />",
-              "<uses-permission android:name=\"android.permission.FOREGROUND_SERVICE_DATA_SYNC\" />",
-              "<uses-permission android:name=\"android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS\" />"
-          ])
+          names = [
+              "INTERNET", "CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS",
+              "POST_NOTIFICATIONS", "VIBRATE", "WAKE_LOCK",
+              "RECEIVE_BOOT_COMPLETED", "SCHEDULE_EXACT_ALARM",
+              "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_DATA_SYNC",
+              "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+          ]
+          perms = "\n    ".join(
+              ["<uses-permission android:name=\"android.permission." + n + "\" />" for n in names]
+          )
           old_p = "<uses-permission android:name=\"android.permission.INTERNET\" />"
           s = s.replace(old_p, perms, 1)
-          svc = (
-              "<service android:name=\".MsbKeepAliveService\" "
-              "android:enabled=\"true\" android:exported=\"false\" "
-              "android:foregroundServiceType=\"dataSync\" />\n    </application>"
-          )
+          svc = "\n".join([
+              "<service android:name=\".MsbKeepAliveService\"",
+              "    android:process=\":msb_bg\" android:enabled=\"true\"",
+              "    android:exported=\"false\" android:stopWithTask=\"false\"",
+              "    android:foregroundServiceType=\"dataSync\" />",
+              "<receiver android:name=\".MsbRestartReceiver\"",
+              "    android:enabled=\"true\" android:exported=\"true\">",
+              "    <intent-filter>",
+              "        <action android:name=\"android.intent.action.BOOT_COMPLETED\" />",
+              "        <action android:name=\"android.intent.action.MY_PACKAGE_REPLACED\" />",
+              "        <action android:name=\"ru.msb55115.RESTART_BG\" />",
+              "    </intent-filter>",
+              "</receiver>",
+              "</application>"
+          ])
           s = s.replace("</application>", svc, 1)
           open(p, "w").write(s)
           '
-      - name: Создание фоновой службы (часть А)
+
+      - name: Создание ресивера автовоскрешения
+        run: |
+          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          JAVA_DIR=$(dirname "$MAIN_ACT")
+          PKG_LINE=$(grep "^package " "$MAIN_ACT")
+
+          cat << EOF > "$JAVA_DIR/MsbRestartReceiver.java"
+          $PKG_LINE
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+
+          public class MsbRestartReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context ctx, Intent intent) {
+                  try {
+                      Intent s = new Intent(ctx, MsbKeepAliveService.class);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          ctx.startForegroundService(s);
+                      } else {
+                          ctx.startService(s);
+                      }
+                  } catch (Exception ignored) {}
+              }
+          }
+          EOF
+      - name: Автономная служба (часть 1)
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           JAVA_DIR=$(dirname "$MAIN_ACT")
@@ -71,6 +108,7 @@ jobs:
           cat << EOF > "$JAVA_DIR/MsbKeepAliveService.java"
           $PKG_LINE
 
+          import android.app.AlarmManager;
           import android.app.Notification;
           import android.app.NotificationChannel;
           import android.app.NotificationManager;
@@ -90,14 +128,18 @@ jobs:
           import org.json.JSONArray;
           import org.json.JSONObject;
           import java.io.BufferedReader;
+          import java.io.File;
+          import java.io.FileInputStream;
+          import java.io.FileOutputStream;
           import java.io.InputStreamReader;
           import java.net.HttpURLConnection;
           import java.net.URL;
           import java.net.URLEncoder;
+          import java.nio.charset.StandardCharsets;
 
           public class MsbKeepAliveService extends Service {
               private static final String DEFAULT_SRV = "$SRV_URL";
-              private static final String ALERT_CH = "msb_alerts_high_v4";
+              private static final String ALERT_CH = "msb_alerts_high_v5";
               private PowerManager.WakeLock wakeLock;
               private Handler handler;
               private Runnable pollTask;
@@ -139,6 +181,33 @@ jobs:
                   }
               }
 
+              private JSONObject readIdentityFile() {
+                  try {
+                      File f = new File(getFilesDir(), "msb_identity.json");
+                      if (!f.exists()) return new JSONObject();
+                      FileInputStream fis = new FileInputStream(f);
+                      byte[] data = new byte[(int) f.length()];
+                      fis.read(data);
+                      fis.close();
+                      return new JSONObject(new String(data, StandardCharsets.UTF_8));
+                  } catch (Exception e) {
+                      return new JSONObject();
+                  }
+              }
+
+              private void saveIdentityFile(String u, String c, String s) {
+                  try {
+                      JSONObject o = new JSONObject();
+                      o.put("unit", u != null ? u : "");
+                      o.put("callsign", c != null ? c : "");
+                      o.put("server_url", (s != null && !s.isEmpty()) ? s : DEFAULT_SRV);
+                      File f = new File(getFilesDir(), "msb_identity.json");
+                      FileOutputStream fos = new FileOutputStream(f);
+                      fos.write(o.toString().getBytes(StandardCharsets.UTF_8));
+                      fos.close();
+                  } catch (Exception ignored) {}
+              }
+
               private void startBackgroundPolling() {
                   handler = new Handler(Looper.getMainLooper());
                   pollTask = new Runnable() {
@@ -151,10 +220,10 @@ jobs:
                           handler.postDelayed(this, 8000);
                       }
                   };
-                  handler.postDelayed(pollTask, 6000);
+                  handler.postDelayed(pollTask, 5000);
               }
           EOF
-      - name: Создание фоновой службы (часть Б)
+      - name: Автономная служба (часть 2)
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           JAVA_DIR=$(dirname "$MAIN_ACT")
@@ -177,16 +246,19 @@ jobs:
 
               private void checkChatUpdates() {
                   try {
-                      SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                      String callsign = sp.getString("callsign", "");
-                      String unit = sp.getString("unit", "");
-                      String srv = sp.getString("server_url", DEFAULT_SRV);
+                      JSONObject idObj = readIdentityFile();
+                      String callsign = idObj.optString("callsign", "");
+                      String unit = idObj.optString("unit", "");
+                      String srv = idObj.optString("server_url", DEFAULT_SRV);
+                      if (srv.isEmpty()) srv = DEFAULT_SRV;
                       String me = !callsign.isEmpty() ? callsign : unit;
                       if (me.isEmpty() || srv.isEmpty()) return;
 
+                      SharedPreferences sp = getSharedPreferences("msb_bg_seen", MODE_PRIVATE);
                       String q = URLEncoder.encode(me, "UTF-8");
                       long ts = System.currentTimeMillis();
-                      String raw = httpGet(srv + "/api/friends/get?noav=1&user=" + q + "&t=" + ts);
+                      String url = srv + "/api/friends/get?noav=1&user=" + q + "&t=" + ts;
+                      String raw = httpGet(url);
                       if (raw == null) return;
 
                       JSONArray arr = new JSONArray(raw);
@@ -198,7 +270,7 @@ jobs:
                           String time = item.optString("time", "");
                           String key = "seen_chat_" + name + "_" + time + "_" + unread;
                           if (unread > 0 && !sp.getBoolean(key, false)) {
-                              sp.edit().putBoolean(key, true).apply();
+                              sp.edit().putBoolean(key, true).commit();
                               String ttl = "💬 " + name + " (" + unread + ")";
                               fireBgNotification(ttl, lastMsg, name.hashCode());
                           }
@@ -208,12 +280,14 @@ jobs:
 
               private void checkJournalAlerts() {
                   try {
-                      SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                      String callsign = sp.getString("callsign", "");
-                      String unit = sp.getString("unit", "");
-                      String srv = sp.getString("server_url", DEFAULT_SRV);
+                      JSONObject idObj = readIdentityFile();
+                      String callsign = idObj.optString("callsign", "");
+                      String unit = idObj.optString("unit", "");
+                      String srv = idObj.optString("server_url", DEFAULT_SRV);
+                      if (srv.isEmpty()) srv = DEFAULT_SRV;
                       if ((callsign.isEmpty() && unit.isEmpty()) || srv.isEmpty()) return;
 
+                      SharedPreferences sp = getSharedPreferences("msb_bg_seen", MODE_PRIVATE);
                       String uEnc = URLEncoder.encode(unit, "UTF-8");
                       String cEnc = URLEncoder.encode(callsign, "UTF-8");
                       long ts = System.currentTimeMillis();
@@ -233,7 +307,7 @@ jobs:
                           String text = al.optString("text", "Новая вводная!");
                           String key = "seen_alert_" + id;
                           if (id > 0 && !sp.getBoolean(key, false)) {
-                              sp.edit().putBoolean(key, true).apply();
+                              sp.edit().putBoolean(key, true).commit();
                               int nId = (int) (id % 1000000);
                               String ttl = "🛑 ТРЕВОГА [" + target + "]";
                               fireBgNotification(ttl, sender + ": " + text, nId);
@@ -266,12 +340,19 @@ jobs:
 
               @Override
               public int onStartCommand(Intent intent, int flags, int startId) {
+                  if (intent != null && intent.hasExtra("callsign")) {
+                      saveIdentityFile(
+                          intent.getStringExtra("unit"),
+                          intent.getStringExtra("callsign"),
+                          intent.getStringExtra("server_url")
+                      );
+                  }
                   Intent openIntent = new Intent(this, MainActivity.class);
                   int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
                   PendingIntent pi = PendingIntent.getActivity(this, 0, openIntent, piFlags);
                   Notification notif = new NotificationCompat.Builder(this, "msb_bg_service")
                       .setContentTitle("МСБ-55115 на связи")
-                      .setContentText("Фоновый прием тревог и чатов активен")
+                      .setContentText("Автономный прием тревог и чатов активен")
                       .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
                       .setContentIntent(pi)
                       .setOngoing(true)
@@ -280,14 +361,22 @@ jobs:
                   return START_STICKY;
               }
 
+              private void scheduleSelfRevive() {
+                  try {
+                      Intent r = new Intent(getApplicationContext(), MsbRestartReceiver.class);
+                      r.setAction("ru.msb55115.RESTART_BG");
+                      int f = PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE;
+                      PendingIntent pi = PendingIntent.getBroadcast(getApplicationContext(), 99, r, f);
+                      AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+                      if (am != null) {
+                          am.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5000, pi);
+                      }
+                  } catch (Exception ignored) {}
+              }
+
               @Override
               public void onTaskRemoved(Intent rootIntent) {
-                  Intent restart = new Intent(getApplicationContext(), MsbKeepAliveService.class);
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      getApplicationContext().startForegroundService(restart);
-                  } else {
-                      getApplicationContext().startService(restart);
-                  }
+                  scheduleSelfRevive();
                   super.onTaskRemoved(rootIntent);
               }
 
@@ -295,6 +384,7 @@ jobs:
               public void onDestroy() {
                   if (handler != null && pollTask != null) handler.removeCallbacks(pollTask);
                   if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+                  scheduleSelfRevive();
                   super.onDestroy();
               }
 
@@ -302,7 +392,7 @@ jobs:
               public IBinder onBind(Intent intent) { return null; }
           }
           EOF
-      - name: Обновление MainActivity и моста уведомлений
+      - name: Обновление MainActivity (часть 1)
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           PKG_LINE=$(grep "^package " "$MAIN_ACT")
@@ -335,11 +425,15 @@ jobs:
           import androidx.core.app.NotificationCompat;
           import androidx.core.content.ContextCompat;
           import com.getcapacitor.BridgeActivity;
+          import org.json.JSONObject;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.nio.charset.StandardCharsets;
           import java.util.ArrayList;
           import java.util.List;
 
           public class MainActivity extends BridgeActivity {
-              private static final String ALERT_CH = "msb_alerts_high_v4";
+              private static final String ALERT_CH = "msb_alerts_high_v5";
 
               @Override
               public void onCreate(Bundle savedInstanceState) {
@@ -389,15 +483,37 @@ jobs:
 
                   @JavascriptInterface
                   public void setIdentity(String unit, String callsign, String srvUrl) {
-                      getSharedPreferences("msb_prefs", MODE_PRIVATE)
-                          .edit()
-                          .putString("unit", unit != null ? unit : "")
-                          .putString("callsign", callsign != null ? callsign : "")
-                          .putString("server_url", srvUrl != null ? srvUrl : "")
-                          .apply();
+                      String u = unit != null ? unit : "";
+                      String c = callsign != null ? callsign : "";
+                      String s = srvUrl != null ? srvUrl : "";
+                      try {
+                          JSONObject o = new JSONObject();
+                          o.put("unit", u);
+                          o.put("callsign", c);
+                          o.put("server_url", s);
+                          File f = new File(getFilesDir(), "msb_identity.json");
+                          FileOutputStream fos = new FileOutputStream(f);
+                          fos.write(o.toString().getBytes(StandardCharsets.UTF_8));
+                          fos.close();
+                      } catch (Exception ignored) {}
+
+                      Intent svc = new Intent(MainActivity.this, MsbKeepAliveService.class);
+                      svc.putExtra("unit", u);
+                      svc.putExtra("callsign", c);
+                      svc.putExtra("server_url", s);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          startForegroundService(svc);
+                      } else {
+                          startService(svc);
+                      }
                   }
               }
+          EOF
+      - name: Обновление MainActivity (часть 2) и сборка APK
+        run: |
+          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
 
+          cat << 'EOF' >> "$MAIN_ACT"
               private void createAlertChannel() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       Uri snd = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
@@ -461,7 +577,8 @@ jobs:
                   }
                   List<String> toReq = new ArrayList<>();
                   for (String p : perms) {
-                      if (ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED) {
+                      int st = ContextCompat.checkSelfPermission(this, p);
+                      if (st != PackageManager.PERMISSION_GRANTED) {
                           toReq.add(p);
                       }
                   }
