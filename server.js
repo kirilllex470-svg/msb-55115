@@ -1330,7 +1330,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             });
         }
     }
-
+ console.log('🔔 Попытка отправки FCM. Кому:', target, '| От кого:', sender, '| Токенов в базе:', fcmTokens.length);
     if (fcmAdmin && fcmTokens.length > 0) {
         fcmTokens.forEach(function(item) {
             if (!item || !item.token) return;
@@ -1342,6 +1342,12 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
                 fcmAdmin.messaging().send({
                     token: item.token,
+                    data: {
+                        title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
+                        body: sender + ': ' + text,
+                        target: String(target),
+                        sender: String(sender)
+                    },
                     notification: {
                         title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
                         body: sender + ': ' + text
@@ -1356,6 +1362,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                     console.log('📨 FCM пуш принят Google для', item.callsign, ':', response);
                 }).catch(function(err) {
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
+
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
                         const badIdx = fcmTokens.indexOf(item);
                         if (badIdx !== -1) {
