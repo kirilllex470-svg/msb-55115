@@ -1,4 +1,4 @@
-name: Сборка Android APK (МСБ-55115)
+name: Сборка Android APK (МСБ-55115 + FCM)
 
 on:
   push:
@@ -24,55 +24,107 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Установка Capacitor 8
+      - name: Синхронизация google-services.json и capacitor.config.json
+        run: |
+          if [ ! -f google-services.json ]; then
+            echo "ОШИБКА: google-services.json не найден!"
+            exit 1
+          fi
+          python3 -c '
+          import json, os
+          gs = json.load(open("google-services.json", encoding="utf-8"))
+          c_info = gs["client"][0]["client_info"]
+          pkg = c_info["android_client_info"]["package_name"]
+          p = "capacitor.config.json"
+          if os.path.exists(p):
+              cfg = json.load(open(p, encoding="utf-8"))
+          else:
+              cfg = {"appName": "МСБ-55115", "webDir": "www"}
+          cfg["appId"] = pkg
+          cfg.setdefault("plugins", {})["PushNotifications"] = {
+              "presentationOptions": ["badge", "sound", "alert"]
+          }
+          json.dump(cfg, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          print("Установлен appId:", pkg)
+          '
+
+      - name: Установка Capacitor 8 и Push Notifications
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
           mkdir -p www
           if [ ! -f www/index.html ]; then
             echo "<html><body></body></html>" > www/index.html
           fi
-          npm install --no-save @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
+          npm install --save \
+            @capacitor/core@8 \
+            @capacitor/cli@8 \
+            @capacitor/android@8 \
+            @capacitor/push-notifications@8
           npx cap add android
+      - name: Подключение google-services.json в Gradle
+        run: |
+          cp google-services.json android/app/google-services.json
+          python3 -c '
+          p1 = "android/build.gradle"
+          s1 = open(p1, encoding="utf-8").read()
+          dep = "classpath \"com.google.gms:google-services:4.4.2\""
+          if "com.google.gms:google-services" not in s1:
+              s1 = s1.replace("dependencies {", "dependencies {\n        " + dep, 1)
+              open(p1, "w", encoding="utf-8").write(s1)
 
-      - name: Настройка Манифеста и защиты сети во сне
+          p2 = "android/app/build.gradle"
+          s2 = open(p2, encoding="utf-8").read()
+          if "com.google.gms.google-services" not in s2:
+              s2 += "\napply plugin: \"com.google.gms.google-services\"\n"
+              open(p2, "w", encoding="utf-8").write(s2)
+          '
+
+      - name: Настройка AndroidManifest.xml
         run: |
           python3 -c '
           p = "android/app/src/main/AndroidManifest.xml"
-          s = open(p).read()
+          s = open(p, encoding="utf-8").read()
           names = [
               "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_WIFI_STATE",
               "CHANGE_WIFI_STATE", "CAMERA", "RECORD_AUDIO",
               "MODIFY_AUDIO_SETTINGS", "POST_NOTIFICATIONS", "VIBRATE",
-              "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED", "SCHEDULE_EXACT_ALARM",
-              "USE_EXACT_ALARM", "FOREGROUND_SERVICE",
+              "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED", "FOREGROUND_SERVICE",
               "FOREGROUND_SERVICE_DATA_SYNC",
               "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
           ]
-          perms = "\n    ".join(
-              ["<uses-permission android:name=\"android.permission." + n + "\" />" for n in names]
-          )
-          old_p = "<uses-permission android:name=\"android.permission.INTERNET\" />"
-          s = s.replace(old_p, perms, 1)
+          tag = "<uses-permission android:name=\"android.permission.{}\" />"
+          perms = "\n    ".join([tag.format(n) for n in names])
+          old_p = tag.format("INTERNET")
+          if old_p in s:
+              s = s.replace(old_p, perms, 1)
+          else:
+              s = s.replace("<application", perms + "\n    <application", 1)
+
+          if "usesCleartextTraffic" not in s:
+              ct = "<application android:usesCleartextTraffic=\"true\""
+              s = s.replace("<application", ct, 1)
+
           svc = "\n".join([
-              "<service android:name=\".MsbKeepAliveService\"",
-              "    android:enabled=\"true\" android:exported=\"false\"",
-              "    android:stopWithTask=\"false\"",
-              "    android:foregroundServiceType=\"dataSync\" />",
-              "<receiver android:name=\".MsbRestartReceiver\"",
-              "    android:enabled=\"true\" android:exported=\"true\">",
-              "    <intent-filter>",
-              "        <action android:name=\"android.intent.action.BOOT_COMPLETED\" />",
-              "        <action android:name=\"android.intent.action.MY_PACKAGE_REPLACED\" />",
-              "        <action android:name=\"ru.msb55115.RESTART_BG\" />",
-              "    </intent-filter>",
-              "</receiver>",
-              "</application>"
+              "        <meta-data",
+              "            android:name=\"com.google.firebase.messaging.default_notification_channel_id\"",
+              "            android:value=\"msb_alerts_high_v5\" />",
+              "        <service android:name=\".MsbKeepAliveService\"",
+              "            android:enabled=\"true\" android:exported=\"false\"",
+              "            android:stopWithTask=\"false\"",
+              "            android:foregroundServiceType=\"dataSync\" />",
+              "        <receiver android:name=\".MsbRestartReceiver\"",
+              "            android:enabled=\"true\" android:exported=\"true\">",
+              "            <intent-filter>",
+              "                <action android:name=\"android.intent.action.BOOT_COMPLETED\" />",
+              "                <action android:name=\"android.intent.action.MY_PACKAGE_REPLACED\" />",
+              "            </intent-filter>",
+              "        </receiver>",
+              "    </application>"
           ])
           s = s.replace("</application>", svc, 1)
-          open(p, "w").write(s)
+          open(p, "w", encoding="utf-8").write(s)
           '
-
-      - name: Создание ресивера будильника сна
+      - name: Создание ресивера и фоновой службы
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           JAVA_DIR=$(dirname "$MAIN_ACT")
@@ -100,87 +152,67 @@ jobs:
               }
           }
           EOF
-      - name: Автономная служба (часть 1)
-        run: |
-          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
-          JAVA_DIR=$(dirname "$MAIN_ACT")
-          PKG_LINE=$(grep "^package " "$MAIN_ACT")
-          SRV_URL=$(python3 -c "import json; print(json.load(open('capacitor.config.json'))['server']['url'])")
 
           cat << EOF > "$JAVA_DIR/MsbKeepAliveService.java"
           $PKG_LINE
 
-          import android.app.AlarmManager;
           import android.app.Notification;
           import android.app.NotificationChannel;
           import android.app.NotificationManager;
           import android.app.PendingIntent;
           import android.app.Service;
           import android.content.Intent;
-          import android.content.SharedPreferences;
           import android.media.AudioAttributes;
           import android.media.RingtoneManager;
           import android.net.Uri;
           import android.net.wifi.WifiManager;
           import android.os.Build;
-          import android.os.Handler;
           import android.os.IBinder;
-          import android.os.Looper;
           import android.os.PowerManager;
           import androidx.core.app.NotificationCompat;
-          import org.json.JSONArray;
-          import org.json.JSONObject;
-          import java.io.BufferedReader;
-          import java.io.File;
-          import java.io.FileInputStream;
-          import java.io.FileOutputStream;
-          import java.io.InputStreamReader;
-          import java.net.HttpURLConnection;
-          import java.net.URL;
-          import java.net.URLEncoder;
-          import java.nio.charset.StandardCharsets;
 
           public class MsbKeepAliveService extends Service {
-              private static final String DEFAULT_SRV = "$SRV_URL";
-              private static final String ALERT_CH = "msb_alerts_high_v5";
+              public static final String ALERT_CH = "msb_alerts_high_v5";
               private PowerManager.WakeLock wakeLock;
               private WifiManager.WifiLock wifiLock;
-              private Handler handler;
-              private Runnable pollTask;
 
               @Override
               public void onCreate() {
                   super.onCreate();
-                  PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                  if (pm != null) {
-                      int lvl = PowerManager.PARTIAL_WAKE_LOCK;
-                      wakeLock = pm.newWakeLock(lvl, "MSB55115::BgLock");
-                      wakeLock.setReferenceCounted(false);
-                      wakeLock.acquire();
-                  }
-                  WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-                  if (wm != null) {
-                      wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "MSB55115::WifiLock");
-                      wifiLock.setReferenceCounted(false);
-                      wifiLock.acquire();
-                  }
+                  try {
+                      PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                      if (pm != null) {
+                          int pLvl = PowerManager.PARTIAL_WAKE_LOCK;
+                          wakeLock = pm.newWakeLock(pLvl, "MSB55115::BgLock");
+                          wakeLock.setReferenceCounted(false);
+                          wakeLock.acquire();
+                      }
+                      WifiManager wm = (WifiManager) getApplicationContext()
+                          .getSystemService(WIFI_SERVICE);
+                      if (wm != null) {
+                          int wMode = WifiManager.WIFI_MODE_FULL_HIGH_PERF;
+                          wifiLock = wm.createWifiLock(wMode, "MSB55115::WifiLock");
+                          wifiLock.setReferenceCounted(false);
+                          wifiLock.acquire();
+                      }
+                  } catch (Exception ignored) {}
                   createChannels();
-                  startBackgroundPolling();
               }
 
-              private void createChannels() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      NotificationManager nm = getSystemService(NotificationManager.class);
-                      if (nm == null) return;
+              public static void ensureHighPriorityChannel(NotificationManager nm) {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
                       NotificationChannel bgCh = new NotificationChannel(
                           "msb_bg_service", "Фоновая связь МСБ-55115",
                           NotificationManager.IMPORTANCE_LOW
                       );
                       nm.createNotificationChannel(bgCh);
 
-                      Uri snd = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                      Uri snd = RingtoneManager.getDefaultUri(
+                          RingtoneManager.TYPE_NOTIFICATION
+                      );
                       AudioAttributes attrs = new AudioAttributes.Builder()
-                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).build();
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                          .build();
                       NotificationChannel alCh = new NotificationChannel(
                           ALERT_CH, "Сообщения и тревоги МСБ-55115",
                           NotificationManager.IMPORTANCE_HIGH
@@ -192,219 +224,47 @@ jobs:
                   }
               }
 
-              private JSONObject readIdentityFile() {
-                  try {
-                      File f = new File(getFilesDir(), "msb_identity.json");
-                      if (!f.exists()) return new JSONObject();
-                      FileInputStream fis = new FileInputStream(f);
-                      byte[] data = new byte[(int) f.length()];
-                      fis.read(data);
-                      fis.close();
-                      return new JSONObject(new String(data, StandardCharsets.UTF_8));
-                  } catch (Exception e) {
-                      return new JSONObject();
+              private void createChannels() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      ensureHighPriorityChannel(getSystemService(NotificationManager.class));
                   }
-              }
-
-              private void saveIdentityFile(String u, String c, String s) {
-                  try {
-                      JSONObject o = new JSONObject();
-                      o.put("unit", u != null ? u : "");
-                      o.put("callsign", c != null ? c : "");
-                      o.put("server_url", (s != null && !s.isEmpty()) ? s : DEFAULT_SRV);
-                      File f = new File(getFilesDir(), "msb_identity.json");
-                      FileOutputStream fos = new FileOutputStream(f);
-                      fos.write(o.toString().getBytes(StandardCharsets.UTF_8));
-                      fos.close();
-                  } catch (Exception ignored) {}
-              }
-
-              private void startBackgroundPolling() {
-                  handler = new Handler(Looper.getMainLooper());
-                  pollTask = new Runnable() {
-                      @Override
-                      public void run() {
-                          new Thread(() -> {
-                              checkChatUpdates();
-                              checkJournalAlerts();
-                          }).start();
-                          handler.postDelayed(this, 7000);
-                      }
-                  };
-                  handler.postDelayed(pollTask, 3000);
-              }
-          EOF
-
-      - name: Автономная служба (часть 2)
-        run: |
-          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
-          JAVA_DIR=$(dirname "$MAIN_ACT")
-
-          cat << 'EOF' >> "$JAVA_DIR/MsbKeepAliveService.java"
-              private String httpGet(String fullUrl) throws Exception {
-                  URL u = new URL(fullUrl);
-                  HttpURLConnection c = (HttpURLConnection) u.openConnection();
-                  c.setConnectTimeout(7000);
-                  c.setReadTimeout(7000);
-                  if (c.getResponseCode() != 200) return null;
-                  InputStreamReader isr = new InputStreamReader(c.getInputStream());
-                  BufferedReader br = new BufferedReader(isr);
-                  StringBuilder sb = new StringBuilder();
-                  String line;
-                  while ((line = br.readLine()) != null) sb.append(line);
-                  br.close();
-                  return sb.toString();
-              }
-
-              private void checkChatUpdates() {
-                  try {
-                      JSONObject idObj = readIdentityFile();
-                      String callsign = idObj.optString("callsign", "");
-                      String unit = idObj.optString("unit", "");
-                      String srv = idObj.optString("server_url", DEFAULT_SRV);
-                      if (srv.isEmpty()) srv = DEFAULT_SRV;
-                      String me = !callsign.isEmpty() ? callsign : unit;
-                      if (me.isEmpty() || srv.isEmpty()) return;
-
-                      SharedPreferences sp = getSharedPreferences("msb_bg_seen", MODE_PRIVATE);
-                      String q = URLEncoder.encode(me, "UTF-8");
-                      long ts = System.currentTimeMillis();
-                      String url = srv + "/api/friends/get?noav=1&user=" + q + "&t=" + ts;
-                      String raw = httpGet(url);
-                      if (raw == null) return;
-
-                      JSONArray arr = new JSONArray(raw);
-                      for (int i = 0; i < arr.length(); i++) {
-                          JSONObject item = arr.getJSONObject(i);
-                          int unread = item.optInt("unread", 0);
-                          String name = item.optString("name", "Контакт");
-                          String lastMsg = item.optString("lastMessage", "Новое сообщение");
-                          String time = item.optString("time", "");
-                          String key = "seen_chat_" + name + "_" + time + "_" + unread;
-                          if (unread > 0 && !sp.getBoolean(key, false)) {
-                              sp.edit().putBoolean(key, true).commit();
-                              String ttl = "💬 " + name + " (" + unread + ")";
-                              fireBgNotification(ttl, lastMsg, name.hashCode());
-                          }
-                      }
-                  } catch (Exception ignored) {}
-              }
-
-              private void checkJournalAlerts() {
-                  try {
-                      JSONObject idObj = readIdentityFile();
-                      String callsign = idObj.optString("callsign", "");
-                      String unit = idObj.optString("unit", "");
-                      String srv = idObj.optString("server_url", DEFAULT_SRV);
-                      if (srv.isEmpty()) srv = DEFAULT_SRV;
-                      if ((callsign.isEmpty() && unit.isEmpty()) || srv.isEmpty()) return;
-
-                      SharedPreferences sp = getSharedPreferences("msb_bg_seen", MODE_PRIVATE);
-                      String uEnc = URLEncoder.encode(unit, "UTF-8");
-                      String cEnc = URLEncoder.encode(callsign, "UTF-8");
-                      long ts = System.currentTimeMillis();
-                      String url = srv + "/api/bg-sync?unit=" + uEnc + "&callsign=" + cEnc + "&t=" + ts;
-                      String raw = httpGet(url);
-                      if (raw == null) return;
-
-                      JSONObject obj = new JSONObject(raw);
-                      JSONArray alerts = obj.optJSONArray("alerts");
-                      if (alerts == null) return;
-
-                      for (int i = 0; i < alerts.length(); i++) {
-                          JSONObject al = alerts.getJSONObject(i);
-                          long id = al.optLong("id", 0);
-                          String target = al.optString("target", "ВСЕМ");
-                          String sender = al.optString("sender", "АДМИН");
-                          String text = al.optString("text", "Новая вводная!");
-                          String key = "seen_alert_" + id;
-                          if (id > 0 && !sp.getBoolean(key, false)) {
-                              sp.edit().putBoolean(key, true).commit();
-                              int nId = (int) (id % 1000000);
-                              String ttl = "🛑 ТРЕВОГА [" + target + "]";
-                              fireBgNotification(ttl, sender + ": " + text, nId);
-                          }
-                      }
-                  } catch (Exception ignored) {}
-              }
-
-              private void fireBgNotification(String title, String body, int notifId) {
-                  Intent intent = new Intent(this, MainActivity.class);
-                  int aFlags = Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP;
-                  intent.addFlags(aFlags);
-                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
-                  PendingIntent pi = PendingIntent.getActivity(this, notifId, intent, piFlags);
-
-                  NotificationCompat.Builder b = new NotificationCompat.Builder(this, ALERT_CH)
-                      .setSmallIcon(android.R.drawable.stat_sys_warning)
-                      .setContentTitle(title)
-                      .setContentText(body)
-                      .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                      .setPriority(NotificationCompat.PRIORITY_MAX)
-                      .setCategory(NotificationCompat.CATEGORY_ALARM)
-                      .setDefaults(NotificationCompat.DEFAULT_ALL)
-                      .setAutoCancel(true)
-                      .setContentIntent(pi);
-
-                  NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                  if (nm != null) nm.notify(notifId, b.build());
               }
 
               @Override
               public int onStartCommand(Intent intent, int flags, int startId) {
-                  if (intent != null && intent.hasExtra("callsign")) {
-                      saveIdentityFile(
-                          intent.getStringExtra("unit"),
-                          intent.getStringExtra("callsign"),
-                          intent.getStringExtra("server_url")
-                      );
-                  }
                   Intent openIntent = new Intent(this, MainActivity.class);
-                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                  }
                   PendingIntent pi = PendingIntent.getActivity(this, 0, openIntent, piFlags);
-                  Notification notif = new NotificationCompat.Builder(this, "msb_bg_service")
+                  Notification n = new NotificationCompat.Builder(this, "msb_bg_service")
                       .setContentTitle("МСБ-55115 на связи")
-                      .setContentText("Автономный прием тревог и чатов активен")
-                      .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
+                      .setContentText("Защищенный канал оповещений активен")
+                      .setSmallIcon(android.R.drawable.ic_dialog_info)
                       .setContentIntent(pi)
                       .setOngoing(true)
                       .build();
-                  startForeground(55115, notif);
+                  startForeground(55115, n);
                   return START_STICKY;
-              }
-
-              private void scheduleSelfRevive() {
-                  try {
-                      Intent r = new Intent(getApplicationContext(), MsbRestartReceiver.class);
-                      r.setAction("ru.msb55115.RESTART_BG");
-                      int f = PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE;
-                      PendingIntent pi = PendingIntent.getBroadcast(getApplicationContext(), 99, r, f);
-                      AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
-                      if (am != null) {
-                          am.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5000, pi);
-                      }
-                  } catch (Exception ignored) {}
-              }
-
-              @Override
-              public void onTaskRemoved(Intent rootIntent) {
-                  scheduleSelfRevive();
-                  super.onTaskRemoved(rootIntent);
               }
 
               @Override
               public void onDestroy() {
-                  if (handler != null && pollTask != null) handler.removeCallbacks(pollTask);
-                  if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-                  scheduleSelfRevive();
+                  try {
+                      if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+                      if (wifiLock != null && wifiLock.isHeld()) wifiLock.release();
+                  } catch (Exception ignored) {}
                   super.onDestroy();
               }
 
               @Override
-              public IBinder onBind(Intent intent) { return null; }
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
           }
           EOF
-      - name: Обновление MainActivity (часть 1)
+      - name: Настройка MainActivity
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           PKG_LINE=$(grep "^package " "$MAIN_ACT")
@@ -413,219 +273,122 @@ jobs:
           $PKG_LINE
 
           import android.Manifest;
-          import android.app.NotificationChannel;
           import android.app.NotificationManager;
-          import android.app.PendingIntent;
           import android.content.Intent;
           import android.content.pm.PackageManager;
-          import android.media.AudioAttributes;
-          import android.media.RingtoneManager;
           import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
-          import android.os.Handler;
-          import android.os.Looper;
           import android.os.PowerManager;
           import android.provider.Settings;
-          import android.webkit.JavascriptInterface;
           import android.webkit.PermissionRequest;
+          import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
-          import androidx.annotation.NonNull;
           import androidx.core.app.ActivityCompat;
-          import androidx.core.app.NotificationCompat;
           import androidx.core.content.ContextCompat;
           import com.getcapacitor.BridgeActivity;
-          import org.json.JSONObject;
-          import java.io.File;
-          import java.io.FileOutputStream;
-          import java.nio.charset.StandardCharsets;
           import java.util.ArrayList;
           import java.util.List;
 
           public class MainActivity extends BridgeActivity {
-              private static final String ALERT_CH = "msb_alerts_high_v5";
-
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  createAlertChannel();
-                  startKeepAliveService();
 
-                  if (this.bridge != null && this.bridge.getWebView() != null) {
-                      WebView wv = this.bridge.getWebView();
-                      WebSettings ws = wv.getSettings();
-                      ws.setMediaPlaybackRequiresUserGesture(false);
-                      ws.setDomStorageEnabled(true);
-                      wv.addJavascriptInterface(new MsbJsBridge(), "MsbNative");
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationManager nm = getSystemService(NotificationManager.class);
+                      MsbKeepAliveService.ensureHighPriorityChannel(nm);
                   }
 
-                  new Handler(Looper.getMainLooper()).postDelayed(
-                      this::requestAllPermissions, 1200
-                  );
-              }
+                  requestRequiredPermissions();
 
-              @Override
-              public void onRequestPermissionsResult(
-                  int code, @NonNull String[] perms, @NonNull int[] res
-              ) {
-                  super.onRequestPermissionsResult(code, perms, res);
-                  if (code == 101) requestIgnoreBatteryOptimization();
-              }
-
-              @Override
-              public void onStart() {
-                  super.onStart();
-                  if (this.bridge != null && this.bridge.getWebView() != null) {
-                      this.bridge.getWebView().setWebChromeClient(new WebChromeClient() {
-                          @Override
-                          public void onPermissionRequest(final PermissionRequest req) {
-                              runOnUiThread(() -> req.grant(req.getResources()));
+                  try {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                          PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                          String pkg = getPackageName();
+                          if (pm != null && !pm.isIgnoringBatteryOptimizations(pkg)) {
+                              String act = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
+                              Intent bi = new Intent(act);
+                              bi.setData(Uri.parse("package:" + pkg));
+                              startActivity(bi);
                           }
-                      });
-                  }
-              }
+                      }
+                  } catch (Exception ignored) {}
 
-              public class MsbJsBridge {
-                  @JavascriptInterface
-                  public void notify(String title, String body, String tag) {
-                      showHighPriorityNotification(title, body, tag);
-                  }
-
-                  @JavascriptInterface
-                  public void setIdentity(String unit, String callsign, String srvUrl) {
-                      String u = unit != null ? unit : "";
-                      String c = callsign != null ? callsign : "";
-                      String s = srvUrl != null ? srvUrl : "";
-                      try {
-                          JSONObject o = new JSONObject();
-                          o.put("unit", u);
-                          o.put("callsign", c);
-                          o.put("server_url", s);
-                          File f = new File(getFilesDir(), "msb_identity.json");
-                          FileOutputStream fos = new FileOutputStream(f);
-                          fos.write(o.toString().getBytes(StandardCharsets.UTF_8));
-                          fos.close();
-                      } catch (Exception ignored) {}
-
-                      Intent svc = new Intent(MainActivity.this, MsbKeepAliveService.class);
-                      svc.putExtra("unit", u);
-                      svc.putExtra("callsign", c);
-                      svc.putExtra("server_url", s);
+                  try {
+                      Intent svc = new Intent(this, MsbKeepAliveService.class);
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                           startForegroundService(svc);
                       } else {
                           startService(svc);
                       }
-                  }
-              }
-          EOF
-      - name: Обновление MainActivity (часть 2) и сборка APK
-        run: |
-          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
-
-          cat << 'EOF' >> "$MAIN_ACT"
-              private void createAlertChannel() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      Uri snd = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
-                      AudioAttributes attrs = new AudioAttributes.Builder()
-                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).build();
-                      NotificationChannel ch = new NotificationChannel(
-                          ALERT_CH, "Сообщения и тревоги МСБ-55115",
-                          NotificationManager.IMPORTANCE_HIGH
-                      );
-                      ch.enableVibration(true);
-                      ch.setVibrationPattern(new long[]{0, 700, 200, 700, 200, 900});
-                      ch.setSound(snd, attrs);
-                      NotificationManager nm = getSystemService(NotificationManager.class);
-                      if (nm != null) nm.createNotificationChannel(ch);
-                  }
-              }
-
-              private void showHighPriorityNotification(String title, String body, String tag) {
-                  Intent intent = new Intent(this, MainActivity.class);
-                  int aFlags = Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP;
-                  intent.addFlags(aFlags);
-                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
-                  int reqCode = (int) System.currentTimeMillis();
-                  PendingIntent pi = PendingIntent.getActivity(this, reqCode, intent, piFlags);
-
-                  NotificationCompat.Builder b = new NotificationCompat.Builder(this, ALERT_CH)
-                      .setSmallIcon(android.R.drawable.stat_sys_warning)
-                      .setContentTitle(title)
-                      .setContentText(body)
-                      .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                      .setPriority(NotificationCompat.PRIORITY_MAX)
-                      .setCategory(NotificationCompat.CATEGORY_ALARM)
-                      .setDefaults(NotificationCompat.DEFAULT_ALL)
-                      .setAutoCancel(true)
-                      .setContentIntent(pi);
-
-                  NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                  if (nm != null) {
-                      int id = (tag != null) ? tag.hashCode() : reqCode;
-                      nm.notify(id, b.build());
-                  }
-              }
-
-              private void startKeepAliveService() {
-                  try {
-                      Intent s = new Intent(this, MsbKeepAliveService.class);
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                          startForegroundService(s);
-                      } else {
-                          startService(s);
-                      }
                   } catch (Exception ignored) {}
+
+                  if (getBridge() != null && getBridge().getWebView() != null) {
+                      WebView wv = getBridge().getWebView();
+                      WebSettings ws = wv.getSettings();
+                      ws.setJavaScriptEnabled(true);
+                      ws.setDomStorageEnabled(true);
+                      ws.setMediaPlaybackRequiresUserGesture(false);
+
+                      final WebChromeClient defClient = wv.getWebChromeClient();
+                      wv.setWebChromeClient(new WebChromeClient() {
+                          @Override
+                          public void onPermissionRequest(final PermissionRequest req) {
+                              runOnUiThread(() -> req.grant(req.getResources()));
+                          }
+
+                          @Override
+                          public boolean onShowFileChooser(
+                              WebView view,
+                              ValueCallback<Uri[]> cb,
+                              FileChooserParams params
+                          ) {
+                              if (defClient != null) {
+                                  return defClient.onShowFileChooser(view, cb, params);
+                              }
+                              return super.onShowFileChooser(view, cb, params);
+                          }
+                      });
+                  }
               }
 
-              private void requestAllPermissions() {
-                  List<String> perms = new ArrayList<>();
-                  perms.add(Manifest.permission.CAMERA);
-                  perms.add(Manifest.permission.RECORD_AUDIO);
-                  if (Build.VERSION.SDK_INT >= 33) {
-                      perms.add("android.permission.POST_NOTIFICATIONS");
-                  }
-                  List<String> toReq = new ArrayList<>();
-                  for (String p : perms) {
-                      int st = ContextCompat.checkSelfPermission(this, p);
-                      if (st != PackageManager.PERMISSION_GRANTED) {
-                          toReq.add(p);
+              private void requestRequiredPermissions() {
+                  List<String> need = new ArrayList<>();
+                  int granted = PackageManager.PERMISSION_GRANTED;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      String pNotif = Manifest.permission.POST_NOTIFICATIONS;
+                      if (ContextCompat.checkSelfPermission(this, pNotif) != granted) {
+                          need.add(pNotif);
                       }
                   }
-                  if (!toReq.isEmpty()) {
-                      ActivityCompat.requestPermissions(this, toReq.toArray(new String[]{}), 101);
-                  } else {
-                      requestIgnoreBatteryOptimization();
+                  String pAudio = Manifest.permission.RECORD_AUDIO;
+                  if (ContextCompat.checkSelfPermission(this, pAudio) != granted) {
+                      need.add(pAudio);
                   }
-              }
-
-              private void requestIgnoreBatteryOptimization() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                      PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                      if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
-                          try {
-                              String act = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
-                              Intent i = new Intent(act);
-                              i.setData(Uri.parse("package:" + getPackageName()));
-                              startActivity(i);
-                          } catch (Exception ignored) {}
-                      }
+                  String pCam = Manifest.permission.CAMERA;
+                  if (ContextCompat.checkSelfPermission(this, pCam) != granted) {
+                      need.add(pCam);
+                  }
+                  if (!need.isEmpty()) {
+                      ActivityCompat.requestPermissions(
+                          this, need.toArray(new String[0]), 101
+                      );
                   }
               }
           }
           EOF
-
-      - name: Финальная сборка APK
+      - name: Синхронизация Capacitor и компиляция APK
         run: |
           npx cap sync android
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug
 
-      - name: Выгрузка готового APK-файла
+      - name: Выгрузка готового APK в Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MSB-55115-Android-App
+          name: MSB55115-FCM-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
