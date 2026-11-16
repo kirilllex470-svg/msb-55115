@@ -1309,10 +1309,12 @@ function initApp() {
     }
     fetchMapsFromServer(false);
     connectWS(false);
+
     if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
-        window.MsbNative.setIdentity(currentUser || '', currentCallsign || '');
+        window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
     }
 }
+
 function hideAuthMessages() {
     const err = document.getElementById('login-error');
     if (err) err.style.display = 'none';
@@ -1433,7 +1435,12 @@ function completeLoginSuccess(unitName, callsign, color) {
     refreshMyPermissionsFromServer();
     subscribeToWebPush(false);
     checkAndShowAlerts(false);
+
+    if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
+        window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
+    }
 }
+
 
 function openAdminUsersModal() {
     if (currentUser !== ADMIN_NAME) return;
@@ -1652,7 +1659,6 @@ function showAlert(target, text, sender, notifId, isNew) {
     const txtStr = String(text || '');
     const isChatAlert = txtStr.indexOf('👥') === 0 || txtStr.indexOf('💬') === 0 || txtStr.indexOf('🎙️') === 0 || txtStr.indexOf('🎥') === 0 || txtStr.indexOf('📎') === 0 || txtStr.indexOf('🎬') === 0;
     if (msgModal && msgModal.style.display === 'flex' && isChatAlert) {
-        // Звук и системная шторка теперь сработают и внутри мессенджера, не перекрывая чат красным окном!
         if (isNew || document.visibilityState === 'hidden') {
             playSoundById('nice1', true);
             sendLocalNotification(target, text, sender || ADMIN_NAME, notifId);
@@ -1669,6 +1675,29 @@ function showAlert(target, text, sender, notifId, isNew) {
         }
         return;
     }
+
+    currentAlertId = notifId || null;
+    currentAlertTarget = target;
+    currentAlertText = text;
+    currentAlertSender = sender || ADMIN_NAME;
+    const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
+    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
+    document.getElementById('alert-text').innerText = text;
+    document.getElementById('alert-modal').style.display = 'flex';
+    if (isNew || document.visibilityState === 'hidden') {
+        sendLocalNotification(target, text, currentAlertSender, currentAlertId);
+    }
+    if (!titleInterval) {
+        let flag = false;
+        titleInterval = setInterval(function() {
+            document.title = flag ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!";
+            flag = !flag;
+        }, 600);
+    }
+    playBeep();
+    if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
+}
+
 
     currentAlertId = notifId || null;
     currentAlertTarget = target;
