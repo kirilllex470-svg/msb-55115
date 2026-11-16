@@ -272,10 +272,10 @@ function playToneNotes(notes, waveType) {
             const gain = audioCtx.createGain();
             osc.type = n.type || waveType || 'sine';
             osc.frequency.setValueAtTime(n.f, now + n.t);
-            if (n.fEnd) osc.frequency.exponentialRampToValueAtTime(n.fEnd, now + n.t + n.d);
-            gain.gain.setValueAtTime(0.001, now + n.t);
+                       if (n.fEnd) osc.frequency.exponentialRampToValueAtTime(n.fEnd, now + n.t + n.d);
             gain.gain.setValueAtTime(0.001, now + n.t);
             gain.gain.linearRampToValueAtTime(n.v || 0.35, now + n.t + 0.02);
+
             gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.d);
             osc.connect(gain);
 
@@ -1216,7 +1216,9 @@ function applyUserUI() {
         document.getElementById('admin-users-btn').style.display = 'none';
     }
     if (typeof syncMessengerAuth === 'function') syncMessengerAuth();
+    if (typeof checkPinOnAppEntry === 'function') checkPinOnAppEntry();
 }
+
 function initApp() {
     runSplash();
     hideAuthMessages();
@@ -1439,6 +1441,7 @@ function completeLoginSuccess(unitName, callsign, color) {
     if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
         window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
     }
+    if (typeof checkPinOnAppEntry === 'function') checkPinOnAppEntry();
 }
 
 
@@ -1946,6 +1949,39 @@ function sendGifToCurrentChat(gifSrc) {
         closeMsgPhotoViewer();
     });
 }
+var msgPanX = 0, msgPanY = 0, msgDragging = false, msgStartX = 0, msgStartY = 0, msgPanBound = false;
+
+function updateMsgViewerTransform() {
+    const img = document.getElementById('msg-viewer-img');
+    const lbl = document.getElementById('msg-zoom-label');
+    if (img) img.style.transform = 'translate(' + msgPanX + 'px, ' + msgPanY + 'px) scale(' + msgImageZoom + ')';
+    if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
+}
+
+function bindMsgViewerPan() {
+    if (msgPanBound) return;
+    msgPanBound = true;
+    const wrap = document.querySelector('.msg-viewer-img-wrap');
+    if (!wrap) return;
+    wrap.style.touchAction = 'none';
+    wrap.style.cursor = 'grab';
+    wrap.addEventListener('pointerdown', function(e) {
+        if (msgImageZoom <= 1) return;
+        msgDragging = true;
+        msgStartX = e.clientX - msgPanX;
+        msgStartY = e.clientY - msgPanY;
+        wrap.setPointerCapture(e.pointerId);
+    });
+    wrap.addEventListener('pointermove', function(e) {
+        if (!msgDragging) return;
+        msgPanX = e.clientX - msgStartX;
+        msgPanY = e.clientY - msgStartY;
+        updateMsgViewerTransform();
+    });
+    wrap.addEventListener('pointerup', function() { msgDragging = false; });
+    wrap.addEventListener('pointercancel', function() { msgDragging = false; });
+}
+
 function openMsgPhotoViewer(src, title, hideSettings) {
     const modal = document.getElementById('msg-photo-viewer-modal');
     const img = document.getElementById('msg-viewer-img');
@@ -1954,11 +1990,15 @@ function openMsgPhotoViewer(src, title, hideSettings) {
     if (settingsBox) {
         settingsBox.style.display = hideSettings ? 'none' : 'block';
     }
-    msgImageZoom = 1;
-    if (img) { img.src = src || makeAnimatedSvgGif('military', 0, '🪖 МСБ-55115'); img.style.transform = 'scale(1)'; }
+    msgImageZoom = 1; msgPanX = 0; msgPanY = 0;
+    if (img) {
+        img.src = src || makeAnimatedSvgGif('military', 0, '🪖 МСБ-55115');
+        img.style.userSelect = 'none';
+        img.ondragstart = function() { return false; };
+    }
     if (ttl) ttl.innerText = title || '🖼️ Просмотр и настройки темы';
-    const zLbl = document.getElementById('msg-zoom-label');
-    if (zLbl) zLbl.innerText = '100%';
+    updateMsgViewerTransform();
+    bindMsgViewerPan();
     setAppTheme(localStorage.getItem('msb_app_theme') || 'military');
     if (modal) modal.style.display = 'flex';
 }
@@ -1968,8 +2008,6 @@ function openAvatarInViewer(el, titleName) {
     const fallback = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 0, '🎖️ ' + (titleName || currentCallsign || 'МСБ'));
     openMsgPhotoViewer(imgEl ? imgEl.src : fallback, '👤 Профиль: ' + (titleName || currentCallsign || 'Боец МСБ-55115'), true);
 }
-
-
 
 function openThemeSettingsModal() {
     const preview = makeAnimatedSvgGif(localStorage.getItem('msb_app_theme') || 'military', 19, '🎨 Тема МСБ-55115');
@@ -1983,12 +2021,11 @@ function closeMsgPhotoViewer() {
 }
 
 function changeMsgImageZoom(delta) {
-    msgImageZoom = Math.min(4, Math.max(0.5, msgImageZoom + delta));
-    const img = document.getElementById('msg-viewer-img');
-    const lbl = document.getElementById('msg-zoom-label');
-    if (img) img.style.transform = 'scale(' + msgImageZoom + ')';
-    if (lbl) lbl.innerText = Math.round(msgImageZoom * 100) + '%';
+    msgImageZoom = Math.min(4.5, Math.max(1, msgImageZoom + delta));
+    if (msgImageZoom === 1) { msgPanX = 0; msgPanY = 0; }
+    updateMsgViewerTransform();
 }
+
 
 var msbInitialSyncDone = false;
 var msbIsWeakNetwork = false;
@@ -2058,11 +2095,125 @@ window.markMsbServerAlive = function(isFullInit) {
     }, 2500);
     window.addEventListener('online', function() { triggerImmediateEdgePull(); setTimeout(updateWeakNetworkUI, 400); });
     window.addEventListener('offline', updateWeakNetworkUI);
-    setInterval(function() {
+    
         if ((!ws || ws.readyState !== WebSocket.OPEN) && navigator.onLine !== false) triggerImmediateEdgePull();
         updateWeakNetworkUI();
     }, 4500);
 })();
+function ensurePinModals() {
+    if (!document.getElementById('msb-pin-setup-modal')) {
+        const m = document.createElement('div');
+        m.id = 'msb-pin-setup-modal';
+        m.className = 'custom-modal-overlay';
+        m.style.zIndex = '240000';
+        m.innerHTML =
+            '<div class="login-box" style="border:2px solid #facc15;">' +
+                '<h3 style="margin:0 0 12px 0; color:#facc15;">🔐 Установка 6-значного ПИН-кода</h3>' +
+                '<p style="font-size:12px; color:#94a3b8; margin:0 0 12px 0;">Введите ровно 6 цифр и повторите для подтверждения:</p>' +
+                '<input type="password" id="msb-pin-in1" inputmode="numeric" maxlength="6" placeholder="Новый ПИН-код (6 цифр)">' +
+                '<input type="password" id="msb-pin-in2" inputmode="numeric" maxlength="6" placeholder="Повторите ПИН-код (6 цифр)">' +
+                '<div id="msb-pin-setup-msg" style="font-size:13px; margin-bottom:10px; display:none;"></div>' +
+                '<button type="button" onclick="submitNewUserPin()">✅ ПОДТВЕРДИТЬ И СОХРАНИТЬ</button>' +
+                '<button type="button" class="viewer-btn" onclick="document.getElementById(\'msb-pin-setup-modal\').style.display=\'none\'">Отмена</button>' +
+            '</div>';
+        document.body.appendChild(m);
+    }
+    if (!document.getElementById('msb-pin-lock-modal')) {
+        const lock = document.createElement('div');
+        lock.id = 'msb-pin-lock-modal';
+        lock.className = 'custom-modal-overlay';
+        lock.style.cssText = 'z-index:260000; background:rgba(9,13,22,0.98);';
+        lock.innerHTML =
+            '<div class="login-box" style="border:2px solid #38bdf8;">' +
+                '<h3 style="margin:0 0 10px 0; color:#38bdf8;">🔒 Введите 6-значный ПИН-код</h3>' +
+                '<p id="msb-pin-lock-user" style="font-size:13px; color:#facc15; margin:0 0 14px 0;"></p>' +
+                '<input type="password" id="msb-pin-unlock-input" inputmode="numeric" maxlength="6" placeholder="••••••" style="text-align:center; font-size:22px; letter-spacing:6px;">' +
+                '<div id="msb-pin-unlock-err" style="color:#ef4444; font-size:13px; margin-bottom:10px; display:none;">❌ Неверный ПИН-код!</div>' +
+                '<button type="button" onclick="verifyUnlockPin()">🔓 ВОЙТИ</button>' +
+                '<button type="button" class="viewer-btn" onclick="logoutUser()">Выйти из аккаунта</button>' +
+            '</div>';
+        document.body.appendChild(lock);
+    }
+}
+
+function openPinSetupModal() {
+    ensurePinModals();
+    document.getElementById('msb-pin-in1').value = '';
+    document.getElementById('msb-pin-in2').value = '';
+    document.getElementById('msb-pin-setup-msg').style.display = 'none';
+    document.getElementById('msb-pin-setup-modal').style.display = 'flex';
+}
+
+function submitNewUserPin() {
+    const p1 = document.getElementById('msb-pin-in1').value.trim();
+    const p2 = document.getElementById('msb-pin-in2').value.trim();
+    const msg = document.getElementById('msb-pin-setup-msg');
+    const who = currentCallsign || currentUser;
+    if (!/^\d{6}$/.test(p1)) {
+        msg.style.color = '#ef4444'; msg.innerText = '❌ Введите ровно 6 цифр!'; msg.style.display = 'block'; return;
+    }
+    if (p1 !== p2) {
+        msg.style.color = '#ef4444'; msg.innerText = '❌ ПИН-коды не совпадают!'; msg.style.display = 'block'; return;
+    }
+    fetch('/api/user/pin/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: who, pin: p1 })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d && d.ok) {
+            localStorage.setItem('msb_user_has_pin_' + who.toLowerCase(), '1');
+            sessionStorage.setItem('msb_pin_verified_' + who.toLowerCase(), '1');
+            msg.style.color = '#4ade80'; msg.innerText = '✅ 6-значный ПИН-код установлен!'; msg.style.display = 'block';
+            setTimeout(function() { document.getElementById('msb-pin-setup-modal').style.display = 'none'; }, 900);
+        }
+    });
+}
+
+function checkPinOnAppEntry() {
+    const who = currentCallsign || currentUser;
+    if (!who) return;
+    const key = who.toLowerCase();
+    if (sessionStorage.getItem('msb_pin_verified_' + key) === '1') return;
+    ensurePinModals();
+    if (localStorage.getItem('msb_user_has_pin_' + key) === '1') {
+        document.getElementById('msb-pin-lock-user').innerText = 'Позывной: ' + who;
+        document.getElementById('msb-pin-lock-modal').style.display = 'flex';
+    }
+    fetch('/api/user/me?noav=1&user=' + encodeURIComponent(who) + '&t=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d && d.hasPin) {
+                localStorage.setItem('msb_user_has_pin_' + key, '1');
+                if (sessionStorage.getItem('msb_pin_verified_' + key) !== '1') {
+                    document.getElementById('msb-pin-lock-user').innerText = 'Позывной: ' + who;
+                    document.getElementById('msb-pin-lock-modal').style.display = 'flex';
+                }
+            } else {
+                localStorage.removeItem('msb_user_has_pin_' + key);
+                document.getElementById('msb-pin-lock-modal').style.display = 'none';
+            }
+        }).catch(function() {});
+}
+
+function verifyUnlockPin() {
+    const who = currentCallsign || currentUser;
+    const pin = document.getElementById('msb-pin-unlock-input').value.trim();
+    const err = document.getElementById('msb-pin-unlock-err');
+    fetch('/api/user/pin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: who, pin: pin })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d && d.ok) {
+            sessionStorage.setItem('msb_pin_verified_' + who.toLowerCase(), '1');
+            document.getElementById('msb-pin-lock-modal').style.display = 'none';
+            err.style.display = 'none';
+        } else {
+            err.style.display = 'block';
+        }
+    });
+}
+
 setInterval(function() {
     if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
         var u = currentUser || localStorage.getItem('journal_user') || '';
@@ -2074,6 +2225,7 @@ setInterval(function() {
 }, 5000);
 
 initApp();
+
 async function initNativeFcmPush() {
     try {
         const cap = window.Capacitor;

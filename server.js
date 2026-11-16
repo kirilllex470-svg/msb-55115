@@ -463,10 +463,24 @@ const server = http.createServer(function(req, res) {
         return res.end(TACTICAL_ICON_192);
     }
 
-    if (urlPath === '/icon-512.png') {
+     if (urlPath === '/icon-512.png') {
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
         return res.end(TACTICAL_ICON_512);
     }
+
+    if (urlPath.startsWith('/api/avatar-img/')) {
+        const rawName = decodeURIComponent(urlPath.replace('/api/avatar-img/', '').replace(/\.jpg$/i, '')).trim().toLowerCase();
+        const uObj = usersDB[rawName];
+        if (uObj && uObj.avatar && uObj.avatar.startsWith('data:image/')) {
+            const parts = uObj.avatar.split(',');
+            const imgBuf = Buffer.from(parts.at(1), 'base64');
+            res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=300' });
+            return res.end(imgBuf);
+        }
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' });
+        return res.end(TACTICAL_ICON_192);
+    }
+
 
     if (urlPath === '/style.css' || urlPath === '/journal.js' || urlPath === '/messenger.js') {
         const cType = urlPath.endsWith('.css') ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8';
@@ -521,18 +535,23 @@ const server = http.createServer(function(req, res) {
     }
 
 
-    if (req.method === 'POST' && urlPath === '/api/fcm/register') {
+     if (req.method === 'POST' && urlPath === '/api/fcm/register') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.token) {
+                const proto = req.headers['x-forwarded-proto'] || 'https';
+                const host = req.headers.host || '';
+                const baseOrigin = host ? (proto + '://' + host) : '';
                 const idx = fcmTokens.findIndex(function(t) { return t.token === data.token; });
                 if (idx !== -1) {
                     fcmTokens[idx].user = data.user || 'ГОСТЬ';
                     fcmTokens[idx].callsign = data.callsign || '';
+                    if (baseOrigin) fcmTokens[idx].origin = baseOrigin;
                 } else {
                     fcmTokens.push({
                         user: data.user || 'ГОСТЬ',
                         callsign: data.callsign || '',
-                        token: data.token
+                        token: data.token,
+                        origin: baseOrigin
                     });
                 }
                 writeJSON(FCM_FILE, fcmTokens);
@@ -540,6 +559,7 @@ const server = http.createServer(function(req, res) {
             return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
+
 
     if (req.method === 'POST' && urlPath === '/api/push/subscribe') {
         return readBodyJSON(req, function(err, data) {
@@ -630,6 +650,7 @@ const server = http.createServer(function(req, res) {
         return sendJsonCompressed(req, res, 200, {
             avatar: skipAv ? undefined : (u.avatar || ''),
             avatarHash: avHash,
+            hasPin: Boolean(u.pinCode),
             unit: u.unit || '',
             permissions: u.permissions || { row: false, stream: false, maps: false, archive: false, table: false }
         });
@@ -656,6 +677,34 @@ const server = http.createServer(function(req, res) {
             return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
+
+    if (req.method === 'POST' && urlPath === '/api/user/pin/set') {
+        return readBodyJSON(req, function(err, data) {
+            if (err || !data || !data.user || !data.pin || !/^\d{6}$/.test(String(data.pin))) {
+                return sendJsonCompressed(req, res, 400, { ok: false, message: 'ПИН-код должен состоять ровно из 6 цифр' });
+            }
+            const k = String(data.user).trim().toLowerCase();
+            if (!usersDB[k]) {
+                return sendJsonCompressed(req, res, 404, { ok: false, message: 'Пользователь не найден' });
+            }
+            usersDB[k].pinCode = String(data.pin);
+            writeJSON(USERS_FILE, usersDB, true);
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/user/pin/verify') {
+        return readBodyJSON(req, function(err, data) {
+            if (err || !data || !data.user || !data.pin) {
+                return sendJsonCompressed(req, res, 400, { ok: false });
+            }
+            const k = String(data.user).trim().toLowerCase();
+            const u = usersDB[k];
+            const valid = Boolean(u && u.pinCode && String(u.pinCode) === String(data.pin).trim());
+            return sendJsonCompressed(req, res, 200, { ok: valid });
+        });
+    }
+
 
     if (req.method === 'GET' && urlPath === '/api/admin/users') {
         const pending = new Array();
@@ -1330,7 +1379,6 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             });
         }
     }
- console.log('🔔 Попытка отправки FCM. Кому:', target, '| От кого:', sender, '| Токенов в базе:', fcmTokens.length);
     if (fcmAdmin && fcmTokens.length > 0) {
         fcmTokens.forEach(function(item) {
             if (!item || !item.token) return;
@@ -1340,28 +1388,35 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             const matchCallsign = cLow && cLow === tLow;
             const matchUnit = isUnitTarget && uLow === tLow;
             if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
+                const cleanSenderKey = String(sender).replace(/^👥\s*/, '').trim().toLowerCase();
+                const avatarUrl = item.origin
+                    ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKey) + '.jpg?v=' + Date.now())
+                    : undefined;
+
                 fcmAdmin.messaging().send({
                     token: item.token,
                     data: {
                         title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
                         body: sender + ': ' + text,
                         target: String(target),
-                        sender: String(sender)
+                        sender: String(sender),
+                        image: avatarUrl || ''
                     },
                     notification: {
                         title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
-                        body: sender + ': ' + text
+                        body: sender + ': ' + text,
+                        imageUrl: avatarUrl
                     },
                     android: {
                         priority: 'high',
                         notification: {
-                            sound: 'default'
+                            sound: 'default',
+                            imageUrl: avatarUrl
                         }
                     }
-                }).then(function(response) {
-                    console.log('📨 FCM пуш принят Google для', item.callsign, ':', response);
                 }).catch(function(err) {
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
+
 
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
                         const badIdx = fcmTokens.indexOf(item);

@@ -728,9 +728,30 @@ body.theme-cosmic .msb-radial-tools-row .media-btn {
     .friend-time-label {
         font-size: 10px;
     }
-    .friend-call-mini {
+        .friend-call-mini {
         padding: 4px 5px;
         font-size: 11px;
         margin-right: 2px;
     }
+}
+
+/* === ОПТИМИЗАЦИЯ ПЛАВНОСТИ КЛАВИАТУРЫ И ПРОКРУТКИ В APK === */
+#alert-modal, .alert-content, #msb-weak-boot-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+.send-btn::after, .stream-main-btn::after, .maps-main-btn::after,
+.archive-main-btn::after, .lb-btn::after, .auth-btn::after,
+.install-btn::after, .login-box button::after, #send-btn::after,
+.msb-radial-tools-row .media-btn::after {
+    animation: none !important;
+    display: none !important;
+}
+.send-btn, .stream-main-btn, .maps-main-btn, .archive-main-btn,
+.lb-btn, .auth-btn, .install-btn, #send-btn, .gif-card-item img {
+    animation: none !important;
+}
+#messages, .friends-list {
+    will-change: scroll-position;
+    -webkit-overflow-scrolling: touch;
 }

@@ -201,8 +201,8 @@ function isSameDirectOrRoom(roomA, roomB) {
     return Boolean(baseA && baseB && baseA === baseB);
 }
 
-var activeUserTypers = {};
 var typingCleanupTimers = {};
+
 
 function getActiveTypersForRoom(roomId, partnerName) {
     var result = new Array();
@@ -358,6 +358,7 @@ function notifyServerTyping(isTyping) {
         try {
             ws.send(JSON.stringify(payload));
         } catch (e) {}
+        return;
     }
 
     fetch('/api/typing', {
@@ -488,14 +489,18 @@ function ensureCleanMessengerTopbar() {
             '<span class="back-arrow-icon">‹</span>' +
             '<span>Назад</span>' +
         '</button>' +
-        '<div class="msb-profile-pill">' +
+            '<div class="msb-profile-pill">' +
             '<div id="my-avatar" class="avatar msb-top-avatar" onclick="openAvatarInViewer(this, chatUser)">МС</div>' +
             '<div class="msb-profile-meta">' +
                 '<span id="msg-my-name" class="msb-profile-callsign">Боец</span>' +
-                '<label for="msb-top-avatar-file" class="msb-avatar-edit-link">📷 Сменить аватарку</label>' +
+                '<div style="display:flex; gap:10px; align-items:center;">' +
+                    '<label for="msb-top-avatar-file" class="msb-avatar-edit-link">📷 Аватарка</label>' +
+                    '<span class="msb-avatar-edit-link" style="color:#facc15;" onclick="openPinSetupModal()">🔐 ПИН-код</span>' +
+                '</div>' +
                 '<input type="file" id="msb-top-avatar-file" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">' +
             '</div>' +
         '</div>';
+
 
     modal.insertBefore(topbar, modal.firstChild);
 }
@@ -812,8 +817,18 @@ document.addEventListener('DOMContentLoaded', function() {
     ensureCleanMessengerTopbar();
     var tInput = document.getElementById('text-input');
     var fInput = document.getElementById('new-friend-name');
+    [tInput, fInput, document.getElementById('login-callsign'), document.getElementById('reg-callsign'), document.getElementById('mini-notif-input')].forEach(function(inp) {
+        if (!inp) return;
+        inp.setAttribute('lang', 'ru');
+        inp.setAttribute('inputmode', 'text');
+        inp.setAttribute('autocapitalize', 'sentences');
+        inp.setAttribute('autocomplete', 'on');
+        inp.setAttribute('autocorrect', 'on');
+        inp.setAttribute('spellcheck', 'true');
+    });
     if (tInput) {
         tInput.addEventListener('keypress', function(e) {
+
             if (e.key === 'Enter') sendMessage();
         });
         tInput.addEventListener('input', function() {
@@ -1814,4 +1829,3 @@ window.toggleMsbRadialToolbar = toggleMsbRadialToolbar;
 window.openMsbDevTab = openMsbDevTab;
 window.closeMsbDevTab = closeMsbDevTab;
 window.toggleMsbPlusDropdown = toggleMsbPlusDropdown;
-
