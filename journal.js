@@ -1699,28 +1699,6 @@ function showAlert(target, text, sender, notifId, isNew) {
 }
 
 
-    currentAlertId = notifId || null;
-    currentAlertTarget = target;
-    currentAlertText = text;
-    currentAlertSender = sender || ADMIN_NAME;
-    const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
-    document.getElementById('alert-text').innerText = text;
-    document.getElementById('alert-modal').style.display = 'flex';
-    if (isNew || document.visibilityState === 'hidden') {
-        sendLocalNotification(target, text, currentAlertSender, currentAlertId);
-    }
-    if (!titleInterval) {
-        let flag = false;
-        titleInterval = setInterval(function() {
-            document.title = flag ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!";
-            flag = !flag;
-        }, 600);
-    }
-    playBeep();
-    if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
-}
-
 function stopAlertVisuals() {
     document.getElementById('alert-modal').style.display = 'none';
     currentAlertId = null;
