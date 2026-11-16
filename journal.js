@@ -1551,6 +1551,15 @@ function sendLocalNotification(target, text, sender, notifId) {
     const fromWho = sender || 'АДМИН';
     const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
     const body = fromWho + ': ' + text;
+
+    // 1. Нативное уведомление для Android APK (работает всегда и в фоне)
+    if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
+        try {
+            window.MsbNative.notify(title, body, String(notifId || Date.now()));
+        } catch (e) {}
+    }
+
+    // 2. Старый способ для обычных браузеров на ПК
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.ready.then(function(reg) {
             reg.showNotification(title, {
@@ -1566,6 +1575,7 @@ function sendLocalNotification(target, text, sender, notifId) {
         });
     }
 }
+
 
 function isUnreadForMe(a) {
     const myCall = String(currentCallsign || '').trim().toLowerCase();
