@@ -18,7 +18,6 @@ jobs:
         with:
           node-version: '22'
 
-      
       - name: Установка Java 21
         uses: actions/setup-java@v4
         with:
@@ -35,16 +34,18 @@ jobs:
           npm install --no-save @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
           npx cap add android
 
-      - name: Настройка Манифеста и отдельного процесса
+      - name: Настройка Манифеста и защиты сети во сне
         run: |
           python3 -c '
           p = "android/app/src/main/AndroidManifest.xml"
           s = open(p).read()
           names = [
-              "INTERNET", "CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS",
-              "POST_NOTIFICATIONS", "VIBRATE", "WAKE_LOCK",
-              "RECEIVE_BOOT_COMPLETED", "SCHEDULE_EXACT_ALARM",
-              "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_DATA_SYNC",
+              "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_WIFI_STATE",
+              "CHANGE_WIFI_STATE", "CAMERA", "RECORD_AUDIO",
+              "MODIFY_AUDIO_SETTINGS", "POST_NOTIFICATIONS", "VIBRATE",
+              "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED", "SCHEDULE_EXACT_ALARM",
+              "USE_EXACT_ALARM", "FOREGROUND_SERVICE",
+              "FOREGROUND_SERVICE_DATA_SYNC",
               "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
           ]
           perms = "\n    ".join(
@@ -54,8 +55,8 @@ jobs:
           s = s.replace(old_p, perms, 1)
           svc = "\n".join([
               "<service android:name=\".MsbKeepAliveService\"",
-              "    android:process=\":msb_bg\" android:enabled=\"true\"",
-              "    android:exported=\"false\" android:stopWithTask=\"false\"",
+              "    android:enabled=\"true\" android:exported=\"false\"",
+              "    android:stopWithTask=\"false\"",
               "    android:foregroundServiceType=\"dataSync\" />",
               "<receiver android:name=\".MsbRestartReceiver\"",
               "    android:enabled=\"true\" android:exported=\"true\">",
@@ -71,7 +72,7 @@ jobs:
           open(p, "w").write(s)
           '
 
-      - name: Создание ресивера автовоскрешения
+      - name: Создание ресивера будильника сна
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           JAVA_DIR=$(dirname "$MAIN_ACT")
@@ -120,6 +121,7 @@ jobs:
           import android.media.AudioAttributes;
           import android.media.RingtoneManager;
           import android.net.Uri;
+          import android.net.wifi.WifiManager;
           import android.os.Build;
           import android.os.Handler;
           import android.os.IBinder;
@@ -142,6 +144,7 @@ jobs:
               private static final String DEFAULT_SRV = "$SRV_URL";
               private static final String ALERT_CH = "msb_alerts_high_v5";
               private PowerManager.WakeLock wakeLock;
+              private WifiManager.WifiLock wifiLock;
               private Handler handler;
               private Runnable pollTask;
 
@@ -152,7 +155,14 @@ jobs:
                   if (pm != null) {
                       int lvl = PowerManager.PARTIAL_WAKE_LOCK;
                       wakeLock = pm.newWakeLock(lvl, "MSB55115::BgLock");
+                      wakeLock.setReferenceCounted(false);
                       wakeLock.acquire();
+                  }
+                  WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+                  if (wm != null) {
+                      wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "MSB55115::WifiLock");
+                      wifiLock.setReferenceCounted(false);
+                      wifiLock.acquire();
                   }
                   createChannels();
                   startBackgroundPolling();
@@ -218,12 +228,13 @@ jobs:
                               checkChatUpdates();
                               checkJournalAlerts();
                           }).start();
-                          handler.postDelayed(this, 8000);
+                          handler.postDelayed(this, 7000);
                       }
                   };
-                  handler.postDelayed(pollTask, 5000);
+                  handler.postDelayed(pollTask, 3000);
               }
           EOF
+
       - name: Автономная служба (часть 2)
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
