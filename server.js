@@ -311,7 +311,8 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v2';",
+    "const SHELL_CACHE = 'msb55115-shell-v4';",
+
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -378,16 +379,16 @@ const SW_CODE = [
     "        return;",
     "    }"
 ].join('\n') + '\n' + [
-    "    event.respondWith(caches.match(event.request, { ignoreSearch: true }).then(function(cachedRes) {",
-    "        const netFetch = fetch(event.request).then(function(networkRes) {",
-    "            if (networkRes && networkRes.status === 200) {",
-    "                const resClone = networkRes.clone();",
-    "                caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
-    "            }",
-    "            return networkRes;",
-    "        }).catch(function() { return cachedRes; });",
-    "        return cachedRes || netFetch;",
+    "    event.respondWith(fetch(event.request).then(function(networkRes) {",
+    "        if (networkRes && networkRes.status === 200) {",
+    "            const resClone = networkRes.clone();",
+    "            caches.open(SHELL_CACHE).then(function(cache) { cache.put(event.request, resClone); });",
+    "        }",
+    "        return networkRes;",
+    "    }).catch(function() {",
+    "        return caches.match(event.request, { ignoreSearch: true });",
     "    }));",
+
     "});",
     "",
     "self.addEventListener('push', function(event) {",
