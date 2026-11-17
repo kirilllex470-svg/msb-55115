@@ -588,7 +588,7 @@ function ensureCleanMessengerTopbar() {
     ].join('');
 
     modal.insertBefore(topbar, modal.firstChild);
-
+}
 
 
 function openUserProfileModal() {
