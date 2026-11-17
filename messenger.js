@@ -578,6 +578,9 @@ function ensureCleanMessengerTopbar() {
     topbar.id = 'msb-unified-topbar';
     topbar.className = 'msb-clean-topbar';
     topbar.innerHTML = [
+        '<button type="button" id="msb-top-back-btn" class="msb-unified-back-btn" onclick="handleUnifiedMessengerBack()">',
+        '<span class="back-arrow-icon">‹</span><span>Назад</span>',
+        '</button>',
         '<div class="msb-profile-pill" onclick="openUserProfileModal()" style="cursor:pointer;">',
         '<div id="my-avatar" class="avatar msb-top-avatar">МС</div>',
         '<div class="msb-profile-meta">',
@@ -589,6 +592,7 @@ function ensureCleanMessengerTopbar() {
 
     modal.insertBefore(topbar, modal.firstChild);
 }
+
 
 
 function openUserProfileModal() {
@@ -701,12 +705,14 @@ window.closeUserProfileModal = closeUserProfileModal;
 
 function handleUnifiedMessengerBack() {
     var sidebar = document.getElementById('app-sidebar');
-    if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('hidden')) {
+    if (sidebar) {
         sidebar.classList.remove('hidden');
-        return;
     }
-    closeMessengerWindow();
+    if (typeof resetChatArea === 'function' && window.innerWidth > 768) {
+        resetChatArea();
+    }
 }
+
 window.handleUnifiedMessengerBack = handleUnifiedMessengerBack;
 
 function enqueueChatPayload(payload) {

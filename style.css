@@ -1126,10 +1126,11 @@ body.theme-cosmic #register-modal {
     color: var(--t-main) !important;
 }
 
-/* === СКРЫТИЕ КНОПКИ НАЗАД И ОКНО «РАБОТА» В НОВОМ ОКНЕ === */
+/* === ОТОБРАЖЕНИЕ КНОПКИ НАЗАД В ВЕРХНЕЙ ПАНЕЛИ === */
 .msb-unified-back-btn {
-    display: none !important;
+    display: inline-flex !important;
 }
+
 
 .msb-work-fullscreen-modal {
     display: none;
