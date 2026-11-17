@@ -2187,7 +2187,9 @@ window.markMsbServerAlive = function(isFullInit) {
 var enteredLockPin = '';
 var pinStatusPollTimer = null;
 
+function ensurePinModals() {
     if (!document.getElementById('msb-pin-setup-modal')) {
+
         const m = document.createElement('div');
         m.id = 'msb-pin-setup-modal';
         m.className = 'custom-modal-overlay';
