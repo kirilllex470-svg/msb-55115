@@ -2083,59 +2083,227 @@ window.flushRetryQueue = flushRetryQueue;
 var msbExtraClockTimer = null;
 var msbToolbarExpanded = false;
 
-function buildAnimatedRadialToolsRow() {
+var TG_EMOJI_CATEGORIES = [
+    {
+        id: 'faces',
+        icon: '😀',
+        title: 'Эмоции',
+        items: [
+            '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
+            '😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐',
+            '🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒',
+            '🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕',
+            '😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱',
+            '😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','🤡'
+        ]
+    },
+    {
+        id: 'gestures',
+        icon: '👍',
+        title: 'Жесты',
+        items: [
+            '👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆',
+            '🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️',
+            '💪','🦾','🦵','🦶','👂','🦻','👃','🧠','🫀','🫁','🦷','🦴','👀','👁️','👅','👄'
+        ]
+    },
+    {
+        id: 'tactical',
+        icon: '🪖',
+        title: 'Служба и техника',
+        items: [
+            '🪖','🎖️','🏅','🥇','🏆','🚀','🛸','🛰️','🚁','🛩️','✈️','🚢','🚤','⚓','🚜','🚛',
+            '🚚','🚗','🚓','🚑','🚒','📡','📻','🔋','🔌','🔦','🧭','🗺️','📍','📌','💣','🧨',
+            '🔪','🗡️','⚔️','🛡️','🏹','🎯','🔭','🔬','🩺','🩹','💊','💉','🩸','🧰','🔧','🔨'
+        ]
+    },
+    {
+        id: 'symbols',
+        icon: '🔥',
+        title: 'Знаки и природа',
+        items: [
+            '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖',
+            '🔥','⚡','💥','✨','💫','⭐','🌟','☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️',
+            '❄️','☃️','🌊','💧','🌲','🌳','🌴','🌵','🌿','☘️','🍀','🍁','🍂','🍃','🌍','🌙',
+            '✅','❌','⚠️','🚫','⛔','🆘','🆗','🆙','🆕','🔴','🟠','🟡','🟢','🔵','🟣','⚫'
+        ]
+    }
+];
+
+function buildTelegramComposerLayout() {
+    var inputContainer = document.querySelector('#messenger-modal .input-container');
     var toolsRow = document.querySelector('#messenger-modal .tools-row');
-    if (!toolsRow || toolsRow.getAttribute('data-msb-radial') === '1') return;
-    toolsRow.setAttribute('data-msb-radial', '1');
-    toolsRow.classList.add('msb-radial-tools-row');
+    var inputRow = document.querySelector('#messenger-modal .input-row');
+    var textInput = document.getElementById('text-input');
+    var sendBtn = document.getElementById('send-btn');
 
-    var fileInput = toolsRow.querySelector('input[type="file"]');
+    if (!inputContainer || !toolsRow || !inputRow || !textInput) return;
 
-    toolsRow.innerHTML =
-        '<div class="msb-wing msb-wing-left" id="msb-wing-left">' +
+    if (toolsRow.getAttribute('data-tg-tools') !== '1') {
+        toolsRow.setAttribute('data-tg-tools', '1');
+        toolsRow.className = 'tools-row tg-top-tools-tray';
+
+        var fileInput = toolsRow.querySelector('input[type="file"]');
+        toolsRow.innerHTML =
             '<button type="button" id="video-btn" class="media-btn" onclick="toggleVideoRecord()" title="Видео-кружок">🎥</button>' +
             '<button type="button" class="media-btn" onclick="document.getElementById(\'msb-radial-file-input\').click()" title="Прикрепить файл">📎</button>' +
             '<button type="button" id="voice-btn" class="media-btn" onclick="toggleVoiceRecord()" title="Голосовое сообщение">🎙️</button>' +
-        '</div>' +
-        '<button type="button" id="msb-center-toggle-btn" class="media-btn gif-btn-wide msb-center-plus-btn" onclick="toggleMsbRadialToolbar()" title="Инструменты">➕</button>' +
-        '<div class="msb-wing msb-wing-right" id="msb-wing-right">' +
             '<button type="button" class="media-btn" onclick="triggerCallInDev(\'Аудиозвонок\', currentPartner || \'\')" title="Аудиозвонок">📞</button>' +
             '<button type="button" class="media-btn" onclick="openThemeSettingsModal()" title="Темы и Гифки">🎨</button>' +
             '<button type="button" id="msb-plus-menu-btn" class="media-btn" onclick="event.stopPropagation(); toggleMsbPlusDropdown()" title="Разделы МСБ-55115">➕</button>' +
-        '</div>';
+            '<button type="button" class="media-btn tg-close-tools-btn" onclick="toggleMsbRadialToolbar(false)" title="Свернуть панель">✖</button>';
 
-    if (fileInput) {
-        fileInput.id = 'msb-radial-file-input';
-        toolsRow.appendChild(fileInput);
-    } else {
-        var newFile = document.createElement('input');
-        newFile.type = 'file';
-        newFile.id = 'msb-radial-file-input';
-        newFile.style.display = 'none';
-        newFile.onchange = function() { uploadAnyFile(this); };
-        toolsRow.appendChild(newFile);
+        if (fileInput) {
+            fileInput.id = 'msb-radial-file-input';
+            toolsRow.appendChild(fileInput);
+        } else {
+            var newFile = document.createElement('input');
+            newFile.type = 'file';
+            newFile.id = 'msb-radial-file-input';
+            newFile.style.display = 'none';
+            newFile.onchange = function() { uploadAnyFile(this); };
+            toolsRow.appendChild(newFile);
+        }
+    }
+
+    if (!document.getElementById('tg-emoji-drawer')) {
+        var emojiDrawer = document.createElement('div');
+        emojiDrawer.id = 'tg-emoji-drawer';
+        emojiDrawer.className = 'tg-emoji-drawer';
+
+        var tabsHtml = TG_EMOJI_CATEGORIES.map(function(cat, idx) {
+            return '<button type="button" class="tg-emoji-tab' + (idx === 0 ? ' active' : '') + '" ' +
+                   'data-cat="' + cat.id + '" onclick="scrollToEmojiCat(\'' + cat.id + '\')" title="' + cat.title + '">' +
+                   cat.icon + '</button>';
+        }).join('');
+
+        var bodyHtml = TG_EMOJI_CATEGORIES.map(function(cat) {
+            var btns = cat.items.map(function(em) {
+                return '<button type="button" class="tg-emoji-item" onclick="insertTgEmoji(\'' + em + '\')">' + em + '</button>';
+            }).join('');
+            return '<div class="tg-emoji-cat-title" id="tg-ecat-' + cat.id + '">' + cat.title + '</div>' +
+                   '<div class="tg-emoji-grid">' + btns + '</div>';
+        }).join('');
+
+        emojiDrawer.innerHTML =
+            '<div class="tg-emoji-tabs-bar">' +
+                tabsHtml +
+                '<button type="button" class="tg-emoji-backspace" onclick="backspaceTgEmoji()" title="Удалить символ">⌫</button>' +
+                '<button type="button" class="tg-emoji-close" onclick="toggleTgEmojiDrawer(false)" title="Закрыть">✖</button>' +
+            '</div>' +
+            '<div class="tg-emoji-scroll-area" id="tg-emoji-scroll-area">' + bodyHtml + '</div>';
+
+        inputContainer.insertBefore(emojiDrawer, toolsRow);
+    }
+
+    if (!document.getElementById('tg-capsule-wrap')) {
+        inputRow.classList.add('tg-full-input-row');
+
+        var capsule = document.createElement('div');
+        capsule.id = 'tg-capsule-wrap';
+        capsule.className = 'tg-input-capsule';
+
+        var smileBtn = document.createElement('button');
+        smileBtn.type = 'button';
+        smileBtn.id = 'tg-smile-btn';
+        smileBtn.className = 'tg-inside-btn tg-smile-btn';
+        smileBtn.textContent = '😊';
+        smileBtn.title = 'Смайлики';
+        smileBtn.onclick = function(e) {
+            e.stopPropagation();
+            toggleTgEmojiDrawer();
+        };
+
+        var plusBtn = document.createElement('button');
+        plusBtn.type = 'button';
+        plusBtn.id = 'tg-inside-plus-btn';
+        plusBtn.className = 'tg-inside-btn tg-plus-btn';
+        plusBtn.textContent = '➕';
+        plusBtn.title = 'Инструменты';
+        plusBtn.onclick = function(e) {
+            e.stopPropagation();
+            toggleMsbRadialToolbar(true);
+        };
+
+        inputRow.insertBefore(capsule, textInput);
+        capsule.appendChild(smileBtn);
+        capsule.appendChild(textInput);
+        capsule.appendChild(plusBtn);
+
+        if (sendBtn) {
+            sendBtn.textContent = '➤';
+            sendBtn.title = 'Отправить';
+        }
     }
 }
 
+function toggleTgEmojiDrawer(forceState) {
+    buildTelegramComposerLayout();
+    var drawer = document.getElementById('tg-emoji-drawer');
+    if (!drawer) return;
+    var show = (typeof forceState === 'boolean') ? forceState : (drawer.style.display !== 'flex');
+    drawer.style.display = show ? 'flex' : 'none';
+}
+
+function scrollToEmojiCat(catId) {
+    var scrollBox = document.getElementById('tg-emoji-scroll-area');
+    var targetEl = document.getElementById('tg-ecat-' + catId);
+    if (scrollBox && targetEl) {
+        scrollBox.scrollTo({ top: targetEl.offsetTop - scrollBox.offsetTop, behavior: 'smooth' });
+    }
+    document.querySelectorAll('.tg-emoji-tab').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-cat') === catId);
+    });
+}
+
+function insertTgEmoji(emojiChar) {
+    var inp = document.getElementById('text-input');
+    if (!inp || inp.disabled) return;
+    var start = inp.selectionStart || inp.value.length;
+    var end = inp.selectionEnd || inp.value.length;
+    inp.value = inp.value.substring(0, start) + emojiChar + inp.value.substring(end);
+    inp.focus();
+    inp.selectionStart = inp.selectionEnd = start + emojiChar.length;
+    inp.dispatchEvent(new Event('input'));
+}
+
+function backspaceTgEmoji() {
+    var inp = document.getElementById('text-input');
+    if (!inp || inp.disabled || !inp.value) return;
+    var chars = Array.from(inp.value);
+    chars.pop();
+    inp.value = chars.join('');
+    inp.focus();
+    inp.dispatchEvent(new Event('input'));
+}
+
 function toggleMsbRadialToolbar(forceState) {
-    buildAnimatedRadialToolsRow();
+    buildTelegramComposerLayout();
     var toolsRow = document.querySelector('#messenger-modal .tools-row');
-    var centerBtn = document.getElementById('msb-center-toggle-btn');
+    var insidePlus = document.getElementById('tg-inside-plus-btn');
     var drop = document.getElementById('msb-plus-dropdown');
-    if (!toolsRow || !centerBtn) return;
+    if (!toolsRow) return;
 
     msbToolbarExpanded = (typeof forceState === 'boolean') ? forceState : !msbToolbarExpanded;
-    toolsRow.classList.toggle('expanded', msbToolbarExpanded);
-    centerBtn.classList.toggle('active', msbToolbarExpanded);
-    centerBtn.textContent = msbToolbarExpanded ? '✖' : '➕';
+    toolsRow.classList.toggle('open', msbToolbarExpanded);
+
+    if (insidePlus) {
+        insidePlus.style.display = msbToolbarExpanded ? 'none' : 'flex';
+    }
 
     if (!msbToolbarExpanded && drop) {
         drop.classList.remove('open');
     }
 }
 
+window.toggleTgEmojiDrawer = toggleTgEmojiDrawer;
+window.scrollToEmojiCat = scrollToEmojiCat;
+window.insertTgEmoji = insertTgEmoji;
+window.backspaceTgEmoji = backspaceTgEmoji;
+
 function ensureMessengerExtraHub() {
-    buildAnimatedRadialToolsRow();
+    buildTelegramComposerLayout();
+
 
     if (!document.getElementById('msb-plus-dropdown')) {
         var inputContainer = document.querySelector('#messenger-modal .input-container');
