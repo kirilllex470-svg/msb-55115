@@ -574,7 +574,7 @@ function ensureCleanMessengerTopbar() {
     var oldName = document.getElementById('msg-my-name');
     if (oldName) oldName.id = 'msg-my-name-legacy';
 
-     var topbar = document.createElement('div');
+    var topbar = document.createElement('div');
     topbar.id = 'msb-unified-topbar';
     topbar.className = 'msb-clean-topbar';
     topbar.innerHTML = [
@@ -584,14 +584,12 @@ function ensureCleanMessengerTopbar() {
         '<span id="msg-my-name" class="msb-profile-callsign">Боец</span>',
         '<span class="msb-avatar-edit-link">👤 Профиль</span>',
         '</div>',
-        '</div>',
-        '<button type="button" class="msb-work-top-btn" onclick="openWorkWorkspaceFromMessenger()">',
-        '📊 Работа',
-        '</button>'
+        '</div>'
     ].join('');
 
     modal.insertBefore(topbar, modal.firstChild);
-}
+
+
 
 function openUserProfileModal() {
     chatUser = getActiveChatIdentity();
@@ -603,31 +601,28 @@ function openUserProfileModal() {
         modal.className = 'custom-modal-overlay';
         modal.style.zIndex = '220000';
         modal.innerHTML = [
-            '<div class="login-box msb-themed-card msb-profile-extended-card">',
-            '<div class="msb-profile-modal-head">',
-            '<h3 class="msb-themed-title" style="margin:0;">👤 Профиль бойца</h3>',
-            '<button type="button" class="modal-close" onclick="closeUserProfileModal()">&times;</button>',
-            '</div>',
-            '<div class="msb-profile-header-row">',
+            '<div class="login-box msb-themed-card" style="max-width:350px;">',
+            '<h3 class="msb-themed-title">👤 Профиль бойца</h3>',
             '<div id="profile-modal-avatar" class="avatar msb-themed-avatar" ',
-            'style="width:68px;height:68px;border-radius:50%;font-size:20px;flex-shrink:0;" ',
+            'style="width:76px;height:76px;border-radius:50%;margin:0 auto 10px;font-size:22px;" ',
             'onclick="openAvatarInViewer(this, chatUser)"></div>',
-            '<div style="text-align:left; min-width:0; flex:1;">',
-            '<div id="profile-modal-name" class="msb-themed-subname" style="margin-bottom:6px;"></div>',
-            '<div style="display:flex; gap:6px; flex-wrap:wrap;">',
-            '<button type="button" class="msb-themed-btn msb-mini-prof-btn" ',
-            'onclick="document.getElementById(\'msb-top-avatar-file\').click()">📷 Аватар</button>',
-            '<button type="button" class="msb-themed-btn-alt msb-mini-prof-btn" ',
-            'onclick="closeUserProfileModal(); openPinSetupModal();">🔐 ПИН-код</button>',
-            '</div>',
-            '</div>',
-            '</div>',
-            '<input type="file" id="msb-top-avatar-file" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">',
-            '<button type="button" id="msb-profile-work-toggle-btn" class="msb-work-launch-btn" onclick="toggleWorkSectionInProfile()">',
-            '📊 Работа (Журнал событий, Архив, Карты)',
+            '<div id="profile-modal-name" class="msb-themed-subname"></div>',
+            '<button type="button" class="msb-themed-btn" style="margin-bottom:10px;" ',
+            'onclick="document.getElementById(\'msb-top-avatar-file\').click()">',
+            '📷 Сменить аватарку',
             '</button>',
-            '<div id="msb-profile-work-slot" class="msb-profile-work-slot"></div>',
-            '<button type="button" class="viewer-btn" style="margin-top:10px;" onclick="closeUserProfileModal()">Закрыть</button>',
+            '<input type="file" id="msb-top-avatar-file" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">',
+            '<button type="button" class="msb-themed-btn-alt" style="margin-bottom:10px;" ',
+            'onclick="closeUserProfileModal(); openPinSetupModal();">',
+            '🔐 Создать ПИН-код',
+            '</button>',
+            '<button type="button" class="msb-themed-btn" style="margin-bottom:10px;" ',
+            'onclick="openWorkNewWindow()">',
+            '📊 Работа',
+            '</button>',
+            '<button type="button" class="viewer-btn" onclick="closeUserProfileModal()">',
+            'Закрыть',
+            '</button>',
             '</div>'
         ].join('');
 
@@ -637,18 +632,30 @@ function openUserProfileModal() {
         document.body.appendChild(modal);
     }
 
-    mountJournalBlocksIntoProfile();
-
     document.getElementById('profile-modal-name').textContent = chatUser;
     var avBox = document.getElementById('profile-modal-avatar');
     renderAvatarElement(avBox, chatUser, getCachedUserAvatar(chatUser, ''));
     modal.style.display = 'flex';
 }
 
-function mountJournalBlocksIntoProfile() {
-    var slot = document.getElementById('msb-profile-work-slot');
-    if (!slot || slot.getAttribute('data-mounted') === '1') return;
+function openWorkNewWindow() {
+    closeUserProfileModal();
+    var workModal = document.getElementById('msb-work-window-modal');
+    if (!workModal) {
+        workModal = document.createElement('div');
+        workModal.id = 'msb-work-window-modal';
+        workModal.className = 'msb-work-fullscreen-modal';
+        workModal.innerHTML = [
+            '<div class="msb-work-window-header">',
+            '<span style="font-weight:900; font-size:16px; color:#f8fafc;">📊 РАБОТА — МСБ-55115</span>',
+            '<button type="button" class="msb-work-close-btn" onclick="closeWorkNewWindow()">✖ Закрыть</button>',
+            '</div>',
+            '<div id="msb-work-window-body" class="msb-work-window-body"></div>'
+        ].join('');
+        document.body.appendChild(workModal);
+    }
 
+    var bodySlot = document.getElementById('msb-work-window-body');
     var blocks = [
         document.getElementById('input-panel'),
         document.querySelector('.notifications-window'),
@@ -657,36 +664,24 @@ function mountJournalBlocksIntoProfile() {
     ];
 
     blocks.forEach(function(el) {
-        if (el && el.parentElement !== slot) {
-            el.style.maxWidth = '100%';
-            el.style.marginBottom = '12px';
-            slot.appendChild(el);
+        if (el && el.parentElement !== bodySlot) {
+            el.style.maxWidth = '1400px';
+            el.style.margin = '0 auto 16px auto';
+            bodySlot.appendChild(el);
         }
     });
-    slot.setAttribute('data-mounted', '1');
+
+    workModal.style.display = 'flex';
 }
 
-function toggleWorkSectionInProfile(forceOpen) {
-    mountJournalBlocksIntoProfile();
-    var slot = document.getElementById('msb-profile-work-slot');
-    var btn = document.getElementById('msb-profile-work-toggle-btn');
-    if (!slot) return;
-    var isOpen = (typeof forceOpen === 'boolean') ? forceOpen : (slot.style.display !== 'block');
-    slot.style.display = isOpen ? 'block' : 'none';
-    if (btn) {
-        btn.innerHTML = isOpen
-            ? '🔽 Свернуть раздел «Работа»'
-            : '📊 Работа (Журнал событий, Архив, Карты)';
-    }
+function closeWorkNewWindow() {
+    var workModal = document.getElementById('msb-work-window-modal');
+    if (workModal) workModal.style.display = 'none';
 }
 
-function openWorkWorkspaceFromMessenger() {
-    openUserProfileModal();
-    toggleWorkSectionInProfile(true);
-}
+window.openWorkNewWindow = openWorkNewWindow;
+window.closeWorkNewWindow = closeWorkNewWindow;
 
-window.toggleWorkSectionInProfile = toggleWorkSectionInProfile;
-window.openWorkWorkspaceFromMessenger = openWorkWorkspaceFromMessenger;
 
 
 function closeUserProfileModal() {
@@ -1387,10 +1382,10 @@ function closeChatMobile() {
     if (sb) sb.classList.remove('hidden');
 }
 
-(function initChatRightSwipeToFriends() {
+(function initChatLeftSwipeToFriends() {
     var touchStartX = 0;
     var touchStartY = 0;
-    var isEdgeSwipe = false;
+    var isLeftSwipeAllowed = false;
 
     document.addEventListener('touchstart', function(e) {
         if (window.innerWidth > 768) return;
@@ -1402,23 +1397,25 @@ function closeChatMobile() {
         var t = e.touches.item(0);
         touchStartX = t.clientX;
         touchStartY = t.clientY;
+        var isNearRightEdge = (window.innerWidth - touchStartX) <= 55;
         var isOnBubble = e.target && e.target.closest && e.target.closest('.swipe-container');
-        isEdgeSwipe = (touchStartX <= 55) || !isOnBubble;
+        isLeftSwipeAllowed = isNearRightEdge || !isOnBubble;
     }, { passive: true });
 
     document.addEventListener('touchend', function(e) {
-        if (!isEdgeSwipe || window.innerWidth > 768) return;
-        isEdgeSwipe = false;
+        if (!isLeftSwipeAllowed || window.innerWidth > 768) return;
+        isLeftSwipeAllowed = false;
 
         var t = e.changedTouches.item(0);
         var diffX = t.clientX - touchStartX;
         var diffY = Math.abs(t.clientY - touchStartY);
 
-        if (diffX > 75 && diffY < 60) {
+        if (diffX < -75 && diffY < 60) {
             closeChatMobile();
         }
     }, { passive: true });
 })();
+
 
 
 function markChatAsRead(roomId) {
