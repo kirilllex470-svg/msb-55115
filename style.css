@@ -83,10 +83,91 @@ body.theme-rocket .alert-btn { background: linear-gradient(135deg, #ea580c, #c24
 body.theme-cosmic .alert-content { background: linear-gradient(180deg, rgba(19, 15, 46, 0.94) 0%, rgba(5, 3, 18, 0.65) 100%); border-color: #8b5cf6; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 28px rgba(139, 92, 246, 0.28); }
 body.theme-cosmic .alert-btn { background: linear-gradient(135deg, #7c3aed, #4f46e5); border-color: #c084fc; }
 
-.notifications-window { width: 100%; max-width: 1400px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 15px; margin-bottom: 20px; box-sizing: border-box; }
-.notifications-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
-.notif-item { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-left: 5px solid var(--danger); padding: 10px 12px; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; cursor: pointer; }
-.notif-item.read { background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); border-left: 5px solid #22c55e; }
+/* === ФОН ОКНА И КАРТОЧЕК УВЕДОМЛЕНИЙ СОГЛАСНО ВЫБРАННОЙ ТЕМЕ === */
+.notifications-window {
+    width: 100%;
+    max-width: 1400px;
+    border-radius: 16px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.notifications-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.notif-item {
+    padding: 10px 14px;
+    border-radius: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.3s ease, border-color 0.3s ease;
+}
+
+/* 1. Тема: ВОЕННЫЙ (по умолчанию) */
+body.theme-military .notifications-window {
+    background: linear-gradient(145deg, rgba(16, 42, 26, 0.94), rgba(6, 18, 11, 0.96)) !important;
+    border: 1.5px solid rgba(34, 197, 94, 0.55) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(74, 222, 128, 0.18) !important;
+}
+body.theme-military .notif-item {
+    background: linear-gradient(135deg, rgba(22, 101, 52, 0.35), rgba(6, 24, 14, 0.85)) !important;
+    border: 1px solid rgba(74, 222, 128, 0.45) !important;
+    border-left: 5px solid #22c55e !important;
+}
+body.theme-military .notif-item.read {
+    background: rgba(10, 28, 17, 0.65) !important;
+    border-color: rgba(34, 197, 94, 0.22) !important;
+    border-left: 5px solid #15803d !important;
+    opacity: 0.85;
+}
+
+/* 2. Тема: РАКЕТНЫЙ */
+body.theme-rocket .notifications-window {
+    background: linear-gradient(145deg, rgba(46, 20, 13, 0.94), rgba(18, 7, 4, 0.96)) !important;
+    border: 1.5px solid rgba(249, 115, 22, 0.6) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(251, 146, 60, 0.2) !important;
+}
+body.theme-rocket .notif-item {
+    background: linear-gradient(135deg, rgba(154, 52, 18, 0.38), rgba(24, 9, 5, 0.88)) !important;
+    border: 1px solid rgba(251, 146, 60, 0.5) !important;
+    border-left: 5px solid #f97316 !important;
+}
+body.theme-rocket .notif-item.read {
+    background: rgba(30, 12, 8, 0.65) !important;
+    border-color: rgba(249, 115, 22, 0.25) !important;
+    border-left: 5px solid #9a3412 !important;
+    opacity: 0.85;
+}
+
+/* 3. Тема: КОСМИЧЕСКИЙ */
+body.theme-cosmic .notifications-window {
+    background: linear-gradient(145deg, rgba(28, 18, 66, 0.94), rgba(9, 6, 24, 0.96)) !important;
+    border: 1.5px solid rgba(168, 85, 247, 0.6) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(192, 132, 252, 0.22) !important;
+}
+body.theme-cosmic .notif-item {
+    background: linear-gradient(135deg, rgba(88, 28, 135, 0.4), rgba(12, 8, 34, 0.88)) !important;
+    border: 1px solid rgba(192, 132, 252, 0.5) !important;
+    border-left: 5px solid #a855f7 !important;
+}
+body.theme-cosmic .notif-item.read {
+    background: rgba(18, 12, 46, 0.65) !important;
+    border-color: rgba(168, 85, 247, 0.25) !important;
+    border-left: 5px solid #6d28d9 !important;
+    opacity: 0.85;
+}
+
 .notif-time { color: #facc15; font-family: monospace; }
 .notif-sender { font-weight: bold; }
 .notif-target { background: #334155; color: #f8fafc; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }

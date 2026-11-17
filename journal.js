@@ -1714,12 +1714,13 @@ function sendLocalNotification(target, text, sender, notifId) {
     const body = fromWho + ': ' + text;
     const themedIcon = createThemedNotifIcon(meta.id);
 
-    // 1. Нативное уведомление для Android APK с цветом и стилем активной темы
+     // 1. Нативное уведомление для Android APK с тёмным фоном активной темы
     if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
         try {
-            window.MsbNative.notify(title, body, String(notifId || Date.now()), meta.color);
+            window.MsbNative.notify(title, body, String(notifId || Date.now()), meta.bgColor);
         } catch (e) {}
     }
+
 
     // 2. Уведомление для PWA / браузера с закруглённой тематической иконкой
     if ('serviceWorker' in navigator) {
@@ -2042,10 +2043,11 @@ function makeAnimatedSvgGif(cat, idx, title) {
 
 function getMsbThemeMeta(themeName) {
     const t = themeName || localStorage.getItem('msb_app_theme') || 'military';
-    if (t === 'rocket') return { id: 'rocket', color: '#f97316', badge: '🚀', label: 'РАКЕТНЫЙ' };
-    if (t === 'cosmic') return { id: 'cosmic', color: '#a855f7', badge: '🌌', label: 'КОСМОС' };
-    return { id: 'military', color: '#22c55e', badge: '🪖', label: 'ВОЕННЫЙ' };
+    if (t === 'rocket') return { id: 'rocket', color: '#f97316', bgColor: '#2e140d', badge: '🚀', label: 'РАКЕТНЫЙ' };
+    if (t === 'cosmic') return { id: 'cosmic', color: '#a855f7', bgColor: '#1c1242', badge: '🌌', label: 'КОСМОС' };
+    return { id: 'military', color: '#22c55e', bgColor: '#102a1a', badge: '🪖', label: 'ВОЕННЫЙ' };
 }
+
 
 function setAppTheme(themeName, skipSync) {
     const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
