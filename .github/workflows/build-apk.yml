@@ -62,7 +62,7 @@ jobs:
             @capacitor/push-notifications@8
           npx cap add android
 
-            - name: Подключение google-services.json в Gradle
+      - name: Подключение google-services.json в Gradle
         run: |
           cp google-services.json android/app/google-services.json
           if ! grep -q "com.google.gms:google-services" android/build.gradle; then
