@@ -2139,19 +2139,24 @@ function buildTelegramComposerLayout() {
 
     if (!inputContainer || !toolsRow || !inputRow || !textInput) return;
 
-    if (toolsRow.getAttribute('data-tg-tools') !== '1') {
+      if (toolsRow.getAttribute('data-tg-tools') !== '1') {
         toolsRow.setAttribute('data-tg-tools', '1');
-        toolsRow.className = 'tools-row tg-top-tools-tray';
+        toolsRow.className = 'tools-row msb-radial-tools-row tg-radial-wave-tray';
 
         var fileInput = toolsRow.querySelector('input[type="file"]');
         toolsRow.innerHTML =
-            '<button type="button" id="video-btn" class="media-btn" onclick="toggleVideoRecord()" title="Видео-кружок">🎥</button>' +
-            '<button type="button" class="media-btn" onclick="document.getElementById(\'msb-radial-file-input\').click()" title="Прикрепить файл">📎</button>' +
-            '<button type="button" id="voice-btn" class="media-btn" onclick="toggleVoiceRecord()" title="Голосовое сообщение">🎙️</button>' +
-            '<button type="button" class="media-btn" onclick="triggerCallInDev(\'Аудиозвонок\', currentPartner || \'\')" title="Аудиозвонок">📞</button>' +
-            '<button type="button" class="media-btn" onclick="openThemeSettingsModal()" title="Темы и Гифки">🎨</button>' +
-            '<button type="button" id="msb-plus-menu-btn" class="media-btn" onclick="event.stopPropagation(); toggleMsbPlusDropdown()" title="Разделы МСБ-55115">➕</button>' +
-            '<button type="button" class="media-btn tg-close-tools-btn" onclick="toggleMsbRadialToolbar(false)" title="Свернуть панель">✖</button>';
+            '<div class="msb-wing msb-wing-left" id="msb-wing-left">' +
+                '<button type="button" id="video-btn" class="media-btn" onclick="toggleVideoRecord()" title="Видео-кружок">🎥</button>' +
+                '<button type="button" class="media-btn" onclick="document.getElementById(\'msb-radial-file-input\').click()" title="Прикрепить файл">📎</button>' +
+                '<button type="button" id="voice-btn" class="media-btn" onclick="toggleVoiceRecord()" title="Голосовое сообщение">🎙️</button>' +
+            '</div>' +
+            '<button type="button" id="msb-center-toggle-btn" class="media-btn msb-center-plus-btn" onclick="toggleMsbRadialToolbar(false)" title="Свернуть панель">✖</button>' +
+            '<div class="msb-wing msb-wing-right" id="msb-wing-right">' +
+                '<button type="button" class="media-btn" onclick="triggerCallInDev(\'Аудиозвонок\', currentPartner || \'\')" title="Аудиозвонок">📞</button>' +
+                '<button type="button" class="media-btn" onclick="openThemeSettingsModal()" title="Темы и Гифки">🎨</button>' +
+                '<button type="button" id="msb-plus-menu-btn" class="media-btn" onclick="event.stopPropagation(); toggleMsbPlusDropdown()" title="Разделы МСБ-55115">➕</button>' +
+            '</div>';
+
 
         if (fileInput) {
             fileInput.id = 'msb-radial-file-input';
@@ -2225,7 +2230,7 @@ function buildTelegramComposerLayout() {
             toggleMsbRadialToolbar(true);
         };
 
-        inputRow.insertBefore(capsule, textInput);
+           inputRow.insertBefore(capsule, textInput);
         capsule.appendChild(smileBtn);
         capsule.appendChild(textInput);
         capsule.appendChild(plusBtn);
@@ -2233,9 +2238,16 @@ function buildTelegramComposerLayout() {
         if (sendBtn) {
             sendBtn.textContent = '➤';
             sendBtn.title = 'Отправить';
+            sendBtn.classList.add('tg-inside-send-btn');
+            capsule.appendChild(sendBtn);
         }
+
+        textInput.addEventListener('focus', function() {
+            toggleTgEmojiDrawer(false);
+        });
     }
 }
+
 
 function toggleTgEmojiDrawer(forceState) {
     buildTelegramComposerLayout();
@@ -2286,6 +2298,7 @@ function toggleMsbRadialToolbar(forceState) {
 
     msbToolbarExpanded = (typeof forceState === 'boolean') ? forceState : !msbToolbarExpanded;
     toolsRow.classList.toggle('open', msbToolbarExpanded);
+    toolsRow.classList.toggle('expanded', msbToolbarExpanded);
 
     if (insidePlus) {
         insidePlus.style.display = msbToolbarExpanded ? 'none' : 'flex';
@@ -2295,6 +2308,7 @@ function toggleMsbRadialToolbar(forceState) {
         drop.classList.remove('open');
     }
 }
+
 
 window.toggleTgEmojiDrawer = toggleTgEmojiDrawer;
 window.scrollToEmojiCat = scrollToEmojiCat;

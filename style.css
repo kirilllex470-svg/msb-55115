@@ -1205,10 +1205,10 @@ body.theme-cosmic #register-modal {
     box-sizing: border-box !important;
 }
 
+/* === КАПСУЛА ВВОДА НА ВСЮ ШИРИНУ (СМАЙЛ, ТЕКСТ, ПЛЮС И ОТПРАВКА ВНУТРИ) === */
 .tg-full-input-row {
     display: flex !important;
     align-items: center !important;
-    gap: 6px !important;
     width: 100% !important;
     margin: 0 !important;
 }
@@ -1217,16 +1217,21 @@ body.theme-cosmic #register-modal {
     flex: 1 1 auto !important;
     width: 100% !important;
     min-width: 0 !important;
-    height: 44px;
+    height: 46px;
     display: flex;
     align-items: center;
     background: rgba(15, 23, 42, 0.95);
     border: 1.5px solid var(--accent);
-    border-radius: 22px;
-    padding: 0 6px;
+    border-radius: 23px;
+    padding: 0 5px 0 6px;
+    gap: 2px;
     box-sizing: border-box;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
+
+body.theme-military .tg-input-capsule { border-color: #22c55e; }
+body.theme-rocket .tg-input-capsule   { border-color: #f97316; }
+body.theme-cosmic .tg-input-capsule   { border-color: #8b5cf6; }
 
 .tg-input-capsule #text-input {
     flex: 1 1 auto !important;
@@ -1261,62 +1266,93 @@ body.theme-cosmic #register-modal {
 
 .tg-inside-btn:active {
     transform: scale(0.88);
-    background: rgba(255, 255, 255, 0.12) !important;
+    background: rgba(255, 255, 255, 0.14) !important;
 }
 
 .tg-plus-btn {
-    color: var(--accent) !important;
+    color: #4ade80 !important;
     font-size: 18px !important;
     font-weight: 900 !important;
 }
+body.theme-rocket .tg-plus-btn { color: #fb923c !important; }
+body.theme-cosmic .tg-plus-btn { color: #c084fc !important; }
 
-#messenger-modal #send-btn {
-    width: 44px !important;
-    min-width: 44px !important;
-    height: 44px !important;
+/* Кнопка отправки ВНУТРИ строки справа с переливом под тему */
+.tg-input-capsule #send-btn,
+.tg-inside-send-btn {
+    width: 36px !important;
+    min-width: 36px !important;
+    height: 36px !important;
     padding: 0 !important;
+    margin: 0 0 0 2px !important;
     border-radius: 50% !important;
-    font-size: 18px !important;
-    display: flex;
+    font-size: 16px !important;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    color: #ffffff !important;
 }
 
-/* Выезжающая панель инструментов над строкой ввода */
-.tg-top-tools-tray {
+body.theme-military .tg-inside-send-btn {
+    background: linear-gradient(135deg, #16a34a, #0f5132) !important;
+    border: 1px solid #4ade80 !important;
+    box-shadow: 0 2px 10px rgba(22, 163, 74, 0.45) !important;
+}
+body.theme-rocket .tg-inside-send-btn {
+    background: linear-gradient(135deg, #ea580c, #7c2d12) !important;
+    border: 1px solid #fb923c !important;
+    box-shadow: 0 2px 10px rgba(234, 88, 12, 0.45) !important;
+}
+body.theme-cosmic .tg-inside-send-btn {
+    background: linear-gradient(135deg, #7c3aed, #312e81) !important;
+    border: 1px solid #c084fc !important;
+    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.5) !important;
+}
+
+/* === ВОЛНОВАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ С ПЕРЕЛИВОМ ПО ТЕМЕ === */
+.tg-radial-wave-tray {
     display: none !important;
     width: 100% !important;
-    align-items: center;
-    justify-content: space-between;
-    gap: 5px;
-    padding: 6px;
-    background: rgba(15, 23, 42, 0.92);
-    border: 1px solid var(--accent);
-    border-radius: 16px;
+    padding: 4px 0;
     box-sizing: border-box;
-    animation: alertPopIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.tg-top-tools-tray.open {
+.tg-radial-wave-tray.open {
     display: flex !important;
 }
 
-.tg-top-tools-tray .media-btn {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    height: 38px !important;
-    font-size: 16px !important;
-    border-radius: 11px !important;
-    padding: 0 !important;
+/* Возвращаем анимацию перелива и волнового раскрытия для кнопок */
+.tg-radial-wave-tray .media-btn {
+    animation: btnGlowPulse 3s ease-in-out infinite !important;
 }
 
-.tg-close-tools-btn {
-    background: rgba(239, 68, 68, 0.22) !important;
-    border-color: #ef4444 !important;
-    color: #fca5a5 !important;
-    font-size: 13px !important;
+.tg-radial-wave-tray .media-btn::after {
+    display: block !important;
+    animation: autoShimmer 3.8s infinite ease-in-out !important;
 }
+
+.tg-radial-wave-tray.expanded .msb-wing-left .media-btn:nth-child(3),
+.tg-radial-wave-tray.expanded .msb-wing-right .media-btn:nth-child(1) {
+    animation: wingButtonWavePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) 0.04s forwards,
+               iconWaveBreathe 2.8s ease-in-out 0.45s infinite,
+               btnGlowPulse 3s ease-in-out infinite !important;
+}
+
+.tg-radial-wave-tray.expanded .msb-wing-left .media-btn:nth-child(2),
+.tg-radial-wave-tray.expanded .msb-wing-right .media-btn:nth-child(2) {
+    animation: wingButtonWavePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s forwards,
+               iconWaveBreathe 2.8s ease-in-out 0.65s infinite,
+               btnGlowPulse 3s ease-in-out infinite !important;
+}
+
+.tg-radial-wave-tray.expanded .msb-wing-left .media-btn:nth-child(1),
+.tg-radial-wave-tray.expanded .msb-wing-right .media-btn:nth-child(3) {
+    animation: wingButtonWavePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) 0.20s forwards,
+               iconWaveBreathe 2.8s ease-in-out 0.85s infinite,
+               btnGlowPulse 3s ease-in-out infinite !important;
+}
+
 
 /* === ПАНЕЛЬ ЭМОДЗИ КАК В TELEGRAM С ПРОКРУТКОЙ ВНИЗ === */
 .tg-emoji-drawer {
