@@ -2187,15 +2187,15 @@ window.markMsbServerAlive = function(isFullInit) {
 var enteredLockPin = '';
 var pinStatusPollTimer = null;
 
-function ensurePinModals() {
     if (!document.getElementById('msb-pin-setup-modal')) {
         const m = document.createElement('div');
         m.id = 'msb-pin-setup-modal';
         m.className = 'custom-modal-overlay';
         m.style.zIndex = '240000';
         m.innerHTML = [
-            '<div class="login-box" style="border:2px solid #facc15; max-width:360px;">',
-            '<h3 style="margin:0 0 10px 0; color:#facc15;">🔐 Создать 4-значный ПИН</h3>',
+            '<div class="login-box msb-themed-card" style="max-width:360px;">',
+            '<h3 class="msb-themed-title">🔐 Создать 4-значный ПИН</h3>',
+
             '<p style="font-size:12px; color:#94a3b8; margin:0 0 10px 0;">',
             'Введите 4 цифры и обязательный контрольный вопрос:',
             '</p>',
@@ -2211,11 +2211,12 @@ function ensurePinModals() {
         document.body.appendChild(m);
     }
 
-    if (!document.getElementById('msb-pin-lock-modal')) {
+       if (!document.getElementById('msb-pin-lock-modal')) {
         const lock = document.createElement('div');
         lock.id = 'msb-pin-lock-modal';
-        lock.className = 'custom-modal-overlay';
-        lock.style.cssText = 'z-index:260000; background:#090d16;';
+        lock.className = 'custom-modal-overlay msb-pin-fullscreen';
+        lock.style.zIndex = '260000';
+
         const digits = ['1','2','3','4','5','6','7','8','9'];
         const numBtns = digits.map(function(n) {
             return '<button type="button" onclick="pressPinDigit(\'' + n + '\')">' + n + '</button>';

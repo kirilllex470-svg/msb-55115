@@ -602,24 +602,20 @@ function openUserProfileModal() {
         modal.id = 'msb-user-profile-modal';
         modal.className = 'custom-modal-overlay';
         modal.style.zIndex = '220000';
-        modal.innerHTML = [
-            '<div class="login-box" style="border:2px solid #00ca9e; max-width:350px;">',
-            '<h3 style="margin:0 0 12px 0; color:#f8fafc;">👤 Профиль бойца</h3>',
-            '<div id="profile-modal-avatar" class="avatar" ',
-            'style="width:74px;height:74px;border-radius:50%;margin:0 auto 10px;font-size:22px;" ',
+         modal.innerHTML = [
+            '<div class="login-box msb-themed-card" style="max-width:350px;">',
+            '<h3 class="msb-themed-title">👤 Профиль бойца</h3>',
+            '<div id="profile-modal-avatar" class="avatar msb-themed-avatar" ',
+            'style="width:76px;height:76px;border-radius:50%;margin:0 auto 10px;font-size:22px;" ',
             'onclick="openAvatarInViewer(this, chatUser)"></div>',
-            '<div id="profile-modal-name" ',
-            'style="font-size:17px;font-weight:bold;color:#38bdf8;margin-bottom:14px;"></div>',
-                        '<button type="button" ',
-            'style="background:#0284c7;margin-bottom:10px;" ',
+            '<div id="profile-modal-name" class="msb-themed-subname"></div>',
+            '<button type="button" class="msb-themed-btn" style="margin-bottom:10px;" ',
             'onclick="document.getElementById(\'msb-top-avatar-file\').click()">',
             '📷 Сменить аватарку',
             '</button>',
-
             '<input type="file" id="msb-top-avatar-file" accept="image/*" ',
             'style="display:none;" onchange="uploadMyAvatar(this)">',
-            '<button type="button" ',
-            'style="background:#f59e0b;color:#090d16;margin-bottom:10px;" ',
+            '<button type="button" class="msb-themed-btn-alt" style="margin-bottom:10px;" ',
             'onclick="closeUserProfileModal(); openPinSetupModal();">',
             '🔐 Создать ПИН-код',
             '</button>',
@@ -628,6 +624,7 @@ function openUserProfileModal() {
             '</button>',
             '</div>'
         ].join('');
+
         modal.onclick = function(e) {
             if (e.target === modal) closeUserProfileModal();
         };
@@ -1867,18 +1864,18 @@ function openMessageActionSheet(msgId, text, msgType, isMy) {
     var canEdit = isMy && msgType === 'text';
     var editBtnHtml = canEdit
         ? '<button type="button" id="act-edit-msg-btn" ' +
-          'style="background:#0284c7;margin-bottom:8px;">' +
+          'class="msb-themed-btn" style="margin-bottom:8px;">' +
           '✏️ Исправить сообщение</button>'
         : '';
 
     sheet.innerHTML = [
-        '<div class="login-box" style="border:2px solid #38bdf8;max-width:340px;">',
-        '<div style="color:#4ade80;font-size:13px;font-weight:bold;margin-bottom:10px;">',
+        '<div class="login-box msb-themed-card" style="max-width:340px;">',
+        '<div class="msb-themed-title" style="font-size:14px;">',
         '📋 Текст сразу скопирован в буфер!',
         '</div>',
         editBtnHtml,
         '<button type="button" id="act-copy-msg-btn" ',
-        'style="background:#10b981;margin-bottom:8px;">',
+        'class="msb-themed-btn-alt" style="margin-bottom:8px;">',
         '📋 Скопировать ещё раз',
         '</button>',
         '<button type="button" class="viewer-btn" id="act-close-msg-btn">',
@@ -1886,6 +1883,7 @@ function openMessageActionSheet(msgId, text, msgType, isMy) {
         '</button>',
         '</div>'
     ].join('');
+
     sheet.style.display = 'flex';
 
     document.getElementById('act-close-msg-btn').onclick = function() {
