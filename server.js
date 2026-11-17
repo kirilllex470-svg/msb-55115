@@ -335,7 +335,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-        "const SHELL_CACHE = 'msb55115-shell-v8';",
+    "const SHELL_CACHE = 'msb55115-shell-v8';",
 
 
     "const MEDIA_CACHE = 'msb55115-media-v1';",
@@ -1561,7 +1561,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                             imageUrl: avatarUrl
                         }
                     }
-                }).catch(function(err) {
+                       }).catch(function(err) {
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
                         const badIdx = fcmTokens.indexOf(item);
@@ -1574,10 +1574,11 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             }
         });
     }
-
+}
 
 
 wss.on('connection', function(ws) {
+
     ws.isAlive = true;
     ws.on('pong', function() { ws.isAlive = true; });
 
