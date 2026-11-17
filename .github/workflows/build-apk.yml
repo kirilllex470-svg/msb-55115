@@ -81,6 +81,10 @@ jobs:
       - name: Настройка AndroidManifest.xml
         run: |
           python3 -c '
+          import json, os
+          gs = json.load(open("google-services.json", encoding="utf-8"))
+          pkg = next(iter(gs["client"]))["client_info"]["android_client_info"]["package_name"]
+
           p = "android/app/src/main/AndroidManifest.xml"
           s = open(p, encoding="utf-8").read()
           names = [
@@ -115,12 +119,12 @@ jobs:
               "            android:value=\"msb_alerts_high_v5\" />",
               "        <provider",
               "            android:name=\"androidx.core.content.FileProvider\"",
-              "            android:authorities=\"${applicationId}.fileprovider\"",
+              "            android:authorities=\"" + pkg + ".msbprovider\"",
               "            android:exported=\"false\"",
               "            android:grantUriPermissions=\"true\">",
               "            <meta-data",
               "                android:name=\"android.support.FILE_PROVIDER_PATHS\"",
-              "                android:resource=\"@xml/file_paths\" />",
+              "                android:resource=\"@xml/msb_file_paths\" />",
               "        </provider>",
               "        <service android:name=\".MsbKeepAliveService\"",
               "            android:enabled=\"true\" android:exported=\"false\"",
@@ -143,61 +147,60 @@ jobs:
           ])
           s = s.replace("</application>", svc, 1)
           open(p, "w", encoding="utf-8").write(s)
+
+          os.makedirs("android/app/src/main/res/xml", exist_ok=True)
+          fp_xml = "\n".join([
+              "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+              "<paths>",
+              "    <cache-path name=\"apk_cache\" path=\".\" />",
+              "    <external-cache-path name=\"ext_cache\" path=\".\" />",
+              "</paths>"
+          ])
+          open("android/app/src/main/res/xml/msb_file_paths.xml", "w", encoding="utf-8").write(fp_xml)
+          os.makedirs("android/app/src/main/res/layout", exist_ok=True)
+          card_xml = "\n".join([
+              "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+              "<LinearLayout xmlns:android=\"http://android.com\"",
+              "    android:id=\"@+id/notif_root\"",
+              "    android:layout_width=\"match_parent\"",
+              "    android:layout_height=\"wrap_content\"",
+              "    android:orientation=\"horizontal\"",
+              "    android:gravity=\"center_vertical\"",
+              "    android:padding=\"12dp\">",
+              "    <ImageView",
+              "        android:id=\"@+id/notif_bg_img\"",
+              "        android:layout_width=\"44dp\"",
+              "        android:layout_height=\"44dp\"",
+              "        android:scaleType=\"centerCrop\"",
+              "        android:layout_marginEnd=\"12dp\" />",
+              "    <LinearLayout",
+              "        android:layout_width=\"0dp\"",
+              "        android:layout_height=\"wrap_content\"",
+              "        android:layout_weight=\"1\"",
+              "        android:orientation=\"vertical\">",
+              "        <TextView",
+              "            android:id=\"@+id/notif_title\"",
+              "            android:layout_width=\"match_parent\"",
+              "            android:layout_height=\"wrap_content\"",
+              "            android:textStyle=\"bold\"",
+              "            android:textSize=\"14sp\"",
+              "            android:maxLines=\"1\"",
+              "            android:ellipsize=\"end\" />",
+              "        <TextView",
+              "            android:id=\"@+id/notif_body\"",
+              "            android:layout_width=\"match_parent\"",
+              "            android:layout_height=\"wrap_content\"",
+              "            android:layout_marginTop=\"3dp\"",
+              "            android:textColor=\"#F8FAFC\"",
+              "            android:textSize=\"13sp\"",
+              "            android:maxLines=\"3\"",
+              "            android:ellipsize=\"end\" />",
+              "    </LinearLayout>",
+              "</LinearLayout>"
+          ])
+          open("android/app/src/main/res/layout/msb_notif_card.xml", "w", encoding="utf-8").write(card_xml)
           '
-          mkdir -p android/app/src/main/res/xml
-          cat << 'EOF' > android/app/src/main/res/xml/file_paths.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <paths>
-              <cache-path name="apk_cache" path="." />
-              <external-cache-path name="ext_cache" path="." />
-          </paths>
-          EOF
 
-          mkdir -p android/app/src/main/res/layout
-          cat << 'EOF' > android/app/src/main/res/layout/msb_notif_card.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://android.com"
-              android:id="@+id/notif_root"
-              android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:orientation="horizontal"
-              android:gravity="center_vertical"
-              android:padding="12dp">
-
-              <ImageView
-                  android:id="@+id/notif_bg_img"
-                  android:layout_width="44dp"
-                  android:layout_height="44dp"
-                  android:scaleType="centerCrop"
-                  android:layout_marginEnd="12dp" />
-
-              <LinearLayout
-                  android:layout_width="0dp"
-                  android:layout_height="wrap_content"
-                  android:layout_weight="1"
-                  android:orientation="vertical">
-
-                  <TextView
-                      android:id="@+id/notif_title"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:textStyle="bold"
-                      android:textSize="14sp"
-                      android:maxLines="1"
-                      android:ellipsize="end" />
-
-                  <TextView
-                      android:id="@+id/notif_body"
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:layout_marginTop="3dp"
-                      android:textColor="#F8FAFC"
-                      android:textSize="13sp"
-                      android:maxLines="3"
-                      android:ellipsize="end" />
-              </LinearLayout>
-          </LinearLayout>
-          EOF
       - name: Создание ресивера и фоновой службы
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
@@ -206,6 +209,7 @@ jobs:
 
           echo "$PKG_LINE" > "$JAVA_DIR/MsbRestartReceiver.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbRestartReceiver.java"
+
           import android.content.BroadcastReceiver;
           import android.content.Context;
           import android.content.Intent;
@@ -225,9 +229,9 @@ jobs:
               }
           }
           EOF
-
           echo "$PKG_LINE" > "$JAVA_DIR/MsbKeepAliveService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbKeepAliveService.java"
+
           import android.app.Notification;
           import android.app.NotificationChannel;
           import android.app.NotificationManager;
@@ -274,6 +278,7 @@ jobs:
                   if ("cosmic".equals(t)) return Color.parseColor("#a855f7");
                   return Color.parseColor("#22c55e");
               }
+
               public static Notification buildThemedAlertNotification(
                   Context ctx, String channelId, String title, String body,
                   int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
@@ -301,7 +306,6 @@ jobs:
                       rv.setTextViewText(resTtl, title);
                       rv.setTextColor(resTtl, accentCol);
                       rv.setTextViewText(resBody, body);
-
                       Bitmap badgeBmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
                       Canvas c = new Canvas(badgeBmp);
                       Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -393,6 +397,7 @@ jobs:
           EOF
           echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
+
           import android.app.NotificationManager;
           import android.app.PendingIntent;
           import android.content.Context;
@@ -468,12 +473,12 @@ jobs:
               }
           }
           EOF
+
       - name: Настройка MainActivity
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           PKG_LINE=$(grep "^package " "$MAIN_ACT")
           echo "$PKG_LINE" > "$MAIN_ACT"
-
           cat << 'EOF' >> "$MAIN_ACT"
 
           import android.Manifest;
@@ -549,6 +554,7 @@ jobs:
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
                   }
               }
+
               public class MsbNativeBridge {
                   @JavascriptInterface
                   public void setTheme(String themeId, String colorHex) {
@@ -561,7 +567,6 @@ jobs:
                           }
                       } catch (Exception ignored) {}
                   }
-
                   @JavascriptInterface
                   public void setIdentity(String unit, String callsign, String origin) {
                       try {
@@ -637,7 +642,7 @@ jobs:
 
                                   Uri apkUri = FileProvider.getUriForFile(
                                       MainActivity.this,
-                                      getPackageName() + ".fileprovider",
+                                      getPackageName() + ".msbprovider",
                                       outFile
                                   );
                                   Intent intent = new Intent(Intent.ACTION_VIEW);
