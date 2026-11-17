@@ -1120,4 +1120,95 @@ body.theme-cosmic #register-modal {
     border: 1.5px solid var(--t-main) !important;
     color: var(--t-main) !important;
 }
+#login-overlay .reg-open-btn {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1.5px solid var(--t-main) !important;
+    color: var(--t-main) !important;
+}
+
+/* === СКРЫТИЕ КНОПКИ НАЗАД И СТИЛИ КНОПКИ «РАБОТА» В ПРОФИЛЕ БОЙЦА === */
+.msb-unified-back-btn {
+    display: none !important;
+}
+
+.msb-work-top-btn {
+    padding: 8px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--accent);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(2, 132, 199, 0.3));
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: transform 0.16s ease, filter 0.16s ease;
+}
+
+.msb-work-top-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.15);
+}
+
+.msb-profile-extended-card {
+    max-width: 960px !important;
+    width: 96% !important;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    padding: 18px 16px !important;
+    text-align: left !important;
+}
+
+.msb-profile-modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+.msb-profile-header-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.msb-mini-prof-btn {
+    width: auto !important;
+    padding: 7px 12px !important;
+    font-size: 12px !important;
+    margin: 0 !important;
+}
+
+.msb-work-launch-btn {
+    width: 100% !important;
+    padding: 13px !important;
+    font-size: 15px !important;
+    font-weight: 900 !important;
+    border-radius: 12px !important;
+    margin-bottom: 10px !important;
+    cursor: pointer;
+}
+
+.msb-profile-work-slot {
+    display: none;
+    width: 100%;
+    max-height: 58vh;
+    overflow-y: auto;
+    padding: 8px;
+    background: rgba(5, 10, 20, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    box-sizing: border-box;
+}
+
+.msb-profile-work-slot .input-panel,
+.msb-profile-work-slot .notifications-window,
+.msb-profile-work-slot .history-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 12px !important;
+    margin-bottom: 12px !important;
+}
 

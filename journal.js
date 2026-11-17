@@ -1255,7 +1255,19 @@ function applyUserUI() {
     }
     if (typeof syncMessengerAuth === 'function') syncMessengerAuth();
     if (typeof checkPinOnAppEntry === 'function') checkPinOnAppEntry();
+    openFriendsListDirectly();
 }
+
+function openFriendsListDirectly() {
+    if (typeof openMessengerWindow === 'function') {
+        openMessengerWindow();
+    }
+    var sb = document.getElementById('app-sidebar');
+    if (sb) {
+        sb.classList.remove('hidden');
+    }
+}
+
 
 function initApp() {
     runSplash();
@@ -2379,10 +2391,12 @@ function checkPinOnAppEntry() {
                         showPinRecoveryView(d.question, d.resetState === 'waiting_admin');
                     }
                 }
-            } else {
+                   } else {
                 localStorage.removeItem('msb_user_has_pin_' + key);
                 lockModal.style.display = 'none';
+                openFriendsListDirectly();
             }
+
         })
         .catch(function() {});
 }
@@ -2403,6 +2417,7 @@ function verifyUnlockPin() {
             document.getElementById('msb-pin-lock-modal').style.display = 'none';
             enteredLockPin = '';
             updateBankPinDots();
+            openFriendsListDirectly();
         } else {
             enteredLockPin = '';
             updateBankPinDots();
@@ -2410,6 +2425,7 @@ function verifyUnlockPin() {
         }
     });
 }
+
 
 function requestForgotPinSupport() {
     const who = currentCallsign || currentUser;
