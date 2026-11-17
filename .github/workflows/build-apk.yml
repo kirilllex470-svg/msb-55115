@@ -33,8 +33,8 @@ jobs:
           python3 -c '
           import json, os
           gs = json.load(open("google-services.json", encoding="utf-8"))
-          c_info = gs["client"][0]["client_info"]
-          pkg = c_info["android_client_info"]["package_name"]
+          first_client = next(iter(gs["client"]))
+          pkg = first_client["client_info"]["android_client_info"]["package_name"]
           p = "capacitor.config.json"
           if os.path.exists(p):
               cfg = json.load(open(p, encoding="utf-8"))
@@ -524,7 +524,7 @@ jobs:
                                   conn.connect();
                                   InputStream is = conn.getInputStream();
                                   FileOutputStream fos = new FileOutputStream(outFile);
-                                  byte[] buf = new byte;
+                                  byte[] buf = new byte[4096];
                                   int len;
                                   while ((len = is.read(buf)) != -1) {
                                       fos.write(buf, 0, len);
@@ -578,7 +578,17 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/msb.keystore
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/msb.keystore
+          else
+            keytool -genkey -v -keystore android/app/msb.keystore -alias msbkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass msb55115 -keypass msb55115 \
+              -dname "CN=MSB55115, OU=Unit, O=MSB, L=RU, S=RU, C=RU"
+            echo "=== СКОПИРУЙТЕ ЭТУ СТРОКУ В СЕКРЕТ KEYSTORE_BASE64 ==="
+            base64 -w 0 android/app/msb.keystore
+            echo ""
+          fi
           npx cap sync android
           cd android
           chmod +x gradlew
@@ -593,13 +603,15 @@ jobs:
           SERVER_URL: ${{ secrets.SERVER_URL }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
         run: |
-          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-          VER_CODE="${{ github.run_number }}"
-          curl -f -X POST "$SERVER_URL/api/app/upload-apk" \
-            -H "x-update-secret: $UPDATE_SECRET" \
-            -H "x-version-code: $VER_CODE" \
-            -H "x-version-name: 1.0.$VER_CODE" \
-            --data-binary "@$APK_PATH"
+          if [ -n "$SERVER_URL" ]; then
+            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+            VER_CODE="${{ github.run_number }}"
+            curl -f -X POST "$SERVER_URL/api/app/upload-apk" \
+              -H "x-update-secret: ${UPDATE_SECRET:-msb55115_ota_key}" \
+              -H "x-version-code: $VER_CODE" \
+              -H "x-version-name: 1.0.$VER_CODE" \
+              --data-binary "@$APK_PATH"
+          fi
 
       - name: Выгрузка готового APK в Artifacts
         uses: actions/upload-artifact@v4
