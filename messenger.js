@@ -1044,11 +1044,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     if (tInput) {
-        tInput.addEventListener('keypress', function(e) {
+        tInput.setAttribute('autocomplete', 'off');
+        tInput.setAttribute('autocorrect', 'off');
+        tInput.setAttribute('autocapitalize', 'off');
+        tInput.setAttribute('spellcheck', 'false');
 
-            if (e.key === 'Enter') sendMessage();
+        var isAndroidComposing = false;
+        tInput.addEventListener('compositionstart', function() {
+            isAndroidComposing = true;
         });
-        tInput.addEventListener('input', function() {
+        tInput.addEventListener('compositionend', function() {
+            isAndroidComposing = false;
+        });
+
+        tInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        tInput.addEventListener('input', function(e) {
+            if (isAndroidComposing || (e && e.isComposing)) return;
             if (!currentRoomId) return;
             var hasVal = tInput.value.trim().length > 0;
             if (hasVal) {
@@ -1063,6 +1080,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
     if (fInput) {
         fInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') sendFriendRequest();
@@ -2132,6 +2150,7 @@ var TG_EMOJI_CATEGORIES = [
 ];
 
 function buildTelegramComposerLayout() {
+    if (document.getElementById('tg-capsule-wrap')) return;
     var inputContainer = document.querySelector('#messenger-modal .input-container');
     var toolsRow = document.querySelector('#messenger-modal .tools-row');
     var inputRow = document.querySelector('#messenger-modal .input-row');
@@ -2139,6 +2158,7 @@ function buildTelegramComposerLayout() {
     var sendBtn = document.getElementById('send-btn');
 
     if (!inputContainer || !toolsRow || !inputRow || !textInput) return;
+
 
       if (toolsRow.getAttribute('data-tg-tools') !== '1') {
         toolsRow.setAttribute('data-tg-tools', '1');
