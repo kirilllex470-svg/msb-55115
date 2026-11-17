@@ -428,18 +428,58 @@ window.handleIncomingChatWS = function(packet) {
         try {
             var rawC = localStorage.getItem('msb_cache_room_' + packet.room);
             if (rawC) {
-                var arrC = JSON.parse(rawC).filter(function(m) { return m.id !== packet.messageId; });
-                localStorage.setItem('msb_cache_room_' + packet.room, JSON.stringify(arrC));
+                var arrC = JSON.parse(rawC).filter(function(m) {
+                    return m.id !== packet.messageId;
+                });
+                localStorage.setItem(
+                    'msb_cache_room_' + packet.room,
+                    JSON.stringify(arrC)
+                );
             }
         } catch (e) {}
         if (currentRoomId === packet.room) {
-            var rowDel = document.querySelector('.message-row[data-msg-id="' + packet.messageId + '"]');
+            var selDel = '.message-row[data-msg-id="' + packet.messageId + '"]';
+            var rowDel = document.querySelector(selDel);
             if (rowDel) rowDel.remove();
             renderedMsgIds.delete(packet.messageId);
         }
         loadFriendsAndRequests(true);
         return;
     }
+
+    if (packet.type === 'chat_msg_edited' && packet.room && packet.messageId) {
+        try {
+            var rawE = localStorage.getItem('msb_cache_room_' + packet.room);
+            if (rawE) {
+                var arrE = JSON.parse(rawE);
+                arrE.forEach(function(m) {
+                    if (m.id === packet.messageId) {
+                        m.text = packet.text;
+                        m.edited = true;
+                    }
+                });
+                localStorage.setItem(
+                    'msb_cache_room_' + packet.room,
+                    JSON.stringify(arrE)
+                );
+            }
+        } catch (e) {}
+        if (currentRoomId === packet.room) {
+            var selEd = '.message-row[data-msg-id="' + packet.messageId + '"]';
+            var rowEd = document.querySelector(selEd);
+            if (rowEd) {
+                var txtEl = rowEd.querySelector('.msg-text');
+                if (txtEl) txtEl.textContent = packet.text;
+                var timeEl = rowEd.querySelector('.msg-time');
+                if (timeEl && timeEl.textContent.indexOf('изм.') === -1) {
+                    var badge = '<span class="msg-edited-tag">(изм.)</span>';
+                    timeEl.insertAdjacentHTML('afterbegin', badge);
+                }
+            }
+        }
+        return;
+    }
+
 
     if (packet.type === 'chat_room_read' && packet.room) {
         if (currentRoomId === packet.room && String(packet.reader || '').toLowerCase() !== chatUser.toLowerCase()) {
@@ -537,26 +577,73 @@ function ensureCleanMessengerTopbar() {
     var topbar = document.createElement('div');
     topbar.id = 'msb-unified-topbar';
     topbar.className = 'msb-clean-topbar';
-    topbar.innerHTML =
-        '<button type="button" class="msb-unified-back-btn" onclick="handleUnifiedMessengerBack()">' +
-            '<span class="back-arrow-icon">‹</span>' +
-            '<span>Назад</span>' +
-        '</button>' +
-            '<div class="msb-profile-pill">' +
-            '<div id="my-avatar" class="avatar msb-top-avatar" onclick="openAvatarInViewer(this, chatUser)">МС</div>' +
-            '<div class="msb-profile-meta">' +
-                '<span id="msg-my-name" class="msb-profile-callsign">Боец</span>' +
-                '<div style="display:flex; gap:10px; align-items:center;">' +
-                    '<label for="msb-top-avatar-file" class="msb-avatar-edit-link">📷 Аватарка</label>' +
-                    '<span class="msb-avatar-edit-link" style="color:#facc15;" onclick="openPinSetupModal()">🔐 ПИН-код</span>' +
-                '</div>' +
-                '<input type="file" id="msb-top-avatar-file" accept="image/*" style="display:none;" onchange="uploadMyAvatar(this)">' +
-            '</div>' +
-        '</div>';
-
+    topbar.innerHTML = [
+        '<button type="button" class="msb-unified-back-btn" onclick="handleUnifiedMessengerBack()">',
+        '<span class="back-arrow-icon">‹</span><span>Назад</span>',
+        '</button>',
+        '<div class="msb-profile-pill" onclick="openUserProfileModal()" style="cursor:pointer;">',
+        '<div id="my-avatar" class="avatar msb-top-avatar">МС</div>',
+        '<div class="msb-profile-meta">',
+        '<span id="msg-my-name" class="msb-profile-callsign">Боец</span>',
+        '<span class="msb-avatar-edit-link">👤 Профиль</span>',
+        '</div>',
+        '</div>'
+    ].join('');
 
     modal.insertBefore(topbar, modal.firstChild);
 }
+
+function openUserProfileModal() {
+    chatUser = getActiveChatIdentity();
+    if (!chatUser) return;
+    var modal = document.getElementById('msb-user-profile-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'msb-user-profile-modal';
+        modal.className = 'custom-modal-overlay';
+        modal.style.zIndex = '220000';
+        modal.innerHTML = [
+            '<div class="login-box" style="border:2px solid #00ca9e; max-width:350px;">',
+            '<h3 style="margin:0 0 12px 0; color:#f8fafc;">👤 Профиль бойца</h3>',
+            '<div id="profile-modal-avatar" class="avatar" ',
+            'style="width:74px;height:74px;border-radius:50%;margin:0 auto 10px;font-size:22px;" ',
+            'onclick="openAvatarInViewer(this, chatUser)"></div>',
+            '<div id="profile-modal-name" ',
+            'style="font-size:17px;font-weight:bold;color:#38bdf8;margin-bottom:14px;"></div>',
+            '<label for="msb-top-avatar-file" class="auth-btn" ',
+            'style="display:block;margin-bottom:10px;background:#0284c7;">',
+            '📷 Сменить аватарку',
+            '</label>',
+            '<input type="file" id="msb-top-avatar-file" accept="image/*" ',
+            'style="display:none;" onchange="uploadMyAvatar(this)">',
+            '<button type="button" ',
+            'style="background:#f59e0b;color:#090d16;margin-bottom:10px;" ',
+            'onclick="closeUserProfileModal(); openPinSetupModal();">',
+            '🔐 Создать ПИН-код',
+            '</button>',
+            '<button type="button" class="viewer-btn" onclick="closeUserProfileModal()">',
+            'Закрыть',
+            '</button>',
+            '</div>'
+        ].join('');
+        modal.onclick = function(e) {
+            if (e.target === modal) closeUserProfileModal();
+        };
+        document.body.appendChild(modal);
+    }
+    document.getElementById('profile-modal-name').textContent = chatUser;
+    var avBox = document.getElementById('profile-modal-avatar');
+    renderAvatarElement(avBox, chatUser, getCachedUserAvatar(chatUser, ''));
+    modal.style.display = 'flex';
+}
+
+function closeUserProfileModal() {
+    var m = document.getElementById('msb-user-profile-modal');
+    if (m) m.style.display = 'none';
+}
+window.openUserProfileModal = openUserProfileModal;
+window.closeUserProfileModal = closeUserProfileModal;
+
 
 function handleUnifiedMessengerBack() {
     var sidebar = document.getElementById('app-sidebar');
@@ -1262,6 +1349,8 @@ function markChatAsRead(roomId) {
     }).catch(function() {});
 }
 
+var editingMessageId = null;
+
 function sendMessage() {
     chatUser = getActiveChatIdentity();
     var textInput = document.getElementById('text-input');
@@ -1269,7 +1358,25 @@ function sendMessage() {
     var text = textInput.value.trim();
     if (text === '' || !chatUser || !currentRoomId) return;
 
+    if (editingMessageId) {
+        var editId = editingMessageId;
+        editingMessageId = null;
+        textInput.value = '';
+        cancelReply();
+        fetch('/api/messages/edit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                room: currentRoomId,
+                messageId: editId,
+                text: text
+            })
+        });
+        return;
+    }
+
     var qId = quotedMessageId || null;
+
     var qTxt = quotedMessageText || null;
     var qSnd = quotedMessageSender || null;
 
@@ -1453,10 +1560,14 @@ function handleQuoteTrigger(id, text, sender) {
 }
 
 function cancelReply() {
-    quotedMessageId = null; quotedMessageText = null; quotedMessageSender = null;
+    editingMessageId = null;
+    quotedMessageId = null;
+    quotedMessageText = null;
+    quotedMessageSender = null;
     var bar = document.getElementById('reply-bar');
     if (bar) bar.style.display = 'none';
 }
+
 
 function handleForwardTrigger(id, text, type, sender) {
     activeMessageId = id; activeMessageText = text; activeMessageType = type; activeMessageOriginalSender = sender;
@@ -1664,10 +1775,145 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
     } else {
         contentHTML = '<div class="msg-text">' + escapeEdgeHtml(msg.text) + '</div>';
     }
-    bubble.innerHTML = delBtnHTML + quoteHTML + forwardHTML + authorHTML + contentHTML + '<div class="msg-time">' + msg.time + checkIcon + '</div>';
+    var editedBadge = msg.edited
+        ? '<span class="msg-edited-tag">(изм.)</span>'
+        : '';
+    var timeBlock = '<div class="msg-time">' +
+        editedBadge + msg.time + checkIcon +
+        '</div>';
+    bubble.innerHTML = delBtnHTML + quoteHTML + forwardHTML +
+        authorHTML + contentHTML + timeBlock;
     parentContainer.appendChild(row);
     setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
+    attachLongPressActions(row, msg, isMy);
 }
+
+function copyTextUniversal(text) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function() {});
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+    }
+}
+
+function attachLongPressActions(rowEl, msg, isMy) {
+    var bubble = rowEl.querySelector('.bubble');
+    if (!bubble) return;
+    var pressTimer = null;
+    var startX = 0;
+    var startY = 0;
+
+    function triggerHold() {
+        if (navigator.vibrate) navigator.vibrate(45);
+        var txtNode = rowEl.querySelector('.msg-text');
+        var actualText = txtNode ? txtNode.textContent : (msg.text || '');
+        if (msg.type === 'text' && actualText) {
+            copyTextUniversal(actualText);
+        }
+        openMessageActionSheet(msg.id, actualText, msg.type, isMy);
+    }
+
+    bubble.addEventListener('touchstart', function(e) {
+        var t = e.touches.item(0);
+        startX = t.clientX;
+        startY = t.clientY;
+        pressTimer = setTimeout(triggerHold, 520);
+    }, { passive: true });
+
+    bubble.addEventListener('touchmove', function(e) {
+        if (!pressTimer) return;
+        var t = e.touches.item(0);
+        var dx = Math.abs(t.clientX - startX);
+        var dy = Math.abs(t.clientY - startY);
+        if (dx > 10 || dy > 10) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+    }, { passive: true });
+
+    bubble.addEventListener('touchend', function() {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+    });
+
+    bubble.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        triggerHold();
+    });
+}
+
+function openMessageActionSheet(msgId, text, msgType, isMy) {
+    var sheet = document.getElementById('msb-msg-action-sheet');
+    if (!sheet) {
+        sheet = document.createElement('div');
+        sheet.id = 'msb-msg-action-sheet';
+        sheet.className = 'custom-modal-overlay';
+        sheet.style.zIndex = '225000';
+        sheet.onclick = function(e) {
+            if (e.target === sheet) sheet.style.display = 'none';
+        };
+        document.body.appendChild(sheet);
+    }
+    var canEdit = isMy && msgType === 'text';
+    var editBtnHtml = canEdit
+        ? '<button type="button" id="act-edit-msg-btn" ' +
+          'style="background:#0284c7;margin-bottom:8px;">' +
+          '✏️ Исправить сообщение</button>'
+        : '';
+
+    sheet.innerHTML = [
+        '<div class="login-box" style="border:2px solid #38bdf8;max-width:340px;">',
+        '<div style="color:#4ade80;font-size:13px;font-weight:bold;margin-bottom:10px;">',
+        '📋 Текст сразу скопирован в буфер!',
+        '</div>',
+        editBtnHtml,
+        '<button type="button" id="act-copy-msg-btn" ',
+        'style="background:#10b981;margin-bottom:8px;">',
+        '📋 Скопировать ещё раз',
+        '</button>',
+        '<button type="button" class="viewer-btn" id="act-close-msg-btn">',
+        'Отмена',
+        '</button>',
+        '</div>'
+    ].join('');
+    sheet.style.display = 'flex';
+
+    document.getElementById('act-close-msg-btn').onclick = function() {
+        sheet.style.display = 'none';
+    };
+    document.getElementById('act-copy-msg-btn').onclick = function() {
+        copyTextUniversal(text);
+        sheet.style.display = 'none';
+    };
+    if (canEdit) {
+        document.getElementById('act-edit-msg-btn').onclick = function() {
+            sheet.style.display = 'none';
+            startEditingMessage(msgId, text);
+        };
+    }
+}
+
+function startEditingMessage(msgId, oldText) {
+    editingMessageId = msgId;
+    var bar = document.getElementById('reply-bar');
+    var textEl = document.getElementById('reply-bar-text');
+    var input = document.getElementById('text-input');
+    if (textEl) textEl.textContent = '✏️ Исправление: ' + oldText;
+    if (bar) bar.style.display = 'flex';
+    if (input) {
+        input.value = oldText;
+        input.focus();
+    }
+}
+
 
 function playVideoWithSound(v) {
     document.querySelectorAll('#messages video.video-round').forEach(function(other) {

@@ -923,10 +923,23 @@ function handleWsIncomingEvent(event) {
         return;
     }
 
-    if ((msg.type === 'chat_new_msg' || msg.type === 'chat_msg_deleted' || msg.type === 'chat_room_read' || msg.type === 'avatar_updated') && typeof window.handleIncomingChatWS === 'function') {
+    if (msg.type === 'pin_unlocked_by_admin' && msg.user) {
+        const who = String(currentCallsign || currentUser || '').trim().toLowerCase();
+        if (who && who === String(msg.user).trim().toLowerCase()) {
+            localStorage.removeItem('msb_user_has_pin_' + who);
+            sessionStorage.setItem('msb_pin_verified_' + who, '1');
+            const lockModal = document.getElementById('msb-pin-lock-modal');
+            if (lockModal) lockModal.style.display = 'none';
+            alert('✅ Администратор подтвердил сброс ПИН-кода! Доступ открыт.');
+        }
+        return;
+    }
+
+    if ((msg.type === 'chat_new_msg' || msg.type === 'chat_msg_deleted' || msg.type === 'chat_msg_edited' || msg.type === 'chat_room_read' || msg.type === 'avatar_updated') && typeof window.handleIncomingChatWS === 'function') {
         window.handleIncomingChatWS(msg);
         return;
     }
+
 
     if (msg.type === 'init') {
         const tbody = document.getElementById('table-body');
@@ -1514,11 +1527,31 @@ function fetchAdminUsersList() {
         aBox.innerHTML = '';
         const pending = data.pending || new Array();
         const approved = data.approved || new Array();
+        const resets = data.pinResets || new Array();
+        const totalActionCount = pending.length + resets.length;
         if (badge) {
-            badge.style.display = pending.length > 0 ? 'inline-block' : 'none';
-            badge.innerText = pending.length;
+            badge.style.display = totalActionCount > 0 ? 'inline-block' : 'none';
+            badge.innerText = totalActionCount;
         }
-        if (pending.length === 0) pBox.innerHTML = '<div style="color:#64748b;">Нет новых заявок</div>';
+        if (pending.length === 0 && resets.length === 0) {
+            pBox.innerHTML = '<div style="color:#64748b;">Нет новых заявок</div>';
+        }
+        resets.forEach(function(r) {
+            const rCard = document.createElement('div');
+            rCard.className = 'user-row-card';
+            rCard.style.borderColor = '#facc15';
+            const ansBlock = r.userAnswer
+                ? ('<div>Ответ бойца: <b style="color:#4ade80;">' + r.userAnswer + '</b> (Верный ответ: <code style="color:#facc15;">' + (r.expectedAnswer || '-') + '</code>)</div>')
+                : '<div style="color:#94a3b8;">⏳ Ожидаем, пока боец введёт ответ на вопрос...</div>';
+            rCard.innerHTML =
+                '<div style="flex:1;">' +
+                    '<div style="color:#facc15; font-weight:bold;">🔐 ЗАБЫТ ПИН-КОД: ' + r.username + ' (' + r.unit + ')</div>' +
+                    '<div>Контрольный вопрос: <i>' + r.question + '</i></div>' +
+                    ansBlock +
+                '</div>' +
+                '<button class="lb-btn" style="background:#22c55e;" onclick="adminUserAction(\'' + r.key + '\', \'approve_pin_reset\')">🔓 Подтвердить и сбросить ПИН</button>';
+            pBox.appendChild(rCard);
+        });
         pending.forEach(function(u) {
             const row = document.createElement('div');
             row.className = 'user-row-card';
@@ -1528,13 +1561,17 @@ function fetchAdminUsersList() {
         });
         if (approved.length === 0) aBox.innerHTML = '<div style="color:#64748b;">Пока нет пользователей</div>';
         approved.forEach(function(u) {
+            const pinBadge = u.pinCode
+                ? (' | 🔐 ПИН: <code style="color:#facc15; font-weight:bold;">' + u.pinCode + '</code> (Вопрос: <i>' + (u.pinQuestion || '-') + '</i> / Ответ: <b>' + (u.pinAnswer || '-') + '</b>)')
+                : ' | <span style="color:#64748b;">ПИН не задан</span>';
             const row = document.createElement('div');
             row.className = 'user-row-card';
-            row.innerHTML = '<div style="flex:1;"><div><b>' + u.username + '</b> (' + u.unit + ') — Пароль: <code style="color:#4ade80; font-weight:bold;">' + u.password + '</code></div>' + renderPermCheckboxes(u) + '</div><button class="lb-btn" style="background:#ef4444; padding:5px 10px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">🗑️ Удалить</button>';
+            row.innerHTML = '<div style="flex:1;"><div><b>' + u.username + '</b> (' + u.unit + ') — Пароль: <code style="color:#4ade80; font-weight:bold;">' + u.password + '</code>' + pinBadge + '</div>' + renderPermCheckboxes(u) + '</div><button class="lb-btn" style="background:#ef4444; padding:5px 10px;" onclick="adminUserAction(\'' + u.key + '\', \'delete\')">🗑️ Удалить</button>';
             aBox.appendChild(row);
         });
     }).catch(function() {});
 }
+
 
 function toggleUserPerm(userKey, permName, val) {
     fetch('/api/admin/users/action', {
@@ -2147,24 +2184,386 @@ window.markMsbServerAlive = function(isFullInit) {
     }, 4500);
 })();
 
+var enteredLockPin = '';
+var pinStatusPollTimer = null;
+
 function ensurePinModals() {
     if (!document.getElementById('msb-pin-setup-modal')) {
         const m = document.createElement('div');
         m.id = 'msb-pin-setup-modal';
         m.className = 'custom-modal-overlay';
         m.style.zIndex = '240000';
-        m.innerHTML =
-            '<div class="login-box" style="border:2px solid #facc15;">' +
-                '<h3 style="margin:0 0 12px 0; color:#facc15;">🔐 Установка 6-значного ПИН-кода</h3>' +
-                '<p style="font-size:12px; color:#94a3b8; margin:0 0 12px 0;">Введите ровно 6 цифр и повторите для подтверждения:</p>' +
-                '<input type="password" id="msb-pin-in1" inputmode="numeric" maxlength="6" placeholder="Новый ПИН-код (6 цифр)">' +
-                '<input type="password" id="msb-pin-in2" inputmode="numeric" maxlength="6" placeholder="Повторите ПИН-код (6 цифр)">' +
-                '<div id="msb-pin-setup-msg" style="font-size:13px; margin-bottom:10px; display:none;"></div>' +
-                '<button type="button" onclick="submitNewUserPin()">✅ ПОДТВЕРДИТЬ И СОХРАНИТЬ</button>' +
-                '<button type="button" class="viewer-btn" onclick="document.getElementById(\'msb-pin-setup-modal\').style.display=\'none\'">Отмена</button>' +
-            '</div>';
+        m.innerHTML = [
+            '<div class="login-box" style="border:2px solid #facc15; max-width:360px;">',
+            '<h3 style="margin:0 0 10px 0; color:#facc15;">🔐 Создать 4-значный ПИН</h3>',
+            '<p style="font-size:12px; color:#94a3b8; margin:0 0 10px 0;">',
+            'Введите 4 цифры и обязательный контрольный вопрос:',
+            '</p>',
+            '<input type="password" id="msb-pin-in1" inputmode="numeric" maxlength="4" placeholder="Новый ПИН (4 цифры)">',
+            '<input type="password" id="msb-pin-in2" inputmode="numeric" maxlength="4" placeholder="Повторите ПИН (4 цифры)">',
+            '<input type="text" id="msb-pin-question" placeholder="Контрольный вопрос">',
+            '<input type="text" id="msb-pin-answer" placeholder="Ответ на вопрос">',
+            '<div id="msb-pin-setup-msg" style="font-size:13px; margin-bottom:10px; display:none;"></div>',
+            '<button type="button" onclick="submitNewUserPin()">✅ СОХРАНИТЬ</button>',
+            '<button type="button" class="viewer-btn" onclick="closePinSetupModal()">Отмена</button>',
+            '</div>'
+        ].join('');
         document.body.appendChild(m);
     }
+
+    if (!document.getElementById('msb-pin-lock-modal')) {
+        const lock = document.createElement('div');
+        lock.id = 'msb-pin-lock-modal';
+        lock.className = 'custom-modal-overlay';
+        lock.style.cssText = 'z-index:260000; background:#090d16;';
+        const digits = ['1','2','3','4','5','6','7','8','9'];
+        const numBtns = digits.map(function(n) {
+            return '<button type="button" onclick="pressPinDigit(\'' + n + '\')">' + n + '</button>';
+        }).join('');
+
+        lock.innerHTML = [
+            '<div class="bank-pin-screen">',
+            '<div class="bank-pin-badge">🛡️ ЗАЩИТА МСБ-55115</div>',
+            '<div id="msb-pin-lock-user" class="bank-pin-user"></div>',
+            '<div id="msb-pin-entry-view">',
+            '<div class="bank-pin-subtitle">Введите 4-значный код</div>',
+            '<div class="bank-pin-dots" id="bank-pin-dots">',
+            '<span></span><span></span><span></span><span></span>',
+            '</div>',
+            '<div id="msb-pin-unlock-err" class="bank-pin-err">❌ Неверный ПИН-код</div>',
+            '<div class="bank-keypad">',
+            numBtns,
+            '<button type="button" class="kp-sub" onclick="logoutUser()">Выход</button>',
+            '<button type="button" onclick="pressPinDigit(\'0\')">0</button>',
+            '<button type="button" class="kp-sub" onclick="backspacePinDigit()">⌫</button>',
+            '</div>',
+            '<button type="button" class="bank-forgot-btn" onclick="requestForgotPinSupport()">',
+            '🆘 Забыли ПИН-код? Связаться со службой поддержки',
+            '</button>',
+            '</div>',
+            '<div id="msb-pin-recovery-view" style="display:none; width:100%;">',
+            '<div class="pin-rec-info">',
+            '📩 Оповещение отправлено Админу. Ответьте на ваш вопрос:',
+            '</div>',
+            '<div id="msb-recovery-question-text" class="pin-rec-q"></div>',
+            '<input type="text" id="msb-recovery-answer-input" class="auth-input" placeholder="Ваш ответ...">',
+            '<button type="button" class="auth-btn" onclick="submitPinRecoveryAnswer()">',
+            '📤 ОТПРАВИТЬ ОТВЕТ',
+            '</button>',
+            '<div id="msb-recovery-wait-box" class="pin-rec-wait">',
+            '⏳ Ожидайте подтверждения разблокировки от Админа...',
+            '</div>',
+            '<button type="button" class="bank-forgot-btn" style="margin-top:14px;" onclick="backToPinKeypad()">',
+            '← Назад к вводу ПИН-кода',
+            '</button>',
+            '</div>',
+            '</div>'
+        ].join('');
+        document.body.appendChild(lock);
+    }
+}
+
+function closePinSetupModal() {
+    const m = document.getElementById('msb-pin-setup-modal');
+    if (m) m.style.display = 'none';
+}
+function openPinSetupModal() {
+    ensurePinModals();
+    document.getElementById('msb-pin-in1').value = '';
+    document.getElementById('msb-pin-in2').value = '';
+    document.getElementById('msb-pin-setup-msg').style.display = 'none';
+    document.getElementById('msb-pin-setup-modal').style.display = 'flex';
+}
+
+function submitNewUserPin() {
+    const p1 = document.getElementById('msb-pin-in1').value.trim();
+    const p2 = document.getElementById('msb-pin-in2').value.trim();
+    const msg = document.getElementById('msb-pin-setup-msg');
+    const who = currentCallsign || currentUser;
+    if (!/^\d{6}$/.test(p1)) {
+        msg.style.color = '#ef4444'; msg.innerText = '❌ Введите ровно 6 цифр!'; msg.style.display = 'block'; return;
+    }
+    if (p1 !== p2) {
+        msg.style.color = '#ef4444'; msg.innerText = '❌ ПИН-коды не совпадают!'; msg.style.display = 'block'; return;
+    }
+    fetch('/api/user/pin/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: who, pin: p1 })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d && d.ok) {
+            localStorage.setItem('msb_user_has_pin_' + who.toLowerCase(), '1');
+            sessionStorage.setItem('msb_pin_verified_' + who.toLowerCase(), '1');
+            msg.style.color = '#4ade80'; msg.innerText = '✅ 6-значный ПИН-код установлен!'; msg.style.display = 'block';
+            setTimeout(function() { document.getElementById('msb-pin-setup-modal').style.display = 'none'; }, 900);
+        }
+    });
+}
+
+function checkPinOnAppEntry() {
+    const who = currentCallsign || currentUser;
+    if (!who) return;
+    const key = who.toLowerCase();
+    if (sessionStorage.getItem('msb_pin_verified_' + key) === '1') return;
+    ensurePinModals();
+    if (localStorage.getItem('msb_user_has_pin_' + key) === '1') {
+        document.getElementById('msb-pin-lock-user').innerText = 'Позывной: ' + who;
+        document.getElementById('msb-pin-lock-modal').style.display = 'flex';
+    }
+    fetch('/api/user/me?noav=1&user=' + encodeURIComponent(who) + '&t=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d && d.hasPin) {
+                localStorage.setItem('msb_user_has_pin_' + key, '1');
+                if (sessionStorage.getItem('msb_pin_verified_' + key) !== '1') {
+                    document.getElementById('msb-pin-lock-user').innerText = 'Позывной: ' + who;
+                    document.getElementById('msb-pin-lock-modal').style.display = 'flex';
+                }
+            } else {
+                localStorage.removeItem('msb_user_has_pin_' + key);
+                document.getElementById('msb-pin-lock-modal').style.display = 'none';
+            }
+        }).catch(function() {});
+}
+
+function verifyUnlockPin() {
+    const who = currentCallsign || currentUser;
+    const pin = document.getElementById('msb-pin-unlock-input').value.trim();
+    const err = document.getElementById('msb-pin-unlock-err');
+    fetch('/api/user/pin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: who, pin: pin })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d && d.ok) {
+            sessionStorage.setItem('msb_pin_verified_' + who.toLowerCase(), '1');
+            document.getElementById('msb-pin-lock-modal').style.display = 'none';
+            err.style.display = 'none';
+        } else {
+            err.style.display = 'block';
+        }
+    });
+}
+function updateBankPinDots() {
+    const dotsBox = document.getElementById('bank-pin-dots');
+    if (!dotsBox) return;
+    dotsBox.querySelectorAll('span').forEach(function(sp, i) {
+        sp.classList.toggle('filled', i < enteredLockPin.length);
+    });
+}
+
+function pressPinDigit(d) {
+    if (enteredLockPin.length >= 4) return;
+    enteredLockPin += d;
+    updateBankPinDots();
+    const err = document.getElementById('msb-pin-unlock-err');
+    if (err) err.style.visibility = 'hidden';
+    if (enteredLockPin.length === 4) {
+        setTimeout(verifyUnlockPin, 120);
+    }
+}
+
+function backspacePinDigit() {
+    enteredLockPin = enteredLockPin.slice(0, -1);
+    updateBankPinDots();
+}
+
+function openPinSetupModal() {
+    ensurePinModals();
+    document.getElementById('msb-pin-in1').value = '';
+    document.getElementById('msb-pin-in2').value = '';
+    document.getElementById('msb-pin-question').value = '';
+    document.getElementById('msb-pin-answer').value = '';
+    document.getElementById('msb-pin-setup-msg').style.display = 'none';
+    document.getElementById('msb-pin-setup-modal').style.display = 'flex';
+}
+
+function showSetupMsg(text, color) {
+    const msg = document.getElementById('msb-pin-setup-msg');
+    if (!msg) return;
+    msg.style.color = color;
+    msg.innerText = text;
+    msg.style.display = 'block';
+}
+
+function submitNewUserPin() {
+    const p1 = document.getElementById('msb-pin-in1').value.trim();
+    const p2 = document.getElementById('msb-pin-in2').value.trim();
+    const q = document.getElementById('msb-pin-question').value.trim();
+    const a = document.getElementById('msb-pin-answer').value.trim();
+    const who = currentCallsign || currentUser;
+
+    if (!/^\d{4}$/.test(p1)) {
+        return showSetupMsg('❌ Введите ровно 4 цифры!', '#ef4444');
+    }
+    if (p1 !== p2) {
+        return showSetupMsg('❌ ПИН-коды не совпадают!', '#ef4444');
+    }
+    if (!q || !a) {
+        return showSetupMsg('❌ Заполните вопрос и ответ!', '#ef4444');
+    }
+
+    fetch('/api/user/pin/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            user: who,
+            pin: p1,
+            question: q,
+            answer: a
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d && d.ok) {
+            const k = who.toLowerCase();
+            localStorage.setItem('msb_user_has_pin_' + k, '1');
+            sessionStorage.setItem('msb_pin_verified_' + k, '1');
+            showSetupMsg('✅ 4-значный ПИН сохранён!', '#4ade80');
+            setTimeout(closePinSetupModal, 900);
+        }
+    });
+}
+
+function checkPinOnAppEntry() {
+    const who = currentCallsign || currentUser;
+    if (!who) return;
+    const key = who.toLowerCase();
+    if (sessionStorage.getItem('msb_pin_verified_' + key) === '1') return;
+
+    ensurePinModals();
+    enteredLockPin = '';
+    updateBankPinDots();
+
+    const userLbl = document.getElementById('msb-pin-lock-user');
+    const lockModal = document.getElementById('msb-pin-lock-modal');
+
+    if (localStorage.getItem('msb_user_has_pin_' + key) === '1') {
+        userLbl.innerText = 'Позывной: ' + who;
+        lockModal.style.display = 'flex';
+    }
+
+    const url = '/api/user/pin/status?user=' +
+        encodeURIComponent(who) + '&t=' + Date.now();
+
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d && d.hasPin) {
+                localStorage.setItem('msb_user_has_pin_' + key, '1');
+                if (sessionStorage.getItem('msb_pin_verified_' + key) !== '1') {
+                    userLbl.innerText = 'Позывной: ' + who;
+                    lockModal.style.display = 'flex';
+                    const isWait = (
+                        d.resetState === 'waiting_user' ||
+                        d.resetState === 'waiting_admin'
+                    );
+                    if (isWait) {
+                        showPinRecoveryView(
+                            d.question,
+                            d.resetState === 'waiting_admin'
+                        );
+                    }
+                }
+            } else {
+                localStorage.removeItem('msb_user_has_pin_' + key);
+                lockModal.style.display = 'none';
+            }
+        })
+        .catch(function() {});
+}
+
+function verifyUnlockPin() {
+    const who = currentCallsign || currentUser;
+    const err = document.getElementById('msb-pin-unlock-err');
+    fetch('/api/user/pin/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: who, pin: enteredLockPin })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d && d.ok) {
+            const k = who.toLowerCase();
+            sessionStorage.setItem('msb_pin_verified_' + k, '1');
+            document.getElementById('msb-pin-lock-modal').style.display = 'none';
+            enteredLockPin = '';
+            updateBankPinDots();
+        } else {
+            enteredLockPin = '';
+            updateBankPinDots();
+            if (err) err.style.visibility = 'visible';
+        }
+    });
+}
+
+function requestForgotPinSupport() {
+    const who = currentCallsign || currentUser;
+    fetch('/api/user/pin/forgot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: who })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d && d.ok) showPinRecoveryView(d.question, false);
+    });
+}
+
+function showPinRecoveryView(questionText, alreadyAnswered) {
+    document.getElementById('msb-pin-entry-view').style.display = 'none';
+    document.getElementById('msb-pin-recovery-view').style.display = 'block';
+    const qEl = document.getElementById('msb-recovery-question-text');
+    qEl.innerText = '❓ Вопрос: ' + (questionText || '');
+    const wBox = document.getElementById('msb-recovery-wait-box');
+    wBox.style.display = alreadyAnswered ? 'block' : 'none';
+
+    if (pinStatusPollTimer) clearInterval(pinStatusPollTimer);
+    pinStatusPollTimer = setInterval(function() {
+        const who = currentCallsign || currentUser;
+        if (!who) return;
+        const url = '/api/user/pin/status?user=' +
+            encodeURIComponent(who) + '&t=' + Date.now();
+        fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(st) {
+                if (st && !st.hasPin) {
+                    clearInterval(pinStatusPollTimer);
+                    const k = who.toLowerCase();
+                    localStorage.removeItem('msb_user_has_pin_' + k);
+                    sessionStorage.setItem('msb_pin_verified_' + k, '1');
+                    const m = document.getElementById('msb-pin-lock-modal');
+                    if (m) m.style.display = 'none';
+                }
+            })
+            .catch(function() {});
+    }, 3500);
+}
+
+function submitPinRecoveryAnswer() {
+    const who = currentCallsign || currentUser;
+    const inp = document.getElementById('msb-recovery-answer-input');
+    const ans = inp ? inp.value.trim() : '';
+    if (!ans) return alert('Введите ответ на вопрос!');
+    fetch('/api/user/pin/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: who, answer: ans })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d && d.ok) {
+            const w = document.getElementById('msb-recovery-wait-box');
+            if (w) w.style.display = 'block';
+        }
+    });
+}
+
+function backToPinKeypad() {
+    document.getElementById('msb-pin-recovery-view').style.display = 'none';
+    document.getElementById('msb-pin-entry-view').style.display = 'block';
+}
+
     if (!document.getElementById('msb-pin-lock-modal')) {
         const lock = document.createElement('div');
         lock.id = 'msb-pin-lock-modal';

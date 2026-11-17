@@ -769,3 +769,152 @@ body.theme-cosmic .msb-radial-tools-row .media-btn {
     will-change: transform;
     animation: tickerScroll 45s linear infinite !important;
 }
+.msg-ticker-move {
+    display: inline-block;
+    padding-left: 100% !important;
+    will-change: transform;
+    animation: tickerScroll 45s linear infinite !important;
+}
+
+/* === БАНКОВСКИЙ ЭКРАН 4-ЗНАЧНОГО ПИН-КОДА === */
+.bank-pin-screen {
+    width: 100%;
+    max-width: 340px;
+    background: linear-gradient(180deg, #131c31 0%, #090d16 100%);
+    border: 1.5px solid rgba(56, 189, 248, 0.35);
+    border-radius: 26px;
+    padding: 24px 20px;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9);
+    box-sizing: border-box;
+}
+
+.bank-pin-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 800;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+}
+
+.bank-pin-user {
+    font-size: 17px;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 4px;
+}
+
+.bank-pin-subtitle {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+}
+
+.bank-pin-dots {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 10px;
+}
+
+.bank-pin-dots span {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    border: 2px solid #38bdf8;
+    background: transparent;
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.bank-pin-dots span.filled {
+    background: #38bdf8;
+    box-shadow: 0 0 12px #38bdf8;
+    transform: scale(1.15);
+}
+
+.bank-pin-err {
+    color: #ef4444;
+    font-size: 13px;
+    font-weight: bold;
+    height: 18px;
+    margin-bottom: 10px;
+    visibility: hidden;
+}
+
+.bank-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    max-width: 250px;
+    margin: 0 auto 16px auto;
+}
+
+.bank-keypad button {
+    height: 62px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(30, 41, 59, 0.75);
+    color: #f8fafc;
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.bank-keypad button:active {
+    background: #0284c7;
+    transform: scale(0.93);
+}
+
+.bank-keypad button.kp-sub {
+    font-size: 14px;
+    color: #94a3b8;
+    background: transparent;
+    border-color: transparent;
+}
+
+.bank-forgot-btn {
+    background: transparent;
+    border: none;
+    color: #facc15;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+    line-height: 1.4;
+}
+
+.pin-rec-info {
+    background: rgba(250, 204, 21, 0.12);
+    border: 1px solid #facc15;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #fef08a;
+}
+
+.pin-rec-q {
+    font-weight: bold;
+    color: #38bdf8;
+    font-size: 15px;
+    margin-bottom: 10px;
+}
+
+.pin-rec-wait {
+    display: none;
+    margin-top: 12px;
+    color: #4ade80;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.msg-edited-tag {
+    font-size: 10px;
+    opacity: 0.75;
+    margin-right: 4px;
+}

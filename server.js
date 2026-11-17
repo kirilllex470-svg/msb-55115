@@ -21,7 +21,9 @@ const FRIENDS_FILE = path.join(storagePath, 'friends.json');
 const GROUPS_FILE = path.join(storagePath, 'groups.json');
 const REQUESTS_FILE = path.join(storagePath, 'requests.json');
 const READS_FILE = path.join(storagePath, 'last_read.json');
+const PIN_RESET_FILE = path.join(storagePath, 'pin_resets.json');
 const UPLOADS_DIR = path.join(storagePath, 'uploads');
+let pinResetsDB = readJSON(PIN_RESET_FILE, {});
 
 if (!fs.existsSync(UPLOADS_DIR)) {
     try {
@@ -690,17 +692,20 @@ const server = http.createServer(function(req, res) {
         });
     }
 
-    if (req.method === 'POST' && urlPath === '/api/user/pin/set') {
+     if (req.method === 'POST' && urlPath === '/api/user/pin/set') {
         return readBodyJSON(req, function(err, data) {
-            if (err || !data || !data.user || !data.pin || !/^\d{6}$/.test(String(data.pin))) {
-                return sendJsonCompressed(req, res, 400, { ok: false, message: 'ПИН-код должен состоять ровно из 6 цифр' });
+            if (err || !data || !data.user || !data.pin || !/^\d{4}$/.test(String(data.pin)) || !data.question || !data.answer) {
+                return sendJsonCompressed(req, res, 400, { ok: false, message: 'Нужны 4 цифры, контрольный вопрос и ответ' });
             }
             const k = String(data.user).trim().toLowerCase();
             if (!usersDB[k]) {
                 return sendJsonCompressed(req, res, 404, { ok: false, message: 'Пользователь не найден' });
             }
             usersDB[k].pinCode = String(data.pin);
+            usersDB[k].pinQuestion = String(data.question).trim();
+            usersDB[k].pinAnswer = String(data.answer).trim();
             writeJSON(USERS_FILE, usersDB, true);
+            broadcastWS({ type: 'users_updated' });
             return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
@@ -717,6 +722,75 @@ const server = http.createServer(function(req, res) {
         });
     }
 
+    if (req.method === 'POST' && urlPath === '/api/user/pin/forgot') {
+        return readBodyJSON(req, function(err, data) {
+            if (err || !data || !data.user) {
+                return sendJsonCompressed(req, res, 400, { ok: false });
+            }
+            const k = String(data.user).trim().toLowerCase();
+            const u = usersDB[k];
+            if (!u || !u.pinCode) {
+                return sendJsonCompressed(req, res, 404, { ok: false, message: 'ПИН-код не установлен' });
+            }
+            pinResetsDB[k] = {
+                key: k,
+                username: u.username,
+                unit: u.unit || '—',
+                question: u.pinQuestion || 'Контрольный вопрос не задан',
+                expectedAnswer: u.pinAnswer || '',
+                userAnswer: '',
+                status: 'waiting_user',
+                time: getServerDateTime()
+            };
+            writeJSON(PIN_RESET_FILE, pinResetsDB, true);
+            broadcastAlert(
+                u.username,
+                '#facc15',
+                getServerDateTime(),
+                'АДМИН',
+                '🔐 ЗАБЫТ ПИН-КОД: Боец ' + u.username + ' (' + (u.unit || '') + ') запросил разблокировку! Откройте "Пользователи и заявки".'
+            );
+            broadcastWS({ type: 'users_updated' });
+            return sendJsonCompressed(req, res, 200, { ok: true, question: pinResetsDB[k].question });
+        });
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/user/pin/answer') {
+        return readBodyJSON(req, function(err, data) {
+            if (err || !data || !data.user || !data.answer) {
+                return sendJsonCompressed(req, res, 400, { ok: false });
+            }
+            const k = String(data.user).trim().toLowerCase();
+            if (!pinResetsDB[k]) {
+                return sendJsonCompressed(req, res, 404, { ok: false });
+            }
+            pinResetsDB[k].userAnswer = String(data.answer).trim();
+            pinResetsDB[k].status = 'waiting_admin';
+            writeJSON(PIN_RESET_FILE, pinResetsDB, true);
+            broadcastAlert(
+                pinResetsDB[k].username,
+                '#38bdf8',
+                getServerDateTime(),
+                'АДМИН',
+                '🔑 ОТВЕТ НА ВОПРОС ПИН-КОДА от ' + pinResetsDB[k].username + ': «' + pinResetsDB[k].userAnswer + '». Подтвердите разблокировку!'
+            );
+            broadcastWS({ type: 'users_updated' });
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+
+    if (req.method === 'GET' && urlPath === '/api/user/pin/status') {
+        const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        const k = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
+        const u = usersDB[k] || {};
+        const rst = pinResetsDB[k] || null;
+        return sendJsonCompressed(req, res, 200, {
+            hasPin: Boolean(u.pinCode),
+            question: u.pinQuestion || '',
+            resetState: rst ? rst.status : 'none'
+        });
+    }
+
 
     if (req.method === 'GET' && urlPath === '/api/admin/users') {
         const pending = new Array();
@@ -727,14 +801,47 @@ const server = http.createServer(function(req, res) {
                 key: k,
                 username: u.username,
                 password: u.password,
+                pinCode: u.pinCode || '',
+                pinQuestion: u.pinQuestion || '',
+                pinAnswer: u.pinAnswer || '',
                 unit: u.unit || '—',
                 permissions: u.permissions || { row: false, stream: false, maps: false, archive: false, table: false }
             };
             if (u.approved === false) pending.push(item);
             else approved.push(item);
         });
-        return sendJsonCompressed(req, res, 200, { pending: pending, approved: approved });
+        const pinResets = Object.values(pinResetsDB).filter(function(r) { return r && r.status !== 'unlocked'; });
+        return sendJsonCompressed(req, res, 200, { pending: pending, approved: approved, pinResets: pinResets });
     }
+
+    if (req.method === 'POST' && urlPath === '/api/admin/users/action') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.key && usersDB[data.key]) {
+                if (data.action === 'approve') usersDB[data.key].approved = true;
+                else if (data.action === 'delete') delete usersDB[data.key];
+                else if (data.action === 'approve_pin_reset') {
+                    delete usersDB[data.key].pinCode;
+                    delete usersDB[data.key].pinQuestion;
+                    delete usersDB[data.key].pinAnswer;
+                    if (pinResetsDB[data.key]) {
+                        pinResetsDB[data.key].status = 'unlocked';
+                        writeJSON(PIN_RESET_FILE, pinResetsDB, true);
+                    }
+                    broadcastWS({ type: 'pin_unlocked_by_admin', user: data.key });
+                }
+                else if (data.action === 'set_perm' && data.permName) {
+                    if (!usersDB[data.key].permissions) {
+                        usersDB[data.key].permissions = { row: false, stream: false, maps: false, archive: false, table: false };
+                    }
+                    usersDB[data.key].permissions[data.permName] = Boolean(data.permVal);
+                }
+                writeJSON(USERS_FILE, usersDB);
+                broadcastWS({ type: 'users_updated' });
+            }
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+
 
     if (req.method === 'POST' && urlPath === '/api/admin/users/action') {
         return readBodyJSON(req, function(err, data) {
@@ -929,6 +1036,22 @@ const server = http.createServer(function(req, res) {
             res.end('OK');
         });
     }
+
+    if (urlPath === '/api/messages/edit' && req.method === 'POST') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.room && data.messageId && typeof data.text === 'string' && Array.isArray(roomsDB[data.room])) {
+                const msg = roomsDB[data.room].find(function(m) { return m.id === data.messageId; });
+                if (msg && msg.type === 'text') {
+                    msg.text = data.text.trim();
+                    msg.edited = true;
+                    writeJSON(CHAT_ROOMS_FILE, roomsDB);
+                    broadcastWS({ type: 'chat_msg_edited', room: data.room, messageId: data.messageId, text: msg.text });
+                }
+            }
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+
 
     if (urlPath === '/api/typing' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
