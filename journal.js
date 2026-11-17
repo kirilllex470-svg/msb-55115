@@ -186,12 +186,14 @@ async function subscribeToWebPush(forceRenew) {
                 });
             }
             const cleanSub = (typeof sub.toJSON === 'function') ? sub.toJSON() : sub;
-            const subPayload = {
+                   const subPayload = {
                 type: 'save_sub',
                 user: currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ',
                 callsign: currentCallsign || localStorage.getItem('journal_callsign') || '',
+                theme: localStorage.getItem('msb_app_theme') || 'military',
                 sub: cleanSub
             };
+
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify(subPayload));
             }
@@ -1670,15 +1672,17 @@ function clearHistoryAdmin() {
 
 function sendLocalNotification(target, text, sender, notifId) {
     const fromWho = sender || 'АДМИН';
-    const title = '🛑 ТРЕВОГА ДЛЯ [' + target + ']!';
+    const meta = getMsbThemeMeta();
+    const title = meta.badge + ' МСБ-55115 • [' + target + ']';
     const body = fromWho + ': ' + text;
 
-    // 1. Нативное уведомление для Android APK (работает всегда и в фоне)
+    // 1. Нативное уведомление для Android APK с цветом активной темы
     if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
         try {
-            window.MsbNative.notify(title, body, String(notifId || Date.now()));
+            window.MsbNative.notify(title, body, String(notifId || Date.now()), meta.color);
         } catch (e) {}
     }
+
 
     // 2. Старый способ для обычных браузеров на ПК
     if ('serviceWorker' in navigator) {
@@ -1998,7 +2002,14 @@ function makeAnimatedSvgGif(cat, idx, title) {
     return dataUrl;
 }
 
-function setAppTheme(themeName) {
+function getMsbThemeMeta(themeName) {
+    const t = themeName || localStorage.getItem('msb_app_theme') || 'military';
+    if (t === 'rocket') return { id: 'rocket', color: '#f97316', badge: '🚀', label: 'РАКЕТНЫЙ' };
+    if (t === 'cosmic') return { id: 'cosmic', color: '#a855f7', badge: '🌌', label: 'КОСМОС' };
+    return { id: 'military', color: '#22c55e', badge: '🪖', label: 'ВОЕННЫЙ' };
+}
+
+function setAppTheme(themeName, skipSync) {
     const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
     document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
     document.body.classList.add('theme-' + clean);
@@ -2007,7 +2018,15 @@ function setAppTheme(themeName) {
         const b = document.getElementById('theme-btn-' + t);
         if (b) b.classList.toggle('active', t === clean);
     });
+    const meta = getMsbThemeMeta(clean);
+    if (window.MsbNative && typeof window.MsbNative.setTheme === 'function') {
+        try { window.MsbNative.setTheme(meta.id, meta.color); } catch (e) {}
+    }
+    if (!skipSync && typeof sendFcmTokenToServer === 'function') {
+        sendFcmTokenToServer();
+    }
 }
+а
 
 function toggleChatGifDrawer() {
     const drawer = document.getElementById('chat-gif-drawer');
@@ -2554,12 +2573,14 @@ function sendFcmTokenToServer(tok) {
     if (!token) return;
     const u = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
     const c = currentCallsign || localStorage.getItem('journal_callsign') || '';
+    const th = localStorage.getItem('msb_app_theme') || 'military';
     fetch('/api/fcm/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: u, callsign: c, token: token })
+        body: JSON.stringify({ user: u, callsign: c, token: token, theme: th })
     }).catch(function() {});
 }
+
 
 initNativeFcmPush();
 setInterval(function() { sendFcmTokenToServer(); }, 300000);

@@ -1601,4 +1601,24 @@ body.theme-cosmic #messenger-modal .chat-header .call-header-btn {
 body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
     color: #c084fc !important;
 }
+/* === ФИКС КУРСОРА ПРИ УДАЛЕНИИ БУКВ НА ANDROID === */
+.tg-input-capsule textarea#text-input {
+    resize: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    white-space: nowrap !important;
+    line-height: 40px !important;
+    height: 40px !important;
+    font-family: inherit !important;
+    vertical-align: middle !important;
+}
+
+/* === ЖЁСТКОЕ СКРЫТИЕ КНОПКИ «НАЗАД» В СПИСКЕ ДРУЗЕЙ === */
+#msb-unified-topbar:not(.has-back-btn) #msb-top-back-btn {
+    display: none !important;
+}
+
+#msb-unified-topbar.has-back-btn #msb-top-back-btn {
+    display: inline-flex !important;
+}
 
