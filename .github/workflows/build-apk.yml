@@ -62,26 +62,23 @@ jobs:
             @capacitor/push-notifications@8
           npx cap add android
 
-      - name: Подключение google-services.json в Gradle
+            - name: Подключение google-services.json в Gradle
         run: |
           cp google-services.json android/app/google-services.json
-          python3 -c '
-          p1 = "android/build.gradle"
-          s1 = open(p1, encoding="utf-8").read()
-          dep = "classpath \"com.google.gms:google-services:4.4.2\""
-          if "com.google.gms:google-services" not in s1:
-              s1 = s1.replace("dependencies {", "dependencies {\n        " + dep, 1)
-              open(p1, "w", encoding="utf-8").write(s1)
+          if ! grep -q "com.google.gms:google-services" android/build.gradle; then
+            sed -i 's/dependencies {/dependencies {\n        classpath "com.google.gms:google-services:4.4.2"/' android/build.gradle
+          fi
+          if ! grep -q "firebase-messaging" android/app/build.gradle; then
+            echo "" >> android/app/build.gradle
+            echo "dependencies {" >> android/app/build.gradle
+            echo "    implementation \"com.google.firebase:firebase-messaging:24.1.0\"" >> android/app/build.gradle
+            echo "}" >> android/app/build.gradle
+          fi
+          if ! grep -q "com.google.gms.google-services" android/app/build.gradle; then
+            echo "" >> android/app/build.gradle
+            echo "apply plugin: \"com.google.gms.google-services\"" >> android/app/build.gradle
+          fi
 
-               p2 = "android/app/build.gradle"
-          s2 = open(p2, encoding="utf-8").read()
-          extra = "\ndependencies {\n    implementation \"com.google.firebase:firebase-messaging:24.1.0\"\n}\n"
-          if "firebase-messaging" not in s2:
-              s2 += extra
-          if "com.google.gms.google-services" not in s2:
-              s2 += "\napply plugin: \"com.google.gms.google-services\"\n"
-          open(p2, "w", encoding="utf-8").write(s2)
-          '
 
       - name: Настройка AndroidManifest.xml
         run: |
