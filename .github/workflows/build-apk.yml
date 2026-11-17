@@ -160,7 +160,7 @@ jobs:
           os.makedirs("android/app/src/main/res/layout", exist_ok=True)
           card_xml = "\n".join([
               "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
-              "<LinearLayout xmlns:android=\"http://android.com\"",
+              "<LinearLayout xmlns:android=\"http://" + "schemas." + "android.com" + "/apk/res/android\"",
               "    android:id=\"@+id/notif_root\"",
               "    android:layout_width=\"match_parent\"",
               "    android:layout_height=\"wrap_content\"",
