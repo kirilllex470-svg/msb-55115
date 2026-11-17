@@ -1509,4 +1509,96 @@ body.theme-cosmic .msb-profile-pill .msb-top-avatar {
 body.theme-cosmic .msb-profile-pill .msb-avatar-edit-link {
     color: #c084fc !important;
 }
+/* === СТИЛИЗАЦИЯ ШАПКИ ЧАТА (АВАТАРКА, СТАТУС В СЕТИ, ВЫЗОВЫ) И КНОПКИ «НАЗАД» ПОД ТЕМУ === */
+
+/* 1. Блок шапки чата с другом (аватарка + позывной + в сети + звонки) */
+#messenger-modal .chat-header {
+    margin: 6px 8px 4px 8px !important;
+    padding: 8px 12px !important;
+    border-radius: 16px !important;
+    background: linear-gradient(135deg, rgba(16, 42, 26, 0.94), rgba(6, 18, 11, 0.96)) !important;
+    border: 1.5px solid rgba(34, 197, 94, 0.55) !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(74, 222, 128, 0.18) !important;
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+#messenger-modal .chat-header #partner-avatar {
+    border-radius: 50% !important;
+    border: 2px solid #22c55e !important;
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.45) !important;
+}
+
+/* Кнопки звонков в шапке чата под тему */
+#messenger-modal .chat-header .call-header-btn {
+    border-radius: 11px !important;
+    background: rgba(22, 101, 52, 0.45) !important;
+    border: 1px solid rgba(74, 222, 128, 0.55) !important;
+    color: #bbf7d0 !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35) !important;
+    transition: transform 0.15s ease, filter 0.15s ease !important;
+}
+
+#messenger-modal .chat-header .call-header-btn:active {
+    transform: scale(0.92);
+}
+
+/* 2. Кнопка «‹ Назад» в том же стиле под выбранную тему */
+.msb-unified-back-btn {
+    border-radius: 14px !important;
+    padding: 7px 14px !important;
+    background: linear-gradient(135deg, rgba(16, 42, 26, 0.94), rgba(6, 18, 11, 0.96)) !important;
+    border: 1.5px solid rgba(34, 197, 94, 0.55) !important;
+    color: #f8fafc !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(74, 222, 128, 0.18) !important;
+}
+
+.msb-unified-back-btn .back-arrow-icon {
+    color: #4ade80 !important;
+}
+
+/* === АДАПТАЦИЯ ПОД ТЕМУ: РАКЕТНЫЙ (тёмный с огненно-оранжевым оттенком) === */
+body.theme-rocket #messenger-modal .chat-header,
+body.theme-rocket .msb-unified-back-btn {
+    background: linear-gradient(135deg, rgba(46, 20, 13, 0.94), rgba(18, 7, 4, 0.96)) !important;
+    border-color: rgba(249, 115, 22, 0.6) !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(251, 146, 60, 0.2) !important;
+}
+
+body.theme-rocket #messenger-modal .chat-header #partner-avatar {
+    border-color: #f97316 !important;
+    box-shadow: 0 0 12px rgba(249, 115, 22, 0.5) !important;
+}
+
+body.theme-rocket #messenger-modal .chat-header .call-header-btn {
+    background: rgba(154, 52, 18, 0.45) !important;
+    border-color: rgba(251, 146, 60, 0.6) !important;
+    color: #fed7aa !important;
+}
+
+body.theme-rocket .msb-unified-back-btn .back-arrow-icon {
+    color: #fb923c !important;
+}
+
+/* === АДАПТАЦИЯ ПОД ТЕМУ: КОСМИЧЕСКИЙ (тёмный с фиолетово-индиго оттенком) === */
+body.theme-cosmic #messenger-modal .chat-header,
+body.theme-cosmic .msb-unified-back-btn {
+    background: linear-gradient(135deg, rgba(28, 18, 66, 0.94), rgba(9, 6, 24, 0.96)) !important;
+    border-color: rgba(168, 85, 247, 0.6) !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(192, 132, 252, 0.22) !important;
+}
+
+body.theme-cosmic #messenger-modal .chat-header #partner-avatar {
+    border-color: #a855f7 !important;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.5) !important;
+}
+
+body.theme-cosmic #messenger-modal .chat-header .call-header-btn {
+    background: rgba(88, 28, 135, 0.45) !important;
+    border-color: rgba(192, 132, 252, 0.6) !important;
+    color: #e9d5ff !important;
+}
+
+body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
+    color: #c084fc !important;
+}
 
