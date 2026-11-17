@@ -73,14 +73,16 @@ jobs:
               s1 = s1.replace("dependencies {", "dependencies {\n        " + dep, 1)
               open(p1, "w", encoding="utf-8").write(s1)
 
-          p2 = "android/app/build.gradle"
+               p2 = "android/app/build.gradle"
           s2 = open(p2, encoding="utf-8").read()
+          extra = "\ndependencies {\n    implementation \"com.google.firebase:firebase-messaging:24.1.0\"\n}\n"
           if "firebase-messaging" not in s2:
-              s2 = s2.replace("dependencies {", "dependencies {\n    implementation \"com.google.firebase:firebase-messaging:24.1.0\"", 1)
+              s2 += extra
           if "com.google.gms.google-services" not in s2:
               s2 += "\napply plugin: \"com.google.gms.google-services\"\n"
-              open(p2, "w", encoding="utf-8").write(s2)
+          open(p2, "w", encoding="utf-8").write(s2)
           '
+
       - name: Настройка AndroidManifest.xml
         run: |
           python3 -c '
@@ -568,11 +570,11 @@ jobs:
                   if (ContextCompat.checkSelfPermission(this, pCam) != granted) {
                       need.add(pCam);
                   }
-                  if (!need.isEmpty()) {
-                      ActivityCompat.requestPermissions(
-                          this, need.toArray(new String[0]), 101
-                      );
+                                   if (!need.isEmpty()) {
+                      String[] arr = need.toArray(new String[need.size()]);
+                      ActivityCompat.requestPermissions(this, arr, 101);
                   }
+
               }
           }
           EOF
