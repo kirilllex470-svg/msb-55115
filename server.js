@@ -274,28 +274,37 @@ function makeTacticalIcon(size) {
     ihdr.writeUInt8(2, 9);
     const rowLen = 1 + size * 3;
     const raw = Buffer.alloc(size * rowLen, 0);
-    const half = size / 2;
+     const half = size / 2;
+    const pad = size * 0.06;
+    const cornerR = size * 0.24;
+    const innerMax = half - pad - cornerR;
+
     for (let y = 0; y < size; y++) {
         const rowOff = y * rowLen;
         raw.writeUInt8(0, rowOff);
         for (let x = 0; x < size; x++) {
             const p = rowOff + 1 + x * 3;
-            const dx = x - half;
-            const dy = y - half;
-            const r = Math.sqrt(dx * dx + dy * dy);
-            let red = 15, green = 23, blue = 42;
-            if (r <= half * 0.88) {
-                if (r >= half * 0.82) {
-                    red = 56; green = 189; blue = 248;
+            const dx = Math.abs(x - half);
+            const dy = Math.abs(y - half);
+            const qx = Math.max(dx - innerMax, 0);
+            const qy = Math.max(dy - innerMax, 0);
+            const dist = Math.sqrt(qx * qx + qy * qy);
+
+            let red = 6, green = 18, blue = 11;
+            if (dist <= cornerR) {
+                if (dist >= cornerR - size * 0.045) {
+                    red = 34; green = 197; blue = 94;
                 } else {
-                    red = 30; green = 41; blue = 59;
-                    const c1 = Math.abs(dy - (-half * 0.32 + Math.abs(dx) * 0.75));
-                    const c2 = Math.abs(dy - (-half * 0.05 + Math.abs(dx) * 0.75));
-                    const c3 = Math.abs(dy - (half * 0.22 + Math.abs(dx) * 0.75));
-                    if ((c1 <= size * 0.045 && Math.abs(dx) <= half * 0.52) ||
-                        (c2 <= size * 0.045 && Math.abs(dx) <= half * 0.46) ||
-                        (c3 <= size * 0.045 && Math.abs(dx) <= half * 0.38)) {
-                        red = 250; green = 204; blue = 21;
+                    red = 16; green = 42; blue = 26;
+                    const sdx = x - half;
+                    const sdy = y - half;
+                    const c1 = Math.abs(sdy - (-half * 0.30 + Math.abs(sdx) * 0.75));
+                    const c2 = Math.abs(sdy - (-half * 0.03 + Math.abs(sdx) * 0.75));
+                    const c3 = Math.abs(sdy - (half * 0.24 + Math.abs(sdx) * 0.75));
+                    if ((c1 <= size * 0.048 && Math.abs(sdx) <= half * 0.50) ||
+                        (c2 <= size * 0.048 && Math.abs(sdx) <= half * 0.44) ||
+                        (c3 <= size * 0.048 && Math.abs(sdx) <= half * 0.36)) {
+                        red = 74; green = 222; blue = 128;
                     }
                 }
             }
@@ -304,6 +313,7 @@ function makeTacticalIcon(size) {
             raw.writeUInt8(blue, p + 2);
         }
     }
+
     const idat = zlib.deflateSync(raw);
     const sig = Buffer.from('89504e470d0a1a0a', 'hex');
     return Buffer.concat(Array.of(sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))));
@@ -325,7 +335,6 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-        const SW_CODE = [
         "const SHELL_CACHE = 'msb55115-shell-v8';",
 
 
@@ -557,15 +566,18 @@ const server = http.createServer(function(req, res) {
                 const proto = req.headers['x-forwarded-proto'] || 'https';
                 const host = req.headers.host || '';
                 const baseOrigin = host ? (proto + '://' + host) : '';
+                const themeName = data.theme || 'military';
                 const idx = fcmTokens.findIndex(function(t) { return t.token === data.token; });
                 if (idx !== -1) {
                     fcmTokens[idx].user = data.user || 'ГОСТЬ';
                     fcmTokens[idx].callsign = data.callsign || '';
+                    fcmTokens[idx].theme = themeName;
                     if (baseOrigin) fcmTokens[idx].origin = baseOrigin;
                 } else {
                     fcmTokens.push({
                         user: data.user || 'ГОСТЬ',
                         callsign: data.callsign || '',
+                        theme: themeName,
                         token: data.token,
                         origin: baseOrigin
                     });
@@ -575,6 +587,7 @@ const server = http.createServer(function(req, res) {
             return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
+
 
 
     if (req.method === 'POST' && urlPath === '/api/push/subscribe') {
@@ -1498,6 +1511,12 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             });
         }
     }
+    const themePalettes = {
+        military: { badge: '🪖', accentColor: '#22c55e', bgColor: '#102a1a' },
+        rocket:   { badge: '🚀', accentColor: '#f97316', bgColor: '#2e140d' },
+        cosmic:   { badge: '🌌', accentColor: '#a855f7', bgColor: '#1c1242' }
+    };
+
     if (fcmAdmin && fcmTokens.length > 0) {
         fcmTokens.forEach(function(item) {
             if (!item || !item.token) return;
@@ -1507,48 +1526,55 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             const matchCallsign = cLow && cLow === tLow;
             const matchUnit = isUnitTarget && uLow === tLow;
             if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
+                const st = themePalettes[item.theme] || themePalettes.military;
                 const cleanSenderKey = String(sender).replace(/^👥\s*/, '').trim().toLowerCase();
                 const avatarUrl = item.origin
                     ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKey) + '.jpg?v=' + Date.now())
                     : undefined;
 
+                const pushTitle = st.badge + ' МСБ-55115 • [' + target + ']';
+                const pushBody = sender + ': ' + text;
+
                 fcmAdmin.messaging().send({
                     token: item.token,
                     data: {
-                        title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
-                        body: sender + ': ' + text,
+                        title: pushTitle,
+                        body: pushBody,
                         target: String(target),
                         sender: String(sender),
-                        image: avatarUrl || ''
+                        image: avatarUrl || '',
+                        theme: item.theme || 'military',
+                        accentColor: st.accentColor,
+                        bgColor: st.bgColor,
+                        roundedStyle: 'true'
                     },
                     notification: {
-                        title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
-                        body: sender + ': ' + text,
+                        title: pushTitle,
+                        body: pushBody,
                         imageUrl: avatarUrl
                     },
                     android: {
                         priority: 'high',
                         notification: {
+                            color: st.accentColor,
                             sound: 'default',
                             imageUrl: avatarUrl
                         }
                     }
                 }).catch(function(err) {
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
-
-
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
                         const badIdx = fcmTokens.indexOf(item);
                         if (badIdx !== -1) {
                             fcmTokens.splice(badIdx, 1);
                             writeJSON(FCM_FILE, fcmTokens);
-         }
+                        }
                     }
                 });
             }
         });
     }
-}
+
 
 
 wss.on('connection', function(ws) {
