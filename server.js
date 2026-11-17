@@ -843,24 +843,6 @@ const server = http.createServer(function(req, res) {
     }
 
 
-    if (req.method === 'POST' && urlPath === '/api/admin/users/action') {
-        return readBodyJSON(req, function(err, data) {
-            if (!err && data && data.key && usersDB[data.key]) {
-                if (data.action === 'approve') usersDB[data.key].approved = true;
-                else if (data.action === 'delete') delete usersDB[data.key];
-                else if (data.action === 'set_perm' && data.permName) {
-                    if (!usersDB[data.key].permissions) {
-                        usersDB[data.key].permissions = { row: false, stream: false, maps: false, archive: false, table: false };
-                    }
-                    usersDB[data.key].permissions[data.permName] = Boolean(data.permVal);
-                }
-                writeJSON(USERS_FILE, usersDB);
-                broadcastWS({ type: 'users_updated' });
-            }
-            return sendJsonCompressed(req, res, 200, { ok: true });
-        });
-    }
-
     if (req.method === 'GET' && urlPath === '/maps-list') {
         return sendJsonCompressed(req, res, 200, mapsHistory, 'no-store');
     }
