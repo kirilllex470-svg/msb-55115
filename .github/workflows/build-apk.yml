@@ -145,7 +145,7 @@ jobs:
           open(p, "w", encoding="utf-8").write(s)
           '
           mkdir -p android/app/src/main/res/xml
-          cat << EOF > android/app/src/main/res/xml/file_paths.xml
+          cat << 'EOF' > android/app/src/main/res/xml/file_paths.xml
           <?xml version="1.0" encoding="utf-8"?>
           <paths>
               <cache-path name="apk_cache" path="." />
@@ -154,7 +154,7 @@ jobs:
           EOF
 
           mkdir -p android/app/src/main/res/layout
-          cat << EOF > android/app/src/main/res/layout/msb_notif_card.xml
+          cat << 'EOF' > android/app/src/main/res/layout/msb_notif_card.xml
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://android.com"
               android:id="@+id/notif_root"
@@ -204,9 +204,8 @@ jobs:
           JAVA_DIR=$(dirname "$MAIN_ACT")
           PKG_LINE=$(grep "^package " "$MAIN_ACT")
 
-          cat << EOF > "$JAVA_DIR/MsbRestartReceiver.java"
-          $PKG_LINE
-
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbRestartReceiver.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbRestartReceiver.java"
           import android.content.BroadcastReceiver;
           import android.content.Context;
           import android.content.Intent;
@@ -227,9 +226,8 @@ jobs:
           }
           EOF
 
-          cat << EOF > "$JAVA_DIR/MsbKeepAliveService.java"
-          $PKG_LINE
-
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbKeepAliveService.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbKeepAliveService.java"
           import android.app.Notification;
           import android.app.NotificationChannel;
           import android.app.NotificationManager;
@@ -393,9 +391,8 @@ jobs:
               public IBinder onBind(Intent intent) { return null; }
           }
           EOF
-          cat << EOF > "$JAVA_DIR/MsbFcmService.java"
-          $PKG_LINE
-
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
           import android.app.NotificationManager;
           import android.app.PendingIntent;
           import android.content.Context;
@@ -475,9 +472,9 @@ jobs:
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           PKG_LINE=$(grep "^package " "$MAIN_ACT")
+          echo "$PKG_LINE" > "$MAIN_ACT"
 
-          cat << EOF > "$MAIN_ACT"
-          $PKG_LINE
+          cat << 'EOF' >> "$MAIN_ACT"
 
           import android.Manifest;
           import android.app.NotificationManager;
@@ -502,10 +499,10 @@ jobs:
           import java.io.File;
           import java.io.FileOutputStream;
           import java.io.InputStream;
+          import java.lang.reflect.Array;
           import java.net.HttpURLConnection;
           import java.net.URL;
           import java.util.ArrayList;
-          import java.util.Arrays;
           import java.util.List;
 
           public class MainActivity extends BridgeActivity {
@@ -586,16 +583,16 @@ jobs:
 
                           int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
                           int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
-                          if (colorHex != null && colorHex.contains("|")) {
-                              List<String> parts = Arrays.asList(colorHex.split("\\|"));
-                              if (parts.size() > 0) {
-                                  try { bgCol = Color.parseColor(parts.get(0)); } catch (Exception ignored) {}
+                          if (colorHex != null) {
+                              int sep = colorHex.indexOf('|');
+                              if (sep > 0) {
+                                  String bgStr = colorHex.substring(0, sep);
+                                  String accStr = colorHex.substring(sep + 1);
+                                  try { bgCol = Color.parseColor(bgStr); } catch (Exception ignored) {}
+                                  try { accCol = Color.parseColor(accStr); } catch (Exception ignored) {}
+                              } else if (colorHex.startsWith("#")) {
+                                  try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
                               }
-                              if (parts.size() > 1) {
-                                  try { accCol = Color.parseColor(parts.get(1)); } catch (Exception ignored) {}
-                              }
-                          } else if (colorHex != null && colorHex.startsWith("#")) {
-                              try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
                           }
 
                           Intent openIntent = new Intent(MainActivity.this, MainActivity.class);
@@ -671,9 +668,9 @@ jobs:
                       need.add(pCam);
                   }
                   if (!need.isEmpty()) {
-                      ActivityCompat.requestPermissions(
-                          this, need.toArray(new String[0]), 101
-                      );
+                      String[] arr = (String[]) Array.newInstance(String.class, need.size());
+                      need.toArray(arr);
+                      ActivityCompat.requestPermissions(this, arr, 101);
                   }
               }
           }
