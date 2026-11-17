@@ -1254,19 +1254,25 @@ function applyUserUI() {
         document.getElementById('admin-users-btn').style.display = 'none';
     }
     if (typeof syncMessengerAuth === 'function') syncMessengerAuth();
-    if (typeof checkPinOnAppEntry === 'function') checkPinOnAppEntry();
-    openFriendsListDirectly();
+    if (typeof checkPinOnAppEntry === 'function') {
+        checkPinOnAppEntry();
+    } else {
+        openFriendsListDirectly();
+    }
 }
 
 function openFriendsListDirectly() {
-    if (typeof openMessengerWindow === 'function') {
-        openMessengerWindow();
-    }
-    var sb = document.getElementById('app-sidebar');
-    if (sb) {
-        sb.classList.remove('hidden');
-    }
+    setTimeout(function() {
+        if (typeof openMessengerWindow === 'function') {
+            openMessengerWindow();
+        }
+        var sb = document.getElementById('app-sidebar');
+        if (sb) {
+            sb.classList.remove('hidden');
+        }
+    }, 50);
 }
+
 
 
 function initApp() {
@@ -1454,11 +1460,15 @@ function attemptLogin() {
         errEl.style.display = 'block';
         return;
     }
+     const loginOverlay = document.getElementById('login-overlay');
+    if (loginOverlay) loginOverlay.style.pointerEvents = 'auto';
+
     fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ unit: unitObj.name, username: callsignInput, password: pass })
     })
+
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {

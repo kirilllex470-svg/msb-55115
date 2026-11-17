@@ -664,6 +664,13 @@ function openWorkNewWindow() {
     ];
 
     blocks.forEach(function(el) {
+        if (el) {
+            el.style.pointerEvents = 'auto';
+        }
+    });
+
+
+    blocks.forEach(function(el) {
         if (el && el.parentElement !== bodySlot) {
             el.style.maxWidth = '1400px';
             el.style.margin = '0 auto 16px auto';
