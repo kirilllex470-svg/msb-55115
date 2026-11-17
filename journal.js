@@ -1612,6 +1612,8 @@ function adminUserAction(userKey, action) {
 }
 
 function logoutUser() {
+    if (typeof closeWorkNewWindow === 'function') closeWorkNewWindow();
+    if (typeof closeMessengerWindow === 'function') closeMessengerWindow();
     const tok = localStorage.getItem('msb_fcm_token');
     if (tok) {
         fetch('/api/fcm/register', {
@@ -1627,6 +1629,7 @@ function logoutUser() {
     localStorage.removeItem('msb_jcache_my_perms');
     setTimeout(function() { location.reload(); }, 150);
 }
+
 
 
 function loginAsViewer() {

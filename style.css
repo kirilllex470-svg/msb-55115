@@ -1126,10 +1126,19 @@ body.theme-cosmic #register-modal {
     color: var(--t-main) !important;
 }
 
-/* === ОТОБРАЖЕНИЕ КНОПКИ НАЗАД В ВЕРХНЕЙ ПАНЕЛИ === */
+/* === КНОПКА НАЗАД СКРЫТА В СПИСКЕ ДРУЗЕЙ И ПОЯВЛЯЕТСЯ ТОЛЬКО В ЧАТЕ === */
 .msb-unified-back-btn {
-    display: inline-flex !important;
+    display: none;
 }
+
+.msb-clean-topbar {
+    justify-content: flex-end;
+}
+
+.msb-clean-topbar.has-back-btn {
+    justify-content: space-between;
+}
+
 
 
 .msb-work-fullscreen-modal {

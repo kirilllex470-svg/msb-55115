@@ -591,6 +591,7 @@ function ensureCleanMessengerTopbar() {
     ].join('');
 
     modal.insertBefore(topbar, modal.firstChild);
+    updateTopBackButtonVisibility();
 }
 
 
@@ -703,6 +704,18 @@ window.openUserProfileModal = openUserProfileModal;
 window.closeUserProfileModal = closeUserProfileModal;
 
 
+function updateTopBackButtonVisibility() {
+    var topbar = document.getElementById('msb-unified-topbar');
+    var backBtn = document.getElementById('msb-top-back-btn');
+    var sb = document.getElementById('app-sidebar');
+    if (!backBtn || !sb) return;
+    var isChatOpenOnMobile = (window.innerWidth <= 768) && sb.classList.contains('hidden');
+    backBtn.style.display = isChatOpenOnMobile ? 'inline-flex' : 'none';
+    if (topbar) {
+        topbar.classList.toggle('has-back-btn', isChatOpenOnMobile);
+    }
+}
+
 function handleUnifiedMessengerBack() {
     var sidebar = document.getElementById('app-sidebar');
     if (sidebar) {
@@ -711,9 +724,12 @@ function handleUnifiedMessengerBack() {
     if (typeof resetChatArea === 'function' && window.innerWidth > 768) {
         resetChatArea();
     }
+    updateTopBackButtonVisibility();
 }
 
+window.updateTopBackButtonVisibility = updateTopBackButtonVisibility;
 window.handleUnifiedMessengerBack = handleUnifiedMessengerBack;
+
 
 function enqueueChatPayload(payload) {
     if (!payload.lid) {
@@ -1375,6 +1391,7 @@ function selectChat(itemObj) {
         var sb = document.getElementById('app-sidebar');
         if (sb) sb.classList.add('hidden');
     }
+    updateTopBackButtonVisibility();
     var mDiv = getMessagesDiv();
     if (mDiv) mDiv.innerHTML = '';
 
@@ -1393,7 +1410,9 @@ function selectChat(itemObj) {
 function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
     if (sb) sb.classList.remove('hidden');
+    updateTopBackButtonVisibility();
 }
+
 
 (function initChatLeftSwipeToFriends() {
     var touchStartX = 0;
