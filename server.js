@@ -1198,6 +1198,57 @@ const server = http.createServer(function(req, res) {
         return;
     }
 
+    const APK_FILE_PATH = path.join(storagePath, 'msb55115-latest.apk');
+    const APK_META_FILE = path.join(storagePath, 'apk_meta.json');
+
+    if (req.method === 'GET' && urlPath === '/api/app/version') {
+        const meta = readJSON(APK_META_FILE, { versionCode: 1, versionName: '1.0', hasApk: false });
+        meta.hasApk = fs.existsSync(APK_FILE_PATH);
+        return sendJsonCompressed(req, res, 200, meta, 'no-store');
+    }
+
+    if (req.method === 'GET' && urlPath === '/api/app/download.apk') {
+        if (!fs.existsSync(APK_FILE_PATH)) {
+            res.writeHead(404);
+            return res.end('APK not found');
+        }
+        const stat = fs.statSync(APK_FILE_PATH);
+        res.writeHead(200, {
+            'Content-Type': 'application/vnd.android.package-archive',
+            'Content-Disposition': 'attachment; filename="MSB55115.apk"',
+            'Content-Length': stat.size,
+            'Cache-Control': 'no-store'
+        });
+        return fs.createReadStream(APK_FILE_PATH).pipe(res);
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/app/upload-apk') {
+        const secret = req.headers['x-update-secret'] || '';
+        const expected = process.env.UPDATE_SECRET || 'msb55115_ota_key';
+        if (secret !== expected) {
+            res.writeHead(403);
+            return res.end('Forbidden');
+        }
+        const verCode = Number(req.headers['x-version-code'] || Date.now());
+        const verName = String(req.headers['x-version-name'] || getServerDateTime());
+        const tmpPath = APK_FILE_PATH + '.tmp';
+        const wsApk = fs.createWriteStream(tmpPath);
+        req.pipe(wsApk);
+        wsApk.on('finish', function() {
+            try {
+                if (fs.existsSync(APK_FILE_PATH)) fs.unlinkSync(APK_FILE_PATH);
+                fs.renameSync(tmpPath, APK_FILE_PATH);
+                writeJSON(APK_META_FILE, { versionCode: verCode, versionName: verName, updatedAt: getServerDateTime() }, true);
+                broadcastWS({ type: 'apk_updated', versionCode: verCode, versionName: verName });
+                sendJsonCompressed(req, res, 200, { ok: true, versionCode: verCode });
+            } catch (e) {
+                res.writeHead(500);
+                res.end('Save error');
+            }
+        });
+        return;
+    }
+
     fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
         if (err) {
             res.writeHead(500);
@@ -1208,6 +1259,7 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
+
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup, omitAvatars) {
     const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
     let lastMsgText = "Нет сообщений";
