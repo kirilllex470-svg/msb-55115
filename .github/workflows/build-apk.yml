@@ -90,7 +90,8 @@ jobs:
               "MODIFY_AUDIO_SETTINGS", "POST_NOTIFICATIONS", "VIBRATE",
               "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED", "FOREGROUND_SERVICE",
               "FOREGROUND_SERVICE_DATA_SYNC",
-              "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+              "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+              "REQUEST_INSTALL_PACKAGES"
           ]
           tag = "<uses-permission android:name=\"android.permission.{}\" />"
           perms = "\n    ".join([tag.format(n) for n in names])
@@ -113,10 +114,25 @@ jobs:
               "        <meta-data",
               "            android:name=\"com.google.firebase.messaging.default_notification_channel_id\"",
               "            android:value=\"msb_alerts_high_v5\" />",
+              "        <provider",
+              "            android:name=\"androidx.core.content.FileProvider\"",
+              "            android:authorities=\"${applicationId}.fileprovider\"",
+              "            android:exported=\"false\"",
+              "            android:grantUriPermissions=\"true\">",
+              "            <meta-data",
+              "                android:name=\"android.support.FILE_PROVIDER_PATHS\"",
+              "                android:resource=\"@xml/file_paths\" />",
+              "        </provider>",
               "        <service android:name=\".MsbKeepAliveService\"",
               "            android:enabled=\"true\" android:exported=\"false\"",
               "            android:stopWithTask=\"false\"",
               "            android:foregroundServiceType=\"dataSync\" />",
+              "        <service android:name=\".MsbFcmService\"",
+              "            android:exported=\"false\">",
+              "            <intent-filter>",
+              "                <action android:name=\"com.google.firebase.MESSAGING_EVENT\" />",
+              "            </intent-filter>",
+              "        </service>",
               "        <receiver android:name=\".MsbRestartReceiver\"",
               "            android:enabled=\"true\" android:exported=\"true\">",
               "            <intent-filter>",
@@ -129,6 +145,15 @@ jobs:
           s = s.replace("</application>", svc, 1)
           open(p, "w", encoding="utf-8").write(s)
           '
+          mkdir -p android/app/src/main/res/xml
+          cat << EOF > android/app/src/main/res/xml/file_paths.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="apk_cache" path="." />
+              <external-cache-path name="ext_cache" path="." />
+          </paths>
+          EOF
+
       - name: Создание ресивера и фоновой службы
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
@@ -157,7 +182,6 @@ jobs:
               }
           }
           EOF
-
           cat << EOF > "$JAVA_DIR/MsbKeepAliveService.java"
           $PKG_LINE
 
@@ -166,7 +190,10 @@ jobs:
           import android.app.NotificationManager;
           import android.app.PendingIntent;
           import android.app.Service;
+          import android.content.Context;
           import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.graphics.Color;
           import android.media.AudioAttributes;
           import android.media.RingtoneManager;
           import android.net.Uri;
@@ -181,6 +208,14 @@ jobs:
               public void onCreate() {
                   super.onCreate();
                   createChannels();
+              }
+
+              public static int resolveThemeBgColor(Context ctx) {
+                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                  String t = sp.getString("theme_id", "military");
+                  if ("rocket".equals(t)) return Color.parseColor("#2e140d");
+                  if ("cosmic".equals(t)) return Color.parseColor("#1c1242");
+                  return Color.parseColor("#102a1a");
               }
 
               public static void ensureHighPriorityChannel(NotificationManager nm) {
@@ -214,33 +249,120 @@ jobs:
                   }
               }
 
-              @Override
-              public int onStartCommand(Intent intent, int flags, int startId) {
-                  Intent openIntent = new Intent(this, MainActivity.class);
+              public static Notification buildBgNotification(Context ctx) {
+                  Intent openIntent = new Intent(ctx, MainActivity.class);
                   int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                       piFlags |= PendingIntent.FLAG_IMMUTABLE;
                   }
-                  PendingIntent pi = PendingIntent.getActivity(this, 0, openIntent, piFlags);
-                  Notification n = new NotificationCompat.Builder(this, "msb_bg_service")
+                  PendingIntent pi = PendingIntent.getActivity(ctx, 0, openIntent, piFlags);
+                  int bgCol = resolveThemeBgColor(ctx);
+                  return new NotificationCompat.Builder(ctx, "msb_bg_service")
                       .setContentTitle("МСБ-55115 на связи")
                       .setContentText("Защищенный канал оповещений активен")
                       .setSmallIcon(android.R.drawable.ic_dialog_info)
+                      .setColor(bgCol)
+                      .setColorized(true)
                       .setContentIntent(pi)
                       .setOngoing(true)
                       .build();
-                  startForeground(55115, n);
+              }
+
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  startForeground(55115, buildBgNotification(this));
                   return START_STICKY;
               }
 
               @Override
-              public void onDestroy() {
-                  super.onDestroy();
-              }
+              public void onDestroy() { super.onDestroy(); }
 
               @Override
-              public IBinder onBind(Intent intent) {
-                  return null;
+              public IBinder onBind(Intent intent) { return null; }
+          }
+          EOF
+          cat << EOF > "$JAVA_DIR/MsbFcmService.java"
+          $PKG_LINE
+
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Intent;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
+          import android.graphics.Color;
+          import android.os.Build;
+          import androidx.core.app.NotificationCompat;
+          import com.google.firebase.messaging.FirebaseMessagingService;
+          import com.google.firebase.messaging.RemoteMessage;
+          import java.io.InputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.Map;
+
+          public class MsbFcmService extends FirebaseMessagingService {
+              @Override
+              public void onMessageReceived(RemoteMessage msg) {
+                  Map<String, String> data = msg.getData();
+                  String title = data.get("title");
+                  String body = data.get("body");
+                  if (title == null && msg.getNotification() != null) {
+                      title = msg.getNotification().getTitle();
+                  }
+                  if (body == null && msg.getNotification() != null) {
+                      body = msg.getNotification().getBody();
+                  }
+                  if (title == null) title = "МСБ-55115";
+                  if (body == null) body = "Новое оповещение";
+
+                  int bgCol = MsbKeepAliveService.resolveThemeBgColor(this);
+                  String bgHex = data.get("bgColor");
+                  if (bgHex != null && bgHex.startsWith("#")) {
+                      try { bgCol = Color.parseColor(bgHex); } catch (Exception ignored) {}
+                  }
+
+                  Bitmap avatarBmp = null;
+                  String imgUrl = data.get("image");
+                  if (imgUrl != null && imgUrl.startsWith("http")) {
+                      try {
+                          HttpURLConnection conn = (HttpURLConnection) new URL(imgUrl).openConnection();
+                          conn.setConnectTimeout(3000);
+                          conn.setReadTimeout(3000);
+                          conn.connect();
+                          InputStream is = conn.getInputStream();
+                          avatarBmp = BitmapFactory.decodeStream(is);
+                          is.close();
+                      } catch (Exception ignored) {}
+                  }
+
+                  NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                  if (nm == null) return;
+                  MsbKeepAliveService.ensureHighPriorityChannel(nm);
+
+                  Intent openIntent = new Intent(this, MainActivity.class);
+                  openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                  }
+                  PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
+
+                  NotificationCompat.Builder b = new NotificationCompat.Builder(this, MsbKeepAliveService.ALERT_CH)
+                      .setSmallIcon(android.R.drawable.ic_dialog_info)
+                      .setContentTitle(title)
+                      .setContentText(body)
+                      .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                      .setColor(bgCol)
+                      .setColorized(true)
+                      .setPriority(NotificationCompat.PRIORITY_HIGH)
+                      .setAutoCancel(true)
+                      .setContentIntent(pi);
+
+                  if (avatarBmp != null) {
+                      b.setLargeIcon(avatarBmp);
+                  }
+
+                  int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
+                  nm.notify(notifId, b.build());
               }
           }
           EOF
@@ -254,19 +376,30 @@ jobs:
 
           import android.Manifest;
           import android.app.NotificationManager;
+          import android.app.PendingIntent;
           import android.content.Intent;
+          import android.content.SharedPreferences;
           import android.content.pm.PackageManager;
+          import android.graphics.Color;
           import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
           import android.os.PowerManager;
           import android.provider.Settings;
           import android.view.View;
+          import android.webkit.JavascriptInterface;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import androidx.core.app.ActivityCompat;
+          import androidx.core.app.NotificationCompat;
           import androidx.core.content.ContextCompat;
+          import androidx.core.content.FileProvider;
           import com.getcapacitor.BridgeActivity;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
           import java.util.ArrayList;
           import java.util.List;
 
@@ -311,6 +444,107 @@ jobs:
                       ws.setJavaScriptEnabled(true);
                       ws.setDomStorageEnabled(true);
                       ws.setMediaPlaybackRequiresUserGesture(false);
+                      wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
+                  }
+              }
+              public class MsbNativeBridge {
+                  @JavascriptInterface
+                  public void setTheme(String themeId, String colorHex) {
+                      try {
+                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                          sp.edit().putString("theme_id", themeId != null ? themeId : "military").apply();
+                          NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                          if (nm != null) {
+                              nm.notify(55115, MsbKeepAliveService.buildBgNotification(MainActivity.this));
+                          }
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void setIdentity(String unit, String callsign, String origin) {
+                      try {
+                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                          sp.edit()
+                              .putString("unit", unit != null ? unit : "")
+                              .putString("callsign", callsign != null ? callsign : "")
+                              .putString("origin", origin != null ? origin : "")
+                              .apply();
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void notify(String title, String body, String idStr, String colorHex) {
+                      try {
+                          NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                          if (nm == null) return;
+                          MsbKeepAliveService.ensureHighPriorityChannel(nm);
+
+                          int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
+                          if (colorHex != null && colorHex.startsWith("#")) {
+                              try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
+                          }
+
+                          Intent openIntent = new Intent(MainActivity.this, MainActivity.class);
+                          openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                          int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                              piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                          }
+                          PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
+
+                          int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
+                          NotificationCompat.Builder b = new NotificationCompat.Builder(
+                              MainActivity.this, MsbKeepAliveService.ALERT_CH
+                          )
+                              .setSmallIcon(android.R.drawable.ic_dialog_info)
+                              .setContentTitle(title != null ? title : "МСБ-55115")
+                              .setContentText(body != null ? body : "")
+                              .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
+                              .setColor(bgCol)
+                              .setColorized(true)
+                              .setPriority(NotificationCompat.PRIORITY_HIGH)
+                              .setAutoCancel(true)
+                              .setContentIntent(pi);
+
+                          nm.notify(notifId, b.build());
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void installApkUpdate(final String apkUrl) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              try {
+                                  File outFile = new File(getCacheDir(), "update_msb.apk");
+                                  if (outFile.exists()) outFile.delete();
+                                  HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
+                                  conn.setConnectTimeout(15000);
+                                  conn.setReadTimeout(60000);
+                                  conn.connect();
+                                  InputStream is = conn.getInputStream();
+                                  FileOutputStream fos = new FileOutputStream(outFile);
+                                  byte[] buf = new byte;
+                                  int len;
+                                  while ((len = is.read(buf)) != -1) {
+                                      fos.write(buf, 0, len);
+                                  }
+                                  fos.flush();
+                                  fos.close();
+                                  is.close();
+
+                                  Uri apkUri = FileProvider.getUriForFile(
+                                      MainActivity.this,
+                                      getPackageName() + ".fileprovider",
+                                      outFile
+                                  );
+                                  Intent intent = new Intent(Intent.ACTION_VIEW);
+                                  intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                  intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                  startActivity(intent);
+                              } catch (Exception ignored) {}
+                          }
+                      }).start();
                   }
               }
 
@@ -340,15 +574,35 @@ jobs:
           }
           EOF
 
-      - name: Синхронизация Capacitor и компиляция APK
+      - name: Подпись единым ключом и компиляция APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/msb.keystore
           npx cap sync android
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$(pwd)/app/msb.keystore \
+            -Pandroid.injected.signing.store.password=msb55115 \
+            -Pandroid.injected.signing.key.alias=msbkey \
+            -Pandroid.injected.signing.key.password=msb55115
+
+      - name: Отправка нового APK на сервер и удаление старого
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
+          UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
+        run: |
+          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          VER_CODE="${{ github.run_number }}"
+          curl -f -X POST "$SERVER_URL/api/app/upload-apk" \
+            -H "x-update-secret: $UPDATE_SECRET" \
+            -H "x-version-code: $VER_CODE" \
+            -H "x-version-name: 1.0.$VER_CODE" \
+            --data-binary "@$APK_PATH"
 
       - name: Выгрузка готового APK в Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: MSB55115-FCM-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
