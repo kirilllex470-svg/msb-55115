@@ -2646,6 +2646,35 @@ function checkApkRemoteUpdate(forcePrompt) {
         }).catch(function() {});
 }
 
+function manualCheckApkUpdate() {
+    if (!window.MsbNative || typeof window.MsbNative.installApkUpdate !== 'function') {
+        alert('ℹ️ Вы открыли систему через браузер. Кнопка обновления APK работает внутри Android-приложения.');
+        return;
+    }
+    fetch('/api/app/version?t=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(meta) {
+            if (!meta || !meta.hasApk) {
+                alert('⚠️ На сервере пока нет загруженного APK-файла.');
+                return;
+            }
+            const localVer = Number(localStorage.getItem('msb_installed_apk_ver') || 0);
+            const isNewer = meta.versionCode > localVer;
+            const msg = isNewer
+                ? ('📲 Найдена новая версия ' + meta.versionName + ' (сборка #' + meta.versionCode + ')!\n\nУстановить поверх без удаления?')
+                : ('✅ У вас установлена актуальная версия ' + meta.versionName + ' (сборка #' + meta.versionCode + ').\n\nХотите переустановить её заново поверх?');
+            if (confirm(msg)) {
+                localStorage.setItem('msb_installed_apk_ver', String(meta.versionCode));
+                window.MsbNative.installApkUpdate(location.origin + '/api/app/download.apk');
+            }
+        })
+        .catch(function() {
+            alert('❌ Не удалось связаться с сервером для проверки обновлений.');
+        });
+}
+window.manualCheckApkUpdate = manualCheckApkUpdate;
+
+
 initNativeFcmPush();
 setTimeout(function() { checkApkRemoteUpdate(false); }, 4000);
 setInterval(function() { sendFcmTokenToServer(); }, 300000);

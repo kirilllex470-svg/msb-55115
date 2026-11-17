@@ -621,13 +621,18 @@ function openUserProfileModal() {
             'onclick="closeUserProfileModal(); openPinSetupModal();">',
             '🔐 Создать ПИН-код',
             '</button>',
-            '<button type="button" class="msb-themed-btn" style="margin-bottom:10px;" ',
+                       '<button type="button" class="msb-themed-btn" style="margin-bottom:10px;" ',
             'onclick="openWorkNewWindow()">',
             '📊 Работа',
+            '</button>',
+            '<button type="button" class="msb-themed-btn-alt" style="margin-bottom:10px;" ',
+            'onclick="manualCheckApkUpdate()">',
+            '🔄 Проверить обновление APK',
             '</button>',
             '<button type="button" class="viewer-btn" onclick="closeUserProfileModal()">',
             'Закрыть',
             '</button>',
+
             '</div>'
         ].join('');
 
