@@ -756,8 +756,12 @@ body.theme-cosmic .msb-radial-tools-row .media-btn {
     -webkit-overflow-scrolling: touch;
 }
 
-.friend-avatar-online, .msb-center-plus-btn, .msb-jumping-word {
+.msb-center-plus-btn, .msb-jumping-word {
     animation: none !important;
+}
+.friend-avatar-online {
+    will-change: transform;
+    animation: avatarOnlineFloat 2.8s ease-in-out infinite !important;
 }
 .msg-ticker-move {
     display: inline-block;

@@ -1441,8 +1441,10 @@ function completeLoginSuccess(unitName, callsign, color) {
     if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
         window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
     }
+    if (typeof sendFcmTokenToServer === 'function') sendFcmTokenToServer();
     if (typeof checkPinOnAppEntry === 'function') checkPinOnAppEntry();
 }
+
 
 
 function openAdminUsersModal() {
@@ -1516,13 +1518,22 @@ function adminUserAction(userKey, action) {
 }
 
 function logoutUser() {
+    const tok = localStorage.getItem('msb_fcm_token');
+    if (tok) {
+        fetch('/api/fcm/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user: 'ГОСТЬ', callsign: '', token: tok })
+        }).catch(function() {});
+    }
     localStorage.removeItem('journal_user');
     localStorage.removeItem('journal_callsign');
     localStorage.removeItem('journal_color');
     localStorage.removeItem('chat_username');
     localStorage.removeItem('msb_jcache_my_perms');
-    location.reload();
+    setTimeout(function() { location.reload(); }, 150);
 }
+
 
 function loginAsViewer() {
     unlockMobileFeatures();
