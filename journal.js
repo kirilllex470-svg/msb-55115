@@ -2267,83 +2267,7 @@ function closePinSetupModal() {
     const m = document.getElementById('msb-pin-setup-modal');
     if (m) m.style.display = 'none';
 }
-function openPinSetupModal() {
-    ensurePinModals();
-    document.getElementById('msb-pin-in1').value = '';
-    document.getElementById('msb-pin-in2').value = '';
-    document.getElementById('msb-pin-setup-msg').style.display = 'none';
-    document.getElementById('msb-pin-setup-modal').style.display = 'flex';
-}
 
-function submitNewUserPin() {
-    const p1 = document.getElementById('msb-pin-in1').value.trim();
-    const p2 = document.getElementById('msb-pin-in2').value.trim();
-    const msg = document.getElementById('msb-pin-setup-msg');
-    const who = currentCallsign || currentUser;
-    if (!/^\d{6}$/.test(p1)) {
-        msg.style.color = '#ef4444'; msg.innerText = '❌ Введите ровно 6 цифр!'; msg.style.display = 'block'; return;
-    }
-    if (p1 !== p2) {
-        msg.style.color = '#ef4444'; msg.innerText = '❌ ПИН-коды не совпадают!'; msg.style.display = 'block'; return;
-    }
-    fetch('/api/user/pin/set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: who, pin: p1 })
-    }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d && d.ok) {
-            localStorage.setItem('msb_user_has_pin_' + who.toLowerCase(), '1');
-            sessionStorage.setItem('msb_pin_verified_' + who.toLowerCase(), '1');
-            msg.style.color = '#4ade80'; msg.innerText = '✅ 6-значный ПИН-код установлен!'; msg.style.display = 'block';
-            setTimeout(function() { document.getElementById('msb-pin-setup-modal').style.display = 'none'; }, 900);
-        }
-    });
-}
-
-function checkPinOnAppEntry() {
-    const who = currentCallsign || currentUser;
-    if (!who) return;
-    const key = who.toLowerCase();
-    if (sessionStorage.getItem('msb_pin_verified_' + key) === '1') return;
-    ensurePinModals();
-    if (localStorage.getItem('msb_user_has_pin_' + key) === '1') {
-        document.getElementById('msb-pin-lock-user').innerText = 'Позывной: ' + who;
-        document.getElementById('msb-pin-lock-modal').style.display = 'flex';
-    }
-    fetch('/api/user/me?noav=1&user=' + encodeURIComponent(who) + '&t=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d && d.hasPin) {
-                localStorage.setItem('msb_user_has_pin_' + key, '1');
-                if (sessionStorage.getItem('msb_pin_verified_' + key) !== '1') {
-                    document.getElementById('msb-pin-lock-user').innerText = 'Позывной: ' + who;
-                    document.getElementById('msb-pin-lock-modal').style.display = 'flex';
-                }
-            } else {
-                localStorage.removeItem('msb_user_has_pin_' + key);
-                document.getElementById('msb-pin-lock-modal').style.display = 'none';
-            }
-        }).catch(function() {});
-}
-
-function verifyUnlockPin() {
-    const who = currentCallsign || currentUser;
-    const pin = document.getElementById('msb-pin-unlock-input').value.trim();
-    const err = document.getElementById('msb-pin-unlock-err');
-    fetch('/api/user/pin/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: who, pin: pin })
-    }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d && d.ok) {
-            sessionStorage.setItem('msb_pin_verified_' + who.toLowerCase(), '1');
-            document.getElementById('msb-pin-lock-modal').style.display = 'none';
-            err.style.display = 'none';
-        } else {
-            err.style.display = 'block';
-        }
-    });
-}
 function updateBankPinDots() {
     const dotsBox = document.getElementById('bank-pin-dots');
     if (!dotsBox) return;
@@ -2406,12 +2330,7 @@ function submitNewUserPin() {
     fetch('/api/user/pin/set', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            user: who,
-            pin: p1,
-            question: q,
-            answer: a
-        })
+        body: JSON.stringify({ user: who, pin: p1, question: q, answer: a })
     })
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -2443,9 +2362,7 @@ function checkPinOnAppEntry() {
         lockModal.style.display = 'flex';
     }
 
-    const url = '/api/user/pin/status?user=' +
-        encodeURIComponent(who) + '&t=' + Date.now();
-
+    const url = '/api/user/pin/status?user=' + encodeURIComponent(who) + '&t=' + Date.now();
     fetch(url)
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -2454,15 +2371,9 @@ function checkPinOnAppEntry() {
                 if (sessionStorage.getItem('msb_pin_verified_' + key) !== '1') {
                     userLbl.innerText = 'Позывной: ' + who;
                     lockModal.style.display = 'flex';
-                    const isWait = (
-                        d.resetState === 'waiting_user' ||
-                        d.resetState === 'waiting_admin'
-                    );
+                    const isWait = (d.resetState === 'waiting_user' || d.resetState === 'waiting_admin');
                     if (isWait) {
-                        showPinRecoveryView(
-                            d.question,
-                            d.resetState === 'waiting_admin'
-                        );
+                        showPinRecoveryView(d.question, d.resetState === 'waiting_admin');
                     }
                 }
             } else {
@@ -2522,8 +2433,7 @@ function showPinRecoveryView(questionText, alreadyAnswered) {
     pinStatusPollTimer = setInterval(function() {
         const who = currentCallsign || currentUser;
         if (!who) return;
-        const url = '/api/user/pin/status?user=' +
-            encodeURIComponent(who) + '&t=' + Date.now();
+        const url = '/api/user/pin/status?user=' + encodeURIComponent(who) + '&t=' + Date.now();
         fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(st) {
@@ -2563,6 +2473,7 @@ function backToPinKeypad() {
     document.getElementById('msb-pin-recovery-view').style.display = 'none';
     document.getElementById('msb-pin-entry-view').style.display = 'block';
 }
+
 
     if (!document.getElementById('msb-pin-lock-modal')) {
         const lock = document.createElement('div');
