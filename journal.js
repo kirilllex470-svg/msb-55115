@@ -881,9 +881,17 @@ function connectWS(forceReconnect) {
 
     ws.onopen = function() {
         lastPongTime = Date.now();
+        var uInit = currentUser || localStorage.getItem('journal_user') || '';
+        var cInit = currentCallsign || localStorage.getItem('journal_callsign') || '';
+        if (uInit || cInit) {
+            try {
+                ws.send(JSON.stringify({ type: 'ping', user: uInit, callsign: cInit }));
+            } catch (e) {}
+        }
         subscribeToWebPush(false);
         if (typeof flushOutboxQueue === 'function') flushOutboxQueue();
     };
+
 
     ws.onmessage = handleWsIncomingEvent;
 
@@ -1050,6 +1058,13 @@ document.addEventListener('visibilitychange', function() {
         if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 9000)) {
             connectWS(true);
         } else {
+            try {
+                ws.send(JSON.stringify({
+                    type: 'ping',
+                    user: currentUser || '',
+                    callsign: currentCallsign || ''
+                }));
+            } catch (e) {}
             checkAndShowAlerts(false);
             if (typeof currentRoomId !== 'undefined' && currentRoomId && typeof fetchMessages === 'function') {
                 fetchMessages();
@@ -1057,6 +1072,16 @@ document.addEventListener('visibilitychange', function() {
             if (typeof loadFriendsAndRequests === 'function') {
                 loadFriendsAndRequests(true);
             }
+        }
+    } else if (document.visibilityState === 'hidden') {
+        if (ws && ws.readyState === WebSocket.OPEN && (currentUser || currentCallsign)) {
+            try {
+                ws.send(JSON.stringify({
+                    type: 'user_away',
+                    user: currentUser || '',
+                    callsign: currentCallsign || ''
+                }));
+            } catch (e) {}
         }
     }
 });
@@ -1438,12 +1463,22 @@ function completeLoginSuccess(unitName, callsign, color) {
     subscribeToWebPush(false);
     checkAndShowAlerts(false);
 
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+            ws.send(JSON.stringify({
+                type: 'ping',
+                user: currentUser || '',
+                callsign: currentCallsign || ''
+            }));
+        } catch (e) {}
+    }
     if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
         window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
     }
     if (typeof sendFcmTokenToServer === 'function') sendFcmTokenToServer();
     if (typeof checkPinOnAppEntry === 'function') checkPinOnAppEntry();
 }
+
 
 
 

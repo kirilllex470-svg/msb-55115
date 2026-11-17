@@ -172,28 +172,40 @@ function markUserOnline(name, wsClient) {
     if (!key || key === 'гость' || key === 'просмотр') return;
     if (wsClient) {
         wsClient.userIdentity = key;
+        wsClient.isAway = false;
     }
     const prev = lastSeenDB[key] || 0;
     const now = Date.now();
+    const wasOnline = Boolean(onlinePresenceCache[key]);
     lastSeenDB[key] = now;
-    if (!onlinePresenceCache[key]) {
-        onlinePresenceCache[key] = true;
-        if (typeof broadcastWS === 'function') {
-            broadcastWS({ type: 'presence_update', user: key, online: true, lastSeen: formatTimestampRu(now) });
-        }
+    onlinePresenceCache[key] = true;
+    if (!wasOnline && typeof broadcastWS === 'function') {
+        broadcastWS({ type: 'presence_update', user: key, online: true, lastSeen: formatTimestampRu(now) });
     }
-    if (now - prev > 12000) {
+    if (now - prev > 10000) {
         writeJSON(LAST_SEEN_FILE, lastSeenDB);
     }
+}
+
+function hasActiveVisibleWsForUser(cleanKey) {
+    if (typeof wss === 'undefined' || !wss || !wss.clients) return false;
+    let found = false;
+    wss.clients.forEach(function(client) {
+        if (client.readyState === WebSocket.OPEN && client.userIdentity === cleanKey && !client.isAway) {
+            found = true;
+        }
+    });
+    return found;
 }
 
 function isUserOnlineNow(name) {
     if (!name) return false;
     const key = String(name).trim().toLowerCase();
-    if (hasActiveWsForUser(key)) return true;
+    if (hasActiveVisibleWsForUser(key)) return true;
     const t = lastSeenDB[key] || 0;
-    return (Date.now() - t) < 15000;
+    return (Date.now() - t) < 7000;
 }
+
 
 function getUserLastSeenStr(name) {
     if (!name) return '';
@@ -1440,15 +1452,17 @@ wss.on('connection', function(ws) {
         if (ws.userIdentity) {
             const key = ws.userIdentity;
             setTimeout(function() {
-                if (!isUserOnlineNow(key)) {
+                if (!hasActiveVisibleWsForUser(key)) {
+                    const seenStr = formatTimestampRu(Date.now());
                     onlinePresenceCache[key] = false;
-                    lastSeenDB[key] = Date.now();
+                    lastSeenDB[key] = Date.now() - 8000;
                     writeJSON(LAST_SEEN_FILE, lastSeenDB);
-                    broadcastWS({ type: 'presence_update', user: key, online: false, lastSeen: getUserLastSeenStr(key) });
+                    broadcastWS({ type: 'presence_update', user: key, online: false, lastSeen: seenStr });
                 }
-            }, 1500);
+            }, 300);
         }
     });
+
 
     ws.send(JSON.stringify({
         type: 'init',
@@ -1465,13 +1479,32 @@ wss.on('connection', function(ws) {
         try {
             const msg = JSON.parse(message.toString());
             ws.isAlive = true;
-            if (msg.type === 'ping') {
+                if (msg.type === 'ping') {
                 if (msg.callsign) markUserOnline(msg.callsign, ws);
                 else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей', ws);
                 else if (msg.user) markUserOnline(msg.user, ws);
                 ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
                 return;
             }
+
+            if (msg.type === 'user_away') {
+                ws.isAway = true;
+                const rawName = msg.callsign || (msg.user === 'АДМИН' ? 'муравей' : msg.user) || ws.userIdentity;
+                if (rawName) {
+                    const key = String(rawName).trim().toLowerCase();
+                    setTimeout(function() {
+                        if (!hasActiveVisibleWsForUser(key)) {
+                            const seenStr = formatTimestampRu(Date.now());
+                            onlinePresenceCache[key] = false;
+                            lastSeenDB[key] = Date.now() - 8000;
+                            writeJSON(LAST_SEEN_FILE, lastSeenDB);
+                            broadcastWS({ type: 'presence_update', user: key, online: false, lastSeen: seenStr });
+                        }
+                    }, 400);
+                }
+                return;
+            }
+
 
             if (msg.type === 'chat_typing' && msg.user && msg.room) {
                 const uClean = String(msg.user).trim();

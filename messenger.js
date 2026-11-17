@@ -285,13 +285,56 @@ function renderPartnerPresenceHeader(partnerOnline, partnerLastSeen, typingUsers
     stEl.classList.toggle('msb-typing-active', isTypingNow);
 }
 
+window.handlePresenceUpdateWS = function(msg) {
+    if (!msg || !msg.user) return;
+    var uLow = String(msg.user).trim().toLowerCase();
+    var isOnline = Boolean(msg.online);
+    var seenStr = msg.lastSeen || '';
+    var updated = false;
+
+    friendsList.forEach(function(f) {
+        if (!f.isGroup && String(f.name || '').trim().toLowerCase() === uLow) {
+            f.online = isOnline;
+            if (seenStr) f.lastSeen = seenStr;
+            updated = true;
+        }
+    });
+
+    if (typeof myMessengerFriends !== 'undefined' && Array.isArray(myMessengerFriends)) {
+        myMessengerFriends.forEach(function(f) {
+            if (!f.isGroup && String(f.name || '').trim().toLowerCase() === uLow) {
+                f.online = isOnline;
+                if (seenStr) f.lastSeen = seenStr;
+            }
+        });
+    }
+
+    lastFriendsRenderSig = '';
+    if (updated) {
+        renderFriends();
+        if (typeof populateTargetSelect === 'function') populateTargetSelect();
+    }
+
+    if (currentRoomId && !isCurrentGroup && currentPartner && currentPartner.trim().toLowerCase() === uLow) {
+        if (seenStr) partnerLastSeenCache = seenStr;
+        renderPartnerPresenceHeader(isOnline, partnerLastSeenCache, null);
+    }
+};
+
 window.handleIncomingTypingWS = function(msg) {
     if (!msg || !msg.user) return;
     var me = String(getActiveChatIdentity() || '').trim().toLowerCase();
     var senderLow = String(msg.user).trim().toLowerCase();
     if (!senderLow || senderLow === me) return;
 
+    friendsList.forEach(function(f) {
+        if (!f.isGroup && String(f.name || '').trim().toLowerCase() === senderLow) {
+            f.online = true;
+        }
+    });
+
     var roomKey = msg.room || makeDirectRoomId(me, msg.user);
+
     if (!activeRoomTypers[roomKey]) activeRoomTypers[roomKey] = {};
 
     if (typingCleanupTimers[senderLow]) {
@@ -343,8 +386,9 @@ function notifyServerTyping(isTyping) {
     var me = getActiveChatIdentity();
     if (!me || !currentRoomId) return;
     var now = Date.now();
-    if (isTyping && (now - myLastTypingSentAt < 1800)) return;
+    if (isTyping && myLastTypingSentAt > 0 && (now - myLastTypingSentAt < 1200)) return;
     myLastTypingSentAt = isTyping ? now : 0;
+
 
     var payload = {
         type: 'chat_typing',
@@ -412,11 +456,18 @@ window.handleIncomingChatWS = function(packet) {
         return;
     }
 
-    if (packet.type === 'chat_new_msg' && packet.room && packet.msg) {
+     if (packet.type === 'chat_new_msg' && packet.room && packet.msg) {
         var msg = packet.msg;
-           if (msg.sender) {
-            var isMsgFromMe = String(msg.sender).trim().toLowerCase() === chatUser.toLowerCase();
+        if (msg.sender) {
+            var senderClean = String(msg.sender).trim().toLowerCase();
+            var isMsgFromMe = senderClean === chatUser.toLowerCase();
+            friendsList.forEach(function(f) {
+                if (!f.isGroup && String(f.name || '').trim().toLowerCase() === senderClean) {
+                    f.online = true;
+                }
+            });
             delete activeUserTypers[msg.sender];
+
             Object.keys(activeRoomTypers).forEach(function(rk) {
                 if (activeRoomTypers[rk][msg.sender]) delete activeRoomTypers[rk][msg.sender];
             });
