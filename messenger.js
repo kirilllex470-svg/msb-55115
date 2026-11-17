@@ -1038,10 +1038,11 @@ document.addEventListener('DOMContentLoaded', function() {
         inp.setAttribute('lang', 'ru');
         inp.setAttribute('inputmode', 'text');
         inp.setAttribute('autocapitalize', 'sentences');
-        inp.setAttribute('autocomplete', 'on');
-        inp.setAttribute('autocorrect', 'on');
-        inp.setAttribute('spellcheck', 'true');
+        inp.setAttribute('autocomplete', 'off');
+        inp.setAttribute('autocorrect', 'off');
+        inp.setAttribute('spellcheck', 'false');
     });
+
     if (tInput) {
         tInput.addEventListener('keypress', function(e) {
 
@@ -2282,12 +2283,22 @@ function insertTgEmoji(emojiChar) {
 function backspaceTgEmoji() {
     var inp = document.getElementById('text-input');
     if (!inp || inp.disabled || !inp.value) return;
-    var chars = Array.from(inp.value);
-    chars.pop();
-    inp.value = chars.join('');
+    var start = (typeof inp.selectionStart === 'number') ? inp.selectionStart : inp.value.length;
+    var end = (typeof inp.selectionEnd === 'number') ? inp.selectionEnd : inp.value.length;
+    if (start !== end) {
+        inp.value = inp.value.slice(0, start) + inp.value.slice(end);
+        inp.setSelectionRange(start, start);
+    } else if (start > 0) {
+        var before = Array.from(inp.value.slice(0, start));
+        before.pop();
+        var newBefore = before.join('');
+        inp.value = newBefore + inp.value.slice(end);
+        inp.setSelectionRange(newBefore.length, newBefore.length);
+    }
     inp.focus();
     inp.dispatchEvent(new Event('input'));
 }
+
 
 function toggleMsbRadialToolbar(forceState) {
     buildTelegramComposerLayout();
