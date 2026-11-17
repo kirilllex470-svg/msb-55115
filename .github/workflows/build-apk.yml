@@ -78,8 +78,6 @@ jobs:
             echo "" >> android/app/build.gradle
             echo "apply plugin: \"com.google.gms.google-services\"" >> android/app/build.gradle
           fi
-
-
       - name: Настройка AndroidManifest.xml
         run: |
           python3 -c '
@@ -155,6 +153,51 @@ jobs:
           </paths>
           EOF
 
+          mkdir -p android/app/src/main/res/layout
+          cat << EOF > android/app/src/main/res/layout/msb_notif_card.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://android.com"
+              android:id="@+id/notif_root"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content"
+              android:orientation="horizontal"
+              android:gravity="center_vertical"
+              android:padding="12dp">
+
+              <ImageView
+                  android:id="@+id/notif_bg_img"
+                  android:layout_width="44dp"
+                  android:layout_height="44dp"
+                  android:scaleType="centerCrop"
+                  android:layout_marginEnd="12dp" />
+
+              <LinearLayout
+                  android:layout_width="0dp"
+                  android:layout_height="wrap_content"
+                  android:layout_weight="1"
+                  android:orientation="vertical">
+
+                  <TextView
+                      android:id="@+id/notif_title"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:textStyle="bold"
+                      android:textSize="14sp"
+                      android:maxLines="1"
+                      android:ellipsize="end" />
+
+                  <TextView
+                      android:id="@+id/notif_body"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="3dp"
+                      android:textColor="#F8FAFC"
+                      android:textSize="13sp"
+                      android:maxLines="3"
+                      android:ellipsize="end" />
+              </LinearLayout>
+          </LinearLayout>
+          EOF
       - name: Создание ресивера и фоновой службы
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
@@ -183,6 +226,7 @@ jobs:
               }
           }
           EOF
+
           cat << EOF > "$JAVA_DIR/MsbKeepAliveService.java"
           $PKG_LINE
 
@@ -194,12 +238,18 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.content.SharedPreferences;
+          import android.graphics.Bitmap;
+          import android.graphics.Canvas;
           import android.graphics.Color;
+          import android.graphics.Paint;
+          import android.graphics.Path;
+          import android.graphics.RectF;
           import android.media.AudioAttributes;
           import android.media.RingtoneManager;
           import android.net.Uri;
           import android.os.Build;
           import android.os.IBinder;
+          import android.widget.RemoteViews;
           import androidx.core.app.NotificationCompat;
 
           public class MsbKeepAliveService extends Service {
@@ -217,6 +267,69 @@ jobs:
                   if ("rocket".equals(t)) return Color.parseColor("#2e140d");
                   if ("cosmic".equals(t)) return Color.parseColor("#1c1242");
                   return Color.parseColor("#102a1a");
+              }
+
+              public static int resolveThemeAccentColor(Context ctx) {
+                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                  String t = sp.getString("theme_id", "military");
+                  if ("rocket".equals(t)) return Color.parseColor("#f97316");
+                  if ("cosmic".equals(t)) return Color.parseColor("#a855f7");
+                  return Color.parseColor("#22c55e");
+              }
+              public static Notification buildThemedAlertNotification(
+                  Context ctx, String channelId, String title, String body,
+                  int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
+              ) {
+                  int resCard = ctx.getResources().getIdentifier("msb_notif_card", "layout", ctx.getPackageName());
+                  int resRoot = ctx.getResources().getIdentifier("notif_root", "id", ctx.getPackageName());
+                  int resImg  = ctx.getResources().getIdentifier("notif_bg_img", "id", ctx.getPackageName());
+                  int resTtl  = ctx.getResources().getIdentifier("notif_title", "id", ctx.getPackageName());
+                  int resBody = ctx.getResources().getIdentifier("notif_body", "id", ctx.getPackageName());
+
+                  NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
+                      .setSmallIcon(android.R.drawable.ic_dialog_info)
+                      .setContentTitle(title)
+                      .setContentText(body)
+                      .setColor(bgCol)
+                      .setColorized(true)
+                      .setPriority(ongoing ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_HIGH)
+                      .setOngoing(ongoing)
+                      .setAutoCancel(!ongoing)
+                      .setContentIntent(pi);
+
+                  if (resCard != 0) {
+                      RemoteViews rv = new RemoteViews(ctx.getPackageName(), resCard);
+                      rv.setInt(resRoot, "setBackgroundColor", bgCol);
+                      rv.setTextViewText(resTtl, title);
+                      rv.setTextColor(resTtl, accentCol);
+                      rv.setTextViewText(resBody, body);
+
+                      Bitmap badgeBmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
+                      Canvas c = new Canvas(badgeBmp);
+                      Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                      RectF rf = new RectF(4f, 4f, 92f, 92f);
+                      p.setStyle(Paint.Style.FILL);
+                      p.setColor(Color.argb(110, 0, 0, 0));
+                      c.drawOval(rf, p);
+                      if (avatarBmp != null) {
+                          Path clip = new Path();
+                          clip.addOval(rf, Path.Direction.CW);
+                          c.save();
+                          c.clipPath(clip);
+                          c.drawBitmap(avatarBmp, null, rf, p);
+                          c.restore();
+                      }
+                      p.setStyle(Paint.Style.STROKE);
+                      p.setStrokeWidth(5f);
+                      p.setColor(accentCol);
+                      c.drawOval(rf, p);
+
+                      rv.setImageViewBitmap(resImg, badgeBmp);
+                      b.setCustomContentView(rv);
+                      b.setCustomBigContentView(rv);
+                      b.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                  }
+                  return b.build();
               }
 
               public static void ensureHighPriorityChannel(NotificationManager nm) {
@@ -257,16 +370,14 @@ jobs:
                       piFlags |= PendingIntent.FLAG_IMMUTABLE;
                   }
                   PendingIntent pi = PendingIntent.getActivity(ctx, 0, openIntent, piFlags);
-                  int bgCol = resolveThemeBgColor(ctx);
-                  return new NotificationCompat.Builder(ctx, "msb_bg_service")
-                      .setContentTitle("МСБ-55115 на связи")
-                      .setContentText("Защищенный канал оповещений активен")
-                      .setSmallIcon(android.R.drawable.ic_dialog_info)
-                      .setColor(bgCol)
-                      .setColorized(true)
-                      .setContentIntent(pi)
-                      .setOngoing(true)
-                      .build();
+                  return buildThemedAlertNotification(
+                      ctx, "msb_bg_service",
+                      "МСБ-55115 на связи",
+                      "Защищенный канал оповещений активен",
+                      resolveThemeBgColor(ctx),
+                      resolveThemeAccentColor(ctx),
+                      null, pi, true
+                  );
               }
 
               @Override
@@ -293,7 +404,6 @@ jobs:
           import android.graphics.BitmapFactory;
           import android.graphics.Color;
           import android.os.Build;
-          import androidx.core.app.NotificationCompat;
           import com.google.firebase.messaging.FirebaseMessagingService;
           import com.google.firebase.messaging.RemoteMessage;
           import java.io.InputStream;
@@ -317,9 +427,14 @@ jobs:
                   if (body == null) body = "Новое оповещение";
 
                   int bgCol = MsbKeepAliveService.resolveThemeBgColor(this);
+                  int accCol = MsbKeepAliveService.resolveThemeAccentColor(this);
                   String bgHex = data.get("bgColor");
+                  String accHex = data.get("accentColor");
                   if (bgHex != null && bgHex.startsWith("#")) {
                       try { bgCol = Color.parseColor(bgHex); } catch (Exception ignored) {}
+                  }
+                  if (accHex != null && accHex.startsWith("#")) {
+                      try { accCol = Color.parseColor(accHex); } catch (Exception ignored) {}
                   }
 
                   Bitmap avatarBmp = null;
@@ -348,23 +463,11 @@ jobs:
                   }
                   PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
 
-                  NotificationCompat.Builder b = new NotificationCompat.Builder(this, MsbKeepAliveService.ALERT_CH)
-                      .setSmallIcon(android.R.drawable.ic_dialog_info)
-                      .setContentTitle(title)
-                      .setContentText(body)
-                      .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                      .setColor(bgCol)
-                      .setColorized(true)
-                      .setPriority(NotificationCompat.PRIORITY_HIGH)
-                      .setAutoCancel(true)
-                      .setContentIntent(pi);
-
-                  if (avatarBmp != null) {
-                      b.setLargeIcon(avatarBmp);
-                  }
-
                   int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
-                  nm.notify(notifId, b.build());
+                  nm.notify(notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                      this, MsbKeepAliveService.ALERT_CH,
+                      title, body, bgCol, accCol, avatarBmp, pi, false
+                  ));
               }
           }
           EOF
@@ -393,17 +496,16 @@ jobs:
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import androidx.core.app.ActivityCompat;
-          import androidx.core.app.NotificationCompat;
           import androidx.core.content.ContextCompat;
           import androidx.core.content.FileProvider;
           import com.getcapacitor.BridgeActivity;
-          import java.io.ByteArrayOutputStream;
           import java.io.File;
           import java.io.FileOutputStream;
           import java.io.InputStream;
           import java.net.HttpURLConnection;
           import java.net.URL;
           import java.util.ArrayList;
+          import java.util.Arrays;
           import java.util.List;
 
           public class MainActivity extends BridgeActivity {
@@ -483,7 +585,16 @@ jobs:
                           MsbKeepAliveService.ensureHighPriorityChannel(nm);
 
                           int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
-                          if (colorHex != null && colorHex.startsWith("#")) {
+                          int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
+                          if (colorHex != null && colorHex.contains("|")) {
+                              List<String> parts = Arrays.asList(colorHex.split("\\|"));
+                              if (parts.size() > 0) {
+                                  try { bgCol = Color.parseColor(parts.get(0)); } catch (Exception ignored) {}
+                              }
+                              if (parts.size() > 1) {
+                                  try { accCol = Color.parseColor(parts.get(1)); } catch (Exception ignored) {}
+                              }
+                          } else if (colorHex != null && colorHex.startsWith("#")) {
                               try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
                           }
 
@@ -496,20 +607,12 @@ jobs:
                           PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
 
                           int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
-                          NotificationCompat.Builder b = new NotificationCompat.Builder(
-                              MainActivity.this, MsbKeepAliveService.ALERT_CH
-                          )
-                              .setSmallIcon(android.R.drawable.ic_dialog_info)
-                              .setContentTitle(title != null ? title : "МСБ-55115")
-                              .setContentText(body != null ? body : "")
-                              .setStyle(new NotificationCompat.BigTextStyle().bigText(body != null ? body : ""))
-                              .setColor(bgCol)
-                              .setColorized(true)
-                              .setPriority(NotificationCompat.PRIORITY_HIGH)
-                              .setAutoCancel(true)
-                              .setContentIntent(pi);
-
-                          nm.notify(notifId, b.build());
+                          nm.notify(notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                              MainActivity.this, MsbKeepAliveService.ALERT_CH,
+                              title != null ? title : "МСБ-55115",
+                              body != null ? body : "",
+                              bgCol, accCol, null, pi, false
+                          ));
                       } catch (Exception ignored) {}
                   }
 
@@ -567,11 +670,11 @@ jobs:
                   if (ContextCompat.checkSelfPermission(this, pCam) != granted) {
                       need.add(pCam);
                   }
-                                   if (!need.isEmpty()) {
-                      String[] arr = need.toArray(new String[need.size()]);
-                      ActivityCompat.requestPermissions(this, arr, 101);
+                  if (!need.isEmpty()) {
+                      ActivityCompat.requestPermissions(
+                          this, need.toArray(new String[0]), 101
+                      );
                   }
-
               }
           }
           EOF
@@ -587,9 +690,6 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass msb55115 -keypass msb55115 \
               -dname "CN=MSB55115, OU=Unit, O=MSB, L=RU, S=RU, C=RU"
-            echo "=== СКОПИРУЙТЕ ЭТУ СТРОКУ В СЕКРЕТ KEYSTORE_BASE64 ==="
-            base64 -w 0 android/app/msb.keystore
-            echo ""
           fi
           npx cap sync android
           cd android
