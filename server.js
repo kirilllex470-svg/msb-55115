@@ -412,20 +412,23 @@ const SW_CODE = [
     "    if (event.data) {",
     "        try { data = event.data.json(); } catch (e) { data.body = event.data.text() || data.body; }",
     "    }",
-    "    event.waitUntil(self.registration.showNotification(data.title || '🛑 МСБ-55115', {",
-    "        body: data.body || 'Откройте приложение',",
-    "        icon: data.icon || '/icon-192.png',",
-    "        badge: '/icon-192.png',",
-
-    "        vibrate: Array.of(400, 100, 400, 100, 600),",
-    "        silent: false,",
-    "        requireInteraction: true,",
-    "        renotify: true,",
-    "         tag: (data.tag || 'msb-push') + '-' + Math.random().toString(36).slice(2, 7),",
-
-    "        data: { url: data.url || '/' }",
+    "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(winList) {",
+    "        var hasActiveTab = winList.some(function(w) { return w.visibilityState === 'visible'; });",
+    "        if (hasActiveTab) return;",
+    "        return self.registration.showNotification(data.title || '🛑 МСБ-55115', {",
+    "            body: data.body || 'Откройте приложение',",
+    "            icon: data.icon || '/icon-192.png',",
+    "            badge: '/icon-192.png',",
+    "            vibrate: Array.of(400, 100, 400, 100, 600),",
+    "            silent: false,",
+    "            requireInteraction: true,",
+    "            renotify: true,",
+    "            tag: data.tag || 'msb-push',",
+    "            data: { url: data.url || '/' }",
+    "        });",
     "    }));",
     "});",
+
     "",
     "self.addEventListener('pushsubscriptionchange', function(event) {",
     "    event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(list) {",
@@ -487,8 +490,17 @@ const server = http.createServer(function(req, res) {
     }
 
     if (urlPath.startsWith('/api/avatar-img/')) {
-        const rawName = decodeURIComponent(urlPath.replace('/api/avatar-img/', '').replace(/\.jpg$/i, '')).trim().toLowerCase();
+        const isSvgReq = urlPath.toLowerCase().endsWith('.svg');
+        const rawName = decodeURIComponent(urlPath.replace('/api/avatar-img/', '').replace(/\.(jpg|svg)$/i, '')).trim().toLowerCase();
         const uObj = usersDB[rawName];
+        if (isSvgReq && uObj && uObj.avatar && uObj.avatar.startsWith('data:image/')) {
+            const svgCircle = '<svg xmlns="http://w3.org" width="384" height="384" viewBox="0 0 384 384">' +
+                '<defs><clipPath id="c"><circle cx="192" cy="192" r="192"/></clipPath></defs>' +
+                '<image href="' + uObj.avatar + '" width="384" height="384" preserveAspectRatio="xMidYMid slice" clip-path="url(#c)"/>' +
+                '</svg>';
+            res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=300' });
+            return res.end(svgCircle);
+        }
         if (uObj && uObj.avatar && uObj.avatar.startsWith('data:image/')) {
             const parts = uObj.avatar.split(',');
             const imgBuf = Buffer.from(parts.at(1), 'base64');
@@ -498,6 +510,7 @@ const server = http.createServer(function(req, res) {
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' });
         return res.end(TACTICAL_ICON_192);
     }
+
 
 
     if (urlPath === '/style.css' || urlPath === '/journal.js' || urlPath === '/messenger.js') {
@@ -1521,7 +1534,8 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
     const cleanSenderKeyForWeb = String(sender).replace(/^👥\s*/, '').trim().toLowerCase();
-    const webAvatarUrl = '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now();
+    const webAvatarUrl = '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.svg?v=' + Date.now();
+
 
     const payload = JSON.stringify({
         title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
