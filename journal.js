@@ -1719,16 +1719,17 @@ function sendLocalNotification(target, text, sender, notifId) {
     const body = fromWho + ': ' + text;
     const themedIcon = createThemedNotifIcon(meta.id);
 
-     // 1. Нативное уведомление для Android APK с тёмным фоном активной темы
+    // 1. Нативное уведомление для Android APK с тёмным фоном и акцентом активной темы
     if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
         try {
-            window.MsbNative.notify(title, body, String(notifId || Date.now()), meta.bgColor);
+            window.MsbNative.notify(title, body, String(notifId || Date.now()), meta.bgColor + '|' + meta.color);
+            return;
         } catch (e) {}
     }
 
-
     // 2. Уведомление для PWA / браузера с закруглённой тематической иконкой
     if ('serviceWorker' in navigator) {
+
         navigator.serviceWorker.ready.then(function(reg) {
             reg.showNotification(title, {
                 body: body,
@@ -2640,7 +2641,7 @@ function checkApkRemoteUpdate(forcePrompt) {
             if (forcePrompt || meta.versionCode > localVer) {
                 if (confirm('📲 Доступна новая версия МСБ-55115 (' + meta.versionName + '). Установить поверх без удаления?')) {
                     localStorage.setItem('msb_installed_apk_ver', String(meta.versionCode));
-                    window.MsbNative.installApkUpdate(location.origin + '/api/app/download.apk');
+                    window.MsbNative.installApkUpdate(location.origin + '/api/app/download.apk?t=' + Date.now());
                 }
             }
         }).catch(function() {});
@@ -2665,13 +2666,14 @@ function manualCheckApkUpdate() {
                 : ('✅ У вас установлена актуальная версия ' + meta.versionName + ' (сборка #' + meta.versionCode + ').\n\nХотите переустановить её заново поверх?');
             if (confirm(msg)) {
                 localStorage.setItem('msb_installed_apk_ver', String(meta.versionCode));
-                window.MsbNative.installApkUpdate(location.origin + '/api/app/download.apk');
+                window.MsbNative.installApkUpdate(location.origin + '/api/app/download.apk?t=' + Date.now());
             }
         })
         .catch(function() {
             alert('❌ Не удалось связаться с сервером для проверки обновлений.');
         });
 }
+
 window.manualCheckApkUpdate = manualCheckApkUpdate;
 
 
