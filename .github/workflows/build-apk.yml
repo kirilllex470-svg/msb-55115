@@ -80,7 +80,9 @@ jobs:
           fi
       - name: Настройка AndroidManifest.xml
         run: |
+          pip install pillow --quiet --break-system-packages || pip install pillow --quiet
           python3 -c '
+
           import json, os
           gs = json.load(open("google-services.json", encoding="utf-8"))
           pkg = next(iter(gs["client"]))["client_info"]["android_client_info"]["package_name"]
@@ -157,42 +159,49 @@ jobs:
               "</paths>"
           ])
           open("android/app/src/main/res/xml/msb_file_paths.xml", "w", encoding="utf-8").write(fp_xml)
-          import struct, zlib, math
-          def make_png(size, mono):
-              raw = bytearray()
-              half = size / 2.0
-              for y in range(size):
-                  raw.append(0)
-                  for x in range(size):
-                      dx = (x - half) / half
-                      dy = (y - half) / half
-                      r = math.hypot(dx, dy)
-                      outer_ring = (0.64 <= r <= 0.78)
-                      inner_ring = (0.30 <= r <= 0.40)
-                      cross_h = (abs(dy) <= 0.055 and 0.16 <= abs(dx) <= 0.86)
-                      cross_v = (abs(dx) <= 0.055 and 0.16 <= abs(dy) <= 0.86)
-                      center_dot = (r <= 0.14)
-                      is_mark = outer_ring or inner_ring or cross_h or cross_v or center_dot
-                      if mono:
-                          raw.extend(bytes((255, 255, 255, 255)) if is_mark else bytes((0, 0, 0, 0)))
-                      else:
-                          if r <= 0.94:
-                              raw.extend(bytes((248, 250, 252, 255)) if is_mark else bytes((22, 163, 74, 255)))
-                          else:
-                              raw.extend(bytes((11, 18, 32, 255)))
-              def ch(t, d):
-                  return struct.pack("!I", len(d)) + t + d + struct.pack("!I", zlib.crc32(t + d) & 0xffffffff)
-              ihdr = struct.pack("!IIBBBBB", size, size, 8, 6, 0, 0, 0)
-              return b"\x89PNG\r\n\x1a\n" + ch(b"IHDR", ihdr) + ch(b"IDAT", zlib.compress(bytes(raw))) + ch(b"IEND", b"")
+          from PIL import Image, ImageDraw, ImageOps
+          import glob
+
+          jpg_candidates = ["logo.jpg", "logo.jpeg", "logo.JPG", "logo.png"] + glob.glob("*.jpg") + glob.glob("*.jpeg")
+          logo_path = next((f for f in jpg_candidates if os.path.exists(f)), None)
+
+          def build_logo_png(size, silhouette_only):
+              if logo_path:
+                  img = Image.open(logo_path).convert("RGBA")
+                  img = ImageOps.fit(img, (size, size), Image.Resampling.LANCZOS)
+                  if silhouette_only:
+                      gray = img.convert("L")
+                      bg_val = gray.getpixel((0, 0))
+                      out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                      px_g = gray.load()
+                      px_o = out.load()
+                      for y in range(size):
+                          for x in range(size):
+                              if abs(px_g[x, y] - bg_val) > 32:
+                                  px_o[x, y] = (255, 255, 255, 255)
+                      return out
+                  mask = Image.new("L", (size, size), 0)
+                  ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
+                  out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                  out.paste(img, (0, 0), mask)
+                  return out
+              out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+              d = ImageDraw.Draw(out)
+              col = (255, 255, 255, 255) if silhouette_only else (34, 197, 94, 255)
+              d.ellipse((4, 4, size - 5, size - 5), outline=col, width=max(2, size // 12))
+              return out
 
           os.makedirs("android/app/src/main/res/drawable", exist_ok=True)
-          open("android/app/src/main/res/drawable/ic_msb_logo.png", "wb").write(make_png(96, True))
+          build_logo_png(96, True).save("android/app/src/main/res/drawable/ic_msb_logo.png", "PNG")
+          build_logo_png(192, False).save("android/app/src/main/res/drawable/msb_brand_logo.png", "PNG")
+
           for d_name, sz in [("mipmap-mdpi", 48), ("mipmap-hdpi", 72), ("mipmap-xhdpi", 96), ("mipmap-xxhdpi", 144), ("mipmap-xxxhdpi", 192)]:
               d_dir = "android/app/src/main/res/" + d_name
               os.makedirs(d_dir, exist_ok=True)
-              png_bytes = make_png(sz, False)
-              open(d_dir + "/ic_launcher.png", "wb").write(png_bytes)
-              open(d_dir + "/ic_launcher_round.png", "wb").write(png_bytes)
+              ic = build_logo_png(sz, False)
+              ic.save(d_dir + "/ic_launcher.png", "PNG")
+              ic.save(d_dir + "/ic_launcher_round.png", "PNG")
+
           for xml_f in ["android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml", "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"]:
               if os.path.exists(xml_f):
                   os.remove(xml_f)
@@ -207,12 +216,12 @@ jobs:
               "    android:layout_height=\"wrap_content\"",
               "    android:orientation=\"horizontal\"",
               "    android:gravity=\"center_vertical\"",
-              "    android:padding=\"8dp\"",
-              "    android:background=\"#102a1a\">",
+              "    android:padding=\"6dp\"",
+              "    android:background=\"@android:color/transparent\">",
               "    <ImageView",
               "        android:id=\"@+id/msb_notif_avatar\"",
-              "        android:layout_width=\"52dp\"",
-              "        android:layout_height=\"52dp\"",
+              "        android:layout_width=\"48dp\"",
+              "        android:layout_height=\"48dp\"",
               "        android:scaleType=\"centerCrop\" />",
               "    <LinearLayout",
               "        android:layout_width=\"0dp\"",
@@ -224,23 +233,24 @@ jobs:
               "            android:id=\"@+id/msb_notif_title\"",
               "            android:layout_width=\"match_parent\"",
               "            android:layout_height=\"wrap_content\"",
-              "            android:textColor=\"#4ade80\"",
+              "            android:textColor=\"#22c55e\"",
               "            android:textStyle=\"bold\"",
-              "            android:textSize=\"14sp\"",
+              "            android:textSize=\"15sp\"",
               "            android:maxLines=\"1\" />",
               "        <TextView",
               "            android:id=\"@+id/msb_notif_body\"",
               "            android:layout_width=\"match_parent\"",
               "            android:layout_height=\"wrap_content\"",
               "            android:layout_marginTop=\"2dp\"",
-              "            android:textColor=\"#f8fafc\"",
-              "            android:textSize=\"13sp\"",
+              "            android:textStyle=\"normal\"",
+              "            android:textSize=\"14sp\"",
               "            android:maxLines=\"3\" />",
               "    </LinearLayout>",
               "</LinearLayout>"
           ])
           open("android/app/src/main/res/layout/msb_notif_custom.xml", "w", encoding="utf-8").write(notif_xml)
           '
+
 
       - name: Создание ресивера и фоновой службы
         run: |
@@ -365,7 +375,7 @@ jobs:
                       int bodyId = ctx.getResources().getIdentifier("msb_notif_body", "id", pkg);
 
                       RemoteViews rv = new RemoteViews(pkg, layoutId);
-                      if (bgCol != 0) rv.setInt(rootId, "setBackgroundColor", bgCol);
+                      rv.setInt(rootId, "setBackgroundColor", Color.TRANSPARENT);
                       rv.setTextViewText(titleId, title);
                       if (accentCol != 0) rv.setTextColor(titleId, accentCol);
                       rv.setTextViewText(bodyId, body);
@@ -373,9 +383,11 @@ jobs:
                       if (bigCleanAvatar != null) {
                           rv.setImageViewBitmap(avId, bigCleanAvatar);
                       } else {
-                          int launcherId = ctx.getResources().getIdentifier("ic_launcher", "mipmap", pkg);
-                          if (launcherId != 0) rv.setImageViewResource(avId, launcherId);
+                          int logoId = ctx.getResources().getIdentifier("msb_brand_logo", "drawable", pkg);
+                          if (logoId == 0) logoId = ctx.getResources().getIdentifier("ic_launcher", "mipmap", pkg);
+                          if (logoId != 0) rv.setImageViewResource(avId, logoId);
                       }
+
 
                       b.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
                       b.setCustomContentView(rv);
@@ -657,8 +669,10 @@ jobs:
                                   try {
                                       SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
                                       String origin = sp.getString("origin", "");
-                                      if (!origin.isEmpty() && body != null && body.indexOf(':') > 0) {
-                                          String senderRaw = body.substring(0, body.indexOf(':')).replace("👥", "").trim().toLowerCase();
+                                      if (!origin.isEmpty() && title != null) {
+                                          String senderRaw = title.contains("•") ? title.substring(title.lastIndexOf('•') + 1) : title;
+                                          senderRaw = senderRaw.replace("👥", "").trim().toLowerCase();
+
                                           if (!senderRaw.isEmpty()) {
                                               String urlStr = origin + "/api/avatar-img/" + java.net.URLEncoder.encode(senderRaw, "UTF-8") + ".jpg";
                                               HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
