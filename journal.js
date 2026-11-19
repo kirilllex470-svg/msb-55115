@@ -1901,9 +1901,12 @@ function showAlert(target, text, sender, notifId, isNew) {
     stopAlertVisuals();
 
     if (isNew || document.visibilityState === 'hidden') {
-        playSoundById(selectedSoundId, true);
+        if (!window.MsbNative) {
+            playSoundById(selectedSoundId, true);
+        }
         sendLocalNotification(target, text, sender || ADMIN_NAME, notifId);
     }
+
 
     markAlertDismissedLocally(notifId, text, sender);
     if (ws && ws.readyState === WebSocket.OPEN) {
