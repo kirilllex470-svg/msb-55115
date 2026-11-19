@@ -788,6 +788,7 @@ jobs:
           SERVER_URL: ${{ secrets.SERVER_URL }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
         run: |
+          
           if [ -n "$SERVER_URL" ]; then
             APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
             VER_CODE="${{ github.run_number }}"
