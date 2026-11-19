@@ -1745,9 +1745,8 @@ function sendLocalNotification(target, text, sender, notifId) {
     if (m) {
         unitStr = m.at(1).trim();
         callStr = m.at(2).trim();
-    }
-
     } else if (Array.isArray(myMessengerFriends)) {
+
         const fr = myMessengerFriends.find(function(f) {
             return f && !f.isGroup && String(f.name || '').toLowerCase() === rawFrom.toLowerCase();
         });
@@ -1767,8 +1766,9 @@ function sendLocalNotification(target, text, sender, notifId) {
     }
 
 
-    if ('serviceWorker' in navigator) {
-        createCleanBigAvatarIcon(fromWho, meta.id, function(bigAvatarDataUrl) {
+     if ('serviceWorker' in navigator) {
+        createCleanBigAvatarIcon(callStr, meta.id, function(bigAvatarDataUrl) {
+
             navigator.serviceWorker.ready.then(function(reg) {
                 reg.showNotification(title, {
                     body: body,
