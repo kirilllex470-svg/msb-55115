@@ -1675,41 +1675,64 @@ function clearHistoryAdmin() {
     }
 }
 
-function createThemedNotifIcon(themeName) {
+function createCleanBigAvatarIcon(senderName, themeName, callback) {
     const meta = getMsbThemeMeta(themeName);
     const palettes = {
-        military: { bg1: '#102a1a', bg2: '#06120b', border: '#22c55e', text: '#4ade80' },
-        rocket:   { bg1: '#2e140d', bg2: '#120704', border: '#f97316', text: '#fb923c' },
-        cosmic:   { bg1: '#1c1242', bg2: '#090618', border: '#a855f7', text: '#c084fc' }
+        military: { bg1: '#102a1a', bg2: '#06120b', text: '#4ade80' },
+        rocket:   { bg1: '#2e140d', bg2: '#120704', text: '#fb923c' },
+        cosmic:   { bg1: '#1c1242', bg2: '#090618', text: '#c084fc' }
     };
     const pal = palettes[meta.id] || palettes.military;
-    const canvas = document.createElement('canvas');
-    canvas.width = 192;
-    canvas.height = 192;
-    const ctx = canvas.getContext('2d');
+    const size = 576;
 
-    ctx.beginPath();
-    ctx.roundRect(6, 6, 180, 180, 42);
-    const grad = ctx.createLinearGradient(0, 0, 192, 192);
-    grad.addColorStop(0, pal.bg1);
-    grad.addColorStop(1, pal.bg2);
-    ctx.fillStyle = grad;
-    ctx.fill();
+    const cleanKey = String(senderName || '').replace(/^👥\s*/, '').trim().toLowerCase();
+    const cachedAv = (typeof getCachedUserAvatar === 'function') ? getCachedUserAvatar(cleanKey, '') : '';
 
-    ctx.lineWidth = 7;
-    ctx.strokeStyle = pal.border;
-    ctx.stroke();
+    const renderCanvas = function(imgObj) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
 
-    ctx.font = '74px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(meta.badge, 96, 84);
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
 
-    ctx.fillStyle = pal.text;
-    ctx.font = '900 22px "Segoe UI", monospace, sans-serif';
-    ctx.fillText('МСБ-55115', 96, 148);
+        if (imgObj) {
+            const minSide = Math.min(imgObj.width, imgObj.height);
+            const sx = (imgObj.width - minSide) / 2;
+            const sy = (imgObj.height - minSide) / 2;
+            ctx.drawImage(imgObj, sx, sy, minSide, minSide, 0, 0, size, size);
+        } else {
+            const grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, pal.bg1);
+            grad.addColorStop(1, pal.bg2);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, size, size);
 
-    return canvas.toDataURL('image/png');
+            ctx.fillStyle = pal.text;
+            ctx.font = '900 180px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const initials = (cleanKey || 'МСБ').substring(0, 2).toUpperCase();
+            ctx.fillText(initials, size / 2, size / 2);
+        }
+        callback(canvas.toDataURL('image/png'));
+    };
+
+    if (cachedAv) {
+        const img = new Image();
+        img.onload = function() { renderCanvas(img); };
+        img.onerror = function() { renderCanvas(null); };
+        img.src = cachedAv;
+    } else {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function() { renderCanvas(img); };
+        img.onerror = function() { renderCanvas(null); };
+        img.src = '/api/avatar-img/' + encodeURIComponent(cleanKey) + '.jpg?v=' + Date.now();
+    }
 }
 
 function sendLocalNotification(target, text, sender, notifId) {
@@ -1717,9 +1740,7 @@ function sendLocalNotification(target, text, sender, notifId) {
     const meta = getMsbThemeMeta();
     const title = meta.badge + ' МСБ-55115 • [' + target + ']';
     const body = fromWho + ': ' + text;
-    const themedIcon = createThemedNotifIcon(meta.id);
 
-    // 1. Нативное уведомление для Android APK с тёмным фоном и акцентом активной темы
     if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
         try {
             window.MsbNative.notify(title, body, String(notifId || Date.now()), meta.bgColor + '|' + meta.color);
@@ -1727,23 +1748,24 @@ function sendLocalNotification(target, text, sender, notifId) {
         } catch (e) {}
     }
 
-    // 2. Уведомление для PWA / браузера с закруглённой тематической иконкой
     if ('serviceWorker' in navigator) {
-
-        navigator.serviceWorker.ready.then(function(reg) {
-            reg.showNotification(title, {
-                body: body,
-                icon: themedIcon || '/icon-192.png',
-                badge: '/icon-192.png',
-                vibrate: Array.of(800, 200, 800, 200, 1000),
-                silent: false,
-                requireInteraction: true,
-                renotify: true,
-                tag: 'msb-alert-' + (notifId || Date.now())
-            }).catch(function() {});
+        createCleanBigAvatarIcon(fromWho, meta.id, function(bigAvatarDataUrl) {
+            navigator.serviceWorker.ready.then(function(reg) {
+                reg.showNotification(title, {
+                    body: body,
+                    icon: bigAvatarDataUrl || '/icon-192.png',
+                    badge: '/icon-192.png',
+                    vibrate: Array.of(800, 200, 800, 200, 1000),
+                    silent: false,
+                    requireInteraction: true,
+                    renotify: true,
+                    tag: 'msb-alert-' + (notifId || Date.now())
+                }).catch(function() {});
+            });
         });
     }
 }
+
 
 
 

@@ -351,7 +351,8 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
 .msb-unified-back-btn:hover { transform: translateX(-2px); border-color: #00ca9e; background: linear-gradient(135deg, rgba(16, 185, 129, 0.38), rgba(2, 132, 199, 0.38)); }
 .msb-unified-back-btn .back-arrow-icon { font-size: 20px; line-height: 1; color: #00ca9e; font-weight: 900; }
 .msb-profile-pill { display: flex; align-items: center; gap: 10px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(255, 255, 255, 0.1); padding: 4px 12px 4px 6px; border-radius: 999px; min-width: 0; }
-.msb-top-avatar { width: 38px !important; height: 38px !important; border-radius: 50% !important; border: 2px solid #00ca9e; box-shadow: 0 0 10px rgba(0, 202, 158, 0.35); }
+.msb-top-avatar { width: 38px !important; height: 38px !important; border-radius: 50% !important; border: none !important; box-shadow: 0 0 12px rgba(0, 202, 158, 0.4); }
+   
 .msb-profile-meta { display: flex; flex-direction: column; min-width: 0; }
 .msb-profile-callsign { font-size: 13px; font-weight: 700; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 .msb-avatar-edit-link { font-size: 11px; color: #38bdf8; cursor: pointer; font-weight: 600; }
@@ -515,17 +516,18 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
 
 .friend-avatar-online {
     animation: avatarOnlineFloat 2.8s ease-in-out infinite;
-    border: 1.5px solid #4ade80 !important;
+    border: none !important;
     box-shadow: 0 0 14px rgba(74, 222, 128, 0.55) !important;
 }
 body.theme-rocket .friend-avatar-online {
-    border-color: #fb923c !important;
+    border: none !important;
     box-shadow: 0 0 14px rgba(249, 115, 22, 0.6) !important;
 }
 body.theme-cosmic .friend-avatar-online {
-    border-color: #c084fc !important;
+    border: none !important;
     box-shadow: 0 0 14px rgba(139, 92, 246, 0.65) !important;
 }
+
 
 .online-dot {
     position: absolute;
@@ -1605,9 +1607,10 @@ body.theme-cosmic .msb-profile-pill .msb-avatar-edit-link {
 
 #messenger-modal .chat-header #partner-avatar {
     border-radius: 50% !important;
-    border: 2px solid #22c55e !important;
+    border: none !important;
     box-shadow: 0 0 12px rgba(34, 197, 94, 0.45) !important;
 }
+
 
 /* Кнопки звонков в шапке чата под тему */
 #messenger-modal .chat-header .call-header-btn {
@@ -1702,4 +1705,3 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
 #msb-unified-topbar.has-back-btn #msb-top-back-btn {
     display: inline-flex !important;
 }
-

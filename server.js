@@ -283,26 +283,22 @@ function makeTacticalIcon(size) {
             const dx = (x - half) / half;
             const dy = (y - half) / half;
 
-            // Чистый глубокий фон
+            const r = Math.hypot(dx, dy);
             let red = 11, green = 18, blue = 32;
 
-            // Форма щита по центру без рамок
-            const inShieldTop = (dy >= -0.62 && dy <= 0.05 && Math.abs(dx) <= 0.54);
-            const inShieldBot = (dy > 0.05 && dy <= 0.68 && Math.abs(dx) <= 0.54 * (1 - (dy - 0.05) / 0.68));
-            if (inShieldTop || inShieldBot) {
+            if (r <= 0.94) {
                 red = 22; green = 163; blue = 74;
-                // Внутренний светлый шеврон (галочка вверх)
-                const chev1 = Math.abs((dy + 0.08) - Math.abs(dx) * 0.85);
-                const chev2 = Math.abs((dy - 0.16) - Math.abs(dx) * 0.85);
-                if ((chev1 <= 0.075 && Math.abs(dx) <= 0.34) || (chev2 <= 0.075 && Math.abs(dx) <= 0.28)) {
+                const outerRing = (0.64 <= r && r <= 0.78);
+                const innerRing = (0.30 <= r && r <= 0.40);
+                const crossH = (Math.abs(dy) <= 0.055 && 0.16 <= Math.abs(dx) && Math.abs(dx) <= 0.86);
+                const crossV = (Math.abs(dx) <= 0.055 && 0.16 <= Math.abs(dy) && Math.abs(dy) <= 0.86);
+                const centerDot = (r <= 0.14);
+
+                if (outerRing || innerRing || crossH || crossV || centerDot) {
                     red = 248; green = 250; blue = 252;
                 }
             }
-            raw.writeUInt8(red, p);
-            raw.writeUInt8(green, p + 1);
-            raw.writeUInt8(blue, p + 2);
-        }
-    }
+
 
 
     const idat = zlib.deflateSync(raw);
@@ -414,8 +410,9 @@ const SW_CODE = [
     "    }",
     "    event.waitUntil(self.registration.showNotification(data.title || '🛑 МСБ-55115', {",
     "        body: data.body || 'Откройте приложение',",
-    "        icon: '/icon-192.png',",
+    "        icon: data.icon || '/icon-192.png',",
     "        badge: '/icon-192.png',",
+
     "        vibrate: Array.of(400, 100, 400, 100, 600),",
     "        silent: false,",
     "        requireInteraction: true,",
@@ -1519,12 +1516,17 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     activeAlerts[target].push({ id: notifId, text: text, sender: sender, readList: new Array() });
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
+    const cleanSenderKeyForWeb = String(sender).replace(/^👥\s*/, '').trim().toLowerCase();
+    const webAvatarUrl = '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now();
+
     const payload = JSON.stringify({
         title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
         body: sender + ': ' + text,
+        icon: webAvatarUrl,
         tag: 'msb-alert-' + notifId,
         url: '/'
     });
+
     const pushOptions = {
         TTL: 86400,
         urgency: 'high'
