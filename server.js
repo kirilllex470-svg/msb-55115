@@ -274,38 +274,28 @@ function makeTacticalIcon(size) {
     ihdr.writeUInt8(2, 9);
     const rowLen = 1 + size * 3;
     const raw = Buffer.alloc(size * rowLen, 0);
-     const half = size / 2;
-    const pad = size * 0.06;
-    const cornerR = size * 0.24;
-    const innerMax = half - pad - cornerR;
-
+    const half = size / 2;
     for (let y = 0; y < size; y++) {
         const rowOff = y * rowLen;
         raw.writeUInt8(0, rowOff);
         for (let x = 0; x < size; x++) {
             const p = rowOff + 1 + x * 3;
-            const dx = Math.abs(x - half);
-            const dy = Math.abs(y - half);
-            const qx = Math.max(dx - innerMax, 0);
-            const qy = Math.max(dy - innerMax, 0);
-            const dist = Math.sqrt(qx * qx + qy * qy);
+            const dx = (x - half) / half;
+            const dy = (y - half) / half;
 
-            let red = 6, green = 18, blue = 11;
-            if (dist <= cornerR) {
-                if (dist >= cornerR - size * 0.045) {
-                    red = 34; green = 197; blue = 94;
-                } else {
-                    red = 16; green = 42; blue = 26;
-                    const sdx = x - half;
-                    const sdy = y - half;
-                    const c1 = Math.abs(sdy - (-half * 0.30 + Math.abs(sdx) * 0.75));
-                    const c2 = Math.abs(sdy - (-half * 0.03 + Math.abs(sdx) * 0.75));
-                    const c3 = Math.abs(sdy - (half * 0.24 + Math.abs(sdx) * 0.75));
-                    if ((c1 <= size * 0.048 && Math.abs(sdx) <= half * 0.50) ||
-                        (c2 <= size * 0.048 && Math.abs(sdx) <= half * 0.44) ||
-                        (c3 <= size * 0.048 && Math.abs(sdx) <= half * 0.36)) {
-                        red = 74; green = 222; blue = 128;
-                    }
+            // Чистый глубокий фон
+            let red = 11, green = 18, blue = 32;
+
+            // Форма щита по центру без рамок
+            const inShieldTop = (dy >= -0.62 && dy <= 0.05 && Math.abs(dx) <= 0.54);
+            const inShieldBot = (dy > 0.05 && dy <= 0.68 && Math.abs(dx) <= 0.54 * (1 - (dy - 0.05) / 0.68));
+            if (inShieldTop || inShieldBot) {
+                red = 22; green = 163; blue = 74;
+                // Внутренний светлый шеврон (галочка вверх)
+                const chev1 = Math.abs((dy + 0.08) - Math.abs(dx) * 0.85);
+                const chev2 = Math.abs((dy - 0.16) - Math.abs(dx) * 0.85);
+                if ((chev1 <= 0.075 && Math.abs(dx) <= 0.34) || (chev2 <= 0.075 && Math.abs(dx) <= 0.28)) {
+                    red = 248; green = 250; blue = 252;
                 }
             }
             raw.writeUInt8(red, p);
@@ -313,6 +303,7 @@ function makeTacticalIcon(size) {
             raw.writeUInt8(blue, p + 2);
         }
     }
+
 
     const idat = zlib.deflateSync(raw);
     const sig = Buffer.from('89504e470d0a1a0a', 'hex');
