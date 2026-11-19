@@ -298,13 +298,17 @@ function makeTacticalIcon(size) {
                     red = 248; green = 250; blue = 252;
                 }
             }
-
-
+            raw.writeUInt8(red, p);
+            raw.writeUInt8(green, p + 1);
+            raw.writeUInt8(blue, p + 2);
+        }
+    }
 
     const idat = zlib.deflateSync(raw);
     const sig = Buffer.from('89504e470d0a1a0a', 'hex');
     return Buffer.concat(Array.of(sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))));
 }
+
 const TACTICAL_ICON_192 = makeTacticalIcon(192);
 const TACTICAL_ICON_512 = makeTacticalIcon(512);
 
