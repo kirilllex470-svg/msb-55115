@@ -161,7 +161,7 @@ jobs:
           ])
           open("android/app/src/main/res/xml/msb_file_paths.xml", "w", encoding="utf-8").write(fp_xml)
 
-          import struct, zlib
+          import struct, zlib, math
           def make_png(size, mono):
               raw = bytearray()
               half = size / 2.0
@@ -170,21 +170,25 @@ jobs:
                   for x in range(size):
                       dx = (x - half) / half
                       dy = (y - half) / half
-                      in_top = (-0.62 <= dy <= 0.05 and abs(dx) <= 0.54)
-                      in_bot = (0.05 < dy <= 0.68 and abs(dx) <= 0.54 * (1.0 - (dy - 0.05) / 0.68))
-                      chev1 = abs((dy + 0.08) - abs(dx) * 0.85) <= 0.08 and abs(dx) <= 0.34
-                      chev2 = abs((dy - 0.16) - abs(dx) * 0.85) <= 0.08 and abs(dx) <= 0.28
+                      r = math.hypot(dx, dy)
+                      outer_ring = (0.64 <= r <= 0.78)
+                      inner_ring = (0.30 <= r <= 0.40)
+                      cross_h = (abs(dy) <= 0.055 and 0.16 <= abs(dx) <= 0.86)
+                      cross_v = (abs(dx) <= 0.055 and 0.16 <= abs(dy) <= 0.86)
+                      center_dot = (r <= 0.14)
+                      is_mark = outer_ring or inner_ring or cross_h or cross_v or center_dot
                       if mono:
-                          raw.extend(bytes((255, 255, 255, 255)) if ((in_top or in_bot) and not (chev1 or chev2)) else bytes((0, 0, 0, 0)))
+                          raw.extend(bytes((255, 255, 255, 255)) if is_mark else bytes((0, 0, 0, 0)))
                       else:
-                          if in_top or in_bot:
-                              raw.extend(bytes((248, 250, 252, 255)) if (chev1 or chev2) else bytes((22, 163, 74, 255)))
+                          if r <= 0.94:
+                              raw.extend(bytes((248, 250, 252, 255)) if is_mark else bytes((22, 163, 74, 255)))
                           else:
                               raw.extend(bytes((11, 18, 32, 255)))
               def ch(t, d):
                   return struct.pack("!I", len(d)) + t + d + struct.pack("!I", zlib.crc32(t + d) & 0xffffffff)
               ihdr = struct.pack("!IIBBBBB", size, size, 8, 6, 0, 0, 0)
               return b"\x89PNG\r\n\x1a\n" + ch(b"IHDR", ihdr) + ch(b"IDAT", zlib.compress(bytes(raw))) + ch(b"IEND", b"")
+
 
           os.makedirs("android/app/src/main/res/drawable", exist_ok=True)
           open("android/app/src/main/res/drawable/ic_msb_logo.png", "wb").write(make_png(96, True))
@@ -278,12 +282,33 @@ jobs:
                   return Color.parseColor("#22c55e");
               }
 
+              public static Bitmap prepareLargeCleanAvatar(Bitmap src) {
+                  if (src == null) return null;
+                  int targetSize = 384;
+                  int minSide = Math.min(src.getWidth(), src.getHeight());
+                  int x = (src.getWidth() - minSide) / 2;
+                  int y = (src.getHeight() - minSide) / 2;
+                  Bitmap square = Bitmap.createBitmap(src, x, y, minSide, minSide);
+                  Bitmap scaled = Bitmap.createScaledBitmap(square, targetSize, targetSize, true);
+
+                  Bitmap out = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888);
+                  Canvas canvas = new Canvas(out);
+                  Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  Path clip = new Path();
+                  clip.addCircle(targetSize / 2f, targetSize / 2f, targetSize / 2f, Path.Direction.CW);
+                  canvas.clipPath(clip);
+                  canvas.drawBitmap(scaled, 0, 0, paint);
+                  return out;
+              }
+
               public static Notification buildThemedAlertNotification(
                   Context ctx, String channelId, String title, String body,
                   int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
               ) {
                   int smallIcon = ctx.getResources().getIdentifier("ic_msb_logo", "drawable", ctx.getPackageName());
                   if (smallIcon == 0) smallIcon = android.R.drawable.ic_dialog_info;
+
+                  Bitmap bigCleanAvatar = prepareLargeCleanAvatar(avatarBmp);
 
                   NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
                       .setSmallIcon(smallIcon)
@@ -296,11 +321,12 @@ jobs:
                       .setAutoCancel(!ongoing)
                       .setContentIntent(pi);
 
-                  if (avatarBmp != null) {
-                      b.setLargeIcon(avatarBmp);
+                  if (bigCleanAvatar != null) {
+                      b.setLargeIcon(bigCleanAvatar);
                   }
                   return b.build();
               }
+
 
 
               public static void ensureHighPriorityChannel(NotificationManager nm) {
