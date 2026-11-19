@@ -78,11 +78,11 @@ jobs:
             echo "" >> android/app/build.gradle
             echo "apply plugin: \"com.google.gms.google-services\"" >> android/app/build.gradle
           fi
+
       - name: Настройка AndroidManifest.xml
         run: |
           pip install pillow --quiet --break-system-packages || pip install pillow --quiet
           python3 -c '
-
           import json, os
           gs = json.load(open("google-services.json", encoding="utf-8"))
           pkg = next(iter(gs["client"]))["client_info"]["android_client_info"]["package_name"]
@@ -149,7 +149,6 @@ jobs:
               "            android:enabled=\"true\" android:exported=\"false\" />",
               "    </application>"
           ])
-
           s = s.replace("</application>", svc, 1)
           open(p, "w", encoding="utf-8").write(s)
 
@@ -164,7 +163,6 @@ jobs:
           open("android/app/src/main/res/xml/msb_file_paths.xml", "w", encoding="utf-8").write(fp_xml)
           from PIL import Image, ImageDraw, ImageOps
           import glob
-
           jpg_candidates = ["logo.jpg", "logo.jpeg", "logo.JPG", "logo.png"] + glob.glob("*.jpg") + glob.glob("*.jpeg")
           logo_path = next((f for f in jpg_candidates if os.path.exists(f)), None)
 
@@ -256,10 +254,8 @@ jobs:
               "    </LinearLayout>",
               "</LinearLayout>"
           ])
-
           open("android/app/src/main/res/layout/msb_notif_custom.xml", "w", encoding="utf-8").write(notif_xml)
           '
-
 
       - name: Создание ресивера и фоновой службы
         run: |
@@ -289,6 +285,80 @@ jobs:
               }
           }
           EOF
+
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbNotifReplyReceiver.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbNotifReplyReceiver.java"
+
+          import android.app.NotificationManager;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.os.Bundle;
+          import androidx.core.app.RemoteInput;
+          import java.io.OutputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import org.json.JSONObject;
+
+          public class MsbNotifReplyReceiver extends BroadcastReceiver {
+              public static final String KEY_TEXT_REPLY = "msb_key_text_reply";
+
+              @Override
+              public void onReceive(final Context ctx, Intent intent) {
+                  Bundle remoteInput = RemoteInput.getResultsFromIntent(intent);
+                  if (remoteInput == null) return;
+                  CharSequence replyCs = remoteInput.getCharSequence(KEY_TEXT_REPLY);
+                  if (replyCs == null) return;
+                  final String replyText = replyCs.toString().trim();
+                  if (replyText.isEmpty()) return;
+
+                  final String targetSender = intent.getStringExtra("reply_to");
+                  final String notifTag = intent.getStringExtra("notif_tag");
+                  final int notifId = intent.getIntExtra("notif_id", 0);
+
+                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", Context.MODE_PRIVATE);
+                  final String origin = sp.getString("origin", "");
+                  String callsign = sp.getString("callsign", "");
+                  if (callsign.isEmpty()) callsign = sp.getString("user", "");
+                  final String myName = callsign;
+
+                  NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm != null && notifTag != null) {
+                      nm.cancel(notifTag, notifId);
+                  }
+
+                  if (origin.isEmpty() || myName.isEmpty() || targetSender == null) return;
+                  new Thread(new Runnable() {
+                      @Override
+                      public void run() {
+                          try {
+                              URL url = new URL(origin + "/api/reply-from-notif");
+                              HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                              conn.setRequestMethod("POST");
+                              conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                              conn.setConnectTimeout(8000);
+                              conn.setReadTimeout(8000);
+                              conn.setDoOutput(true);
+
+                              JSONObject json = new JSONObject();
+                              json.put("sender", myName);
+                              json.put("target", targetSender);
+                              json.put("text", replyText);
+
+                              OutputStream os = conn.getOutputStream();
+                              os.write(json.toString().getBytes("UTF-8"));
+                              os.flush();
+                              os.close();
+                              conn.getResponseCode();
+                              conn.disconnect();
+                          } catch (Exception ignored) {}
+                      }
+                  }).start();
+              }
+          }
+          EOF
+
           echo "$PKG_LINE" > "$JAVA_DIR/MsbKeepAliveService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbKeepAliveService.java"
 
@@ -306,12 +376,15 @@ jobs:
           import android.graphics.Paint;
           import android.graphics.Path;
           import android.media.AudioAttributes;
+          import android.media.AudioManager;
           import android.media.RingtoneManager;
+          import android.media.ToneGenerator;
           import android.net.Uri;
           import android.os.Build;
           import android.os.IBinder;
           import android.widget.RemoteViews;
           import androidx.core.app.NotificationCompat;
+          import androidx.core.app.RemoteInput;
 
           public class MsbKeepAliveService extends Service {
               public static final String ALERT_CH = "msb_alerts_high_v5";
@@ -322,6 +395,22 @@ jobs:
                   createChannels();
               }
 
+              public static void playSelectedMelody(Context ctx, String soundId) {
+                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                  String id = (soundId != null && !soundId.isEmpty()) ? soundId : sp.getString("sound_id", "alarm1");
+                  try {
+                      ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 95);
+                      if ("bank1".equals(id) || "bank2".equals(id)) {
+                          tg.startTone(ToneGenerator.TONE_PROP_ACK, 280);
+                      } else if ("nice1".equals(id) || "nice2".equals(id) || "nice3".equals(id)) {
+                          tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 320);
+                      } else if ("alarm2".equals(id)) {
+                          tg.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 450);
+                      } else {
+                          tg.startTone(ToneGenerator.TONE_PROP_NACK, 400);
+                      }
+                  } catch (Exception ignored) {}
+              }
               public static int resolveThemeBgColor(Context ctx) {
                   SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
                   String t = sp.getString("theme_id", "military");
@@ -337,10 +426,10 @@ jobs:
                   if ("cosmic".equals(t)) return Color.parseColor("#a855f7");
                   return Color.parseColor("#22c55e");
               }
+
               public static Bitmap prepareLargeCleanAvatar(Bitmap src) {
                   if (src == null) return null;
                   int targetSize = 96;
-
                   int minSide = Math.min(src.getWidth(), src.getHeight());
                   int x = (src.getWidth() - minSide) / 2;
                   int y = (src.getHeight() - minSide) / 2;
@@ -356,9 +445,11 @@ jobs:
                   canvas.drawBitmap(scaled, 0, 0, paint);
                   return out;
               }
+
               public static Notification buildThemedAlertNotification(
                   Context ctx, String channelId, String title, String body,
-                  int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
+                  int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing,
+                  String replyTarget, String notifTag, int notifId
               ) {
                   String pkg = ctx.getPackageName();
                   int smallIcon = ctx.getResources().getIdentifier("ic_msb_logo", "drawable", pkg);
@@ -390,7 +481,6 @@ jobs:
                       rv.setTextViewText(bodyId, body);
                       rv.setTextColor(bodyId, Color.parseColor("#111827"));
 
-
                       if (bigCleanAvatar != null) {
                           rv.setImageViewBitmap(avId, bigCleanAvatar);
                       } else {
@@ -399,9 +489,8 @@ jobs:
                           if (logoId != 0) rv.setImageViewResource(avId, logoId);
                       }
 
-
                       if (replyTarget != null && !replyTarget.isEmpty()) {
-                          androidx.core.app.RemoteInput remoteInput = new androidx.core.app.RemoteInput.Builder(MsbNotifReplyReceiver.KEY_TEXT_REPLY)
+                          RemoteInput remoteInput = new RemoteInput.Builder(MsbNotifReplyReceiver.KEY_TEXT_REPLY)
                               .setLabel("Написать ответ...")
                               .build();
                           Intent replyIntent = new Intent(ctx, MsbNotifReplyReceiver.class);
@@ -424,7 +513,6 @@ jobs:
                       b.setCustomBigContentView(rv);
                       b.setCustomHeadsUpContentView(rv);
                   } else if (bigCleanAvatar != null) {
-
                       b.setLargeIcon(bigCleanAvatar);
                   }
                   return b.build();
@@ -449,7 +537,7 @@ jobs:
                           NotificationManager.IMPORTANCE_HIGH
                       );
                       alCh.enableVibration(true);
-                      alCh.setVibrationPattern(new long[]{0, 700, 200, 700, 200, 900});
+                      alCh.setVibrationPattern(new long[]{0, 400, 150, 400});
                       alCh.setSound(snd, attrs);
                       nm.createNotificationChannel(alCh);
                   }
@@ -474,7 +562,8 @@ jobs:
                       "Защищенный канал оповещений активен",
                       resolveThemeBgColor(ctx),
                       resolveThemeAccentColor(ctx),
-                      null, pi, true
+                      null, pi, true,
+                      null, null, 0
                   );
               }
 
@@ -491,6 +580,7 @@ jobs:
               public IBinder onBind(Intent intent) { return null; }
           }
           EOF
+
           echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
 
@@ -575,7 +665,6 @@ jobs:
               }
           }
           EOF
-
 
       - name: Настройка MainActivity
         run: |
@@ -690,10 +779,8 @@ jobs:
                               .apply();
                       } catch (Exception ignored) {}
                   }
-
-
                   @JavascriptInterface
-                  public void notify(final String title, final String body, String idStr, final String colorHex) {
+                  public void notify(final String title, final String body, final String idStr, final String colorHex) {
                       new Thread(new Runnable() {
                           @Override
                           public void run() {
@@ -750,19 +837,20 @@ jobs:
                                       ? ("msb-alert-" + idStr)
                                       : ("msb-alert-" + (title + "_" + body).hashCode());
                                   int notifId = tag.hashCode() & 0x7fffffff;
+                                  String replyTarget = (title != null && title.contains("•"))
+                                      ? title.substring(title.lastIndexOf('•') + 1).trim()
+                                      : title;
                                   nm.notify(tag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
                                       MainActivity.this, MsbKeepAliveService.ALERT_CH,
                                       title != null ? title : "МСБ-55115",
                                       body != null ? body : "",
-                                      bgCol, accCol, avatarBmp, pi, false
+                                      bgCol, accCol, avatarBmp, pi, false,
+                                      replyTarget, tag, notifId
                                   ));
-
                               } catch (Exception ignored) {}
-                              
                           }
                       }).start();
                   }
-
                   @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
