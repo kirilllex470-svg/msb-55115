@@ -562,7 +562,20 @@ jobs:
                                   if (nm == null) return;
                                   MsbKeepAliveService.ensureHighPriorityChannel(nm);
 
+                                  int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
                                   int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
+                                  if (colorHex != null) {
+                                      int sep = colorHex.indexOf('|');
+                                      if (sep > 0) {
+                                          String bgStr = colorHex.substring(0, sep);
+                                          String accStr = colorHex.substring(sep + 1);
+                                          try { bgCol = Color.parseColor(bgStr); } catch (Exception ignored) {}
+                                          try { accCol = Color.parseColor(accStr); } catch (Exception ignored) {}
+                                      } else if (colorHex.startsWith("#")) {
+                                          try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
+                                      }
+                                  }
+
                                   android.graphics.Bitmap avatarBmp = null;
                                   try {
                                       SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
@@ -597,12 +610,13 @@ jobs:
                                       MainActivity.this, MsbKeepAliveService.ALERT_CH,
                                       title != null ? title : "МСБ-55115",
                                       body != null ? body : "",
-                                      0, accCol, avatarBmp, pi, false
+                                      bgCol, accCol, avatarBmp, pi, false
                                   ));
                               } catch (Exception ignored) {}
                           }
                       }).start();
                   }
+
 
 
                   @JavascriptInterface
