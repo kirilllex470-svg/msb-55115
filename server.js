@@ -1600,20 +1600,11 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                         bgColor: st.bgColor,
                         roundedStyle: 'true'
                     },
-                    notification: {
-                        title: pushTitle,
-                        body: pushBody,
-                        imageUrl: avatarUrl
-                    },
                     android: {
-                        priority: 'high',
-                        notification: {
-                            color: st.accentColor,
-                            sound: 'default',
-                            imageUrl: avatarUrl
-                        }
+                        priority: 'high'
                     }
-                       }).catch(function(err) {
+                }).catch(function(err) {
+
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
                         const badIdx = fcmTokens.indexOf(item);
