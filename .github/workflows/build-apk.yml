@@ -78,10 +78,7 @@ jobs:
             echo "" >> android/app/build.gradle
             echo "apply plugin: \"com.google.gms.google-services\"" >> android/app/build.gradle
           fi
-          find android -name "*.gradle" -exec sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 30/g' {} +
-          find android -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 30/g' {} +
-          find android -name "*.gradle" -exec sed -i 's/targetSdk = [0-9]*/targetSdk = 30/g' {} +
-          find android -name "*.gradle" -exec sed -i 's/targetSdk [0-9]*/targetSdk 30/g' {} +
+
 
 
       - name: Настройка AndroidManifest.xml
@@ -301,70 +298,41 @@ jobs:
                   Context ctx, String channelId, String title, String body,
                   int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
               ) {
-                  int resCard   = ctx.getResources().getIdentifier("msb_notif_card", "layout", ctx.getPackageName());
-                  int resCardBg = ctx.getResources().getIdentifier("notif_card_bg", "id", ctx.getPackageName());
-                  int resImg    = ctx.getResources().getIdentifier("notif_bg_img", "id", ctx.getPackageName());
-                  int resTtl    = ctx.getResources().getIdentifier("notif_title", "id", ctx.getPackageName());
-                  int resBody   = ctx.getResources().getIdentifier("notif_body", "id", ctx.getPackageName());
+                  Bitmap badgeBmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
+                  Canvas c = new Canvas(badgeBmp);
+                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  RectF rf = new RectF(4f, 4f, 92f, 92f);
+                  p.setStyle(Paint.Style.FILL);
+                  p.setColor(Color.argb(140, 0, 0, 0));
+                  c.drawOval(rf, p);
+                  if (avatarBmp != null) {
+                      Path clip = new Path();
+                      clip.addOval(rf, Path.Direction.CW);
+                      c.save();
+                      c.clipPath(clip);
+                      c.drawBitmap(avatarBmp, null, rf, p);
+                      c.restore();
+                  }
+                  p.setStyle(Paint.Style.STROKE);
+                  p.setStrokeWidth(6f);
+                  p.setColor(accentCol);
+                  c.drawOval(rf, p);
 
                   NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
                       .setSmallIcon(android.R.drawable.ic_dialog_info)
                       .setContentTitle(title)
                       .setContentText(body)
+                      .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                      .setLargeIcon(badgeBmp)
                       .setColor(bgCol)
                       .setColorized(true)
                       .setPriority(ongoing ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_HIGH)
                       .setOngoing(ongoing)
                       .setAutoCancel(!ongoing)
                       .setContentIntent(pi);
-                  if (resCard != 0) {
-                      RemoteViews rv = new RemoteViews(ctx.getPackageName(), resCard);
-                      rv.setTextViewText(resTtl, title);
-                      rv.setTextColor(resTtl, accentCol);
-                      rv.setTextViewText(resBody, body);
 
-                      Bitmap cardBmp = Bitmap.createBitmap(1080, 210, Bitmap.Config.ARGB_8888);
-                      Canvas cc = new Canvas(cardBmp);
-                      Paint cp = new Paint(Paint.ANTI_ALIAS_FLAG);
-                      RectF cr = new RectF(3f, 3f, 1077f, 207f);
-                      cp.setStyle(Paint.Style.FILL);
-                      cp.setColor(bgCol);
-                      cc.drawRoundRect(cr, 44f, 44f, cp);
-                      cp.setStyle(Paint.Style.STROKE);
-                      cp.setStrokeWidth(6f);
-                      cp.setColor(accentCol);
-                      cc.drawRoundRect(cr, 44f, 44f, cp);
-
-                      if (resCardBg != 0) {
-                          rv.setImageViewBitmap(resCardBg, cardBmp);
-                      }
-
-                      Bitmap badgeBmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
-                      Canvas c = new Canvas(badgeBmp);
-                      Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-                      RectF rf = new RectF(4f, 4f, 92f, 92f);
-                      p.setStyle(Paint.Style.FILL);
-                      p.setColor(Color.argb(110, 0, 0, 0));
-                      c.drawOval(rf, p);
-                      if (avatarBmp != null) {
-                          Path clip = new Path();
-                          clip.addOval(rf, Path.Direction.CW);
-                          c.save();
-                          c.clipPath(clip);
-                          c.drawBitmap(avatarBmp, null, rf, p);
-                          c.restore();
-                      }
-                      p.setStyle(Paint.Style.STROKE);
-                      p.setStrokeWidth(5f);
-                      p.setColor(accentCol);
-                      c.drawOval(rf, p);
-
-                      rv.setImageViewBitmap(resImg, badgeBmp);
-                      b.setCustomContentView(rv);
-                      b.setCustomBigContentView(rv);
-                      b.setCustomHeadsUpContentView(rv);
-                  }
                   return b.build();
+
               }
 
               public static void ensureHighPriorityChannel(NotificationManager nm) {
