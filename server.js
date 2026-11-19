@@ -1613,13 +1613,8 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             });
         }
     }
-    const themePalettes = {
-        military: { badge: '🪖', accentColor: '#22c55e', bgColor: '#102a1a' },
-        rocket:   { badge: '🚀', accentColor: '#f97316', bgColor: '#2e140d' },
-        cosmic:   { badge: '🌌', accentColor: '#a855f7', bgColor: '#1c1242' }
-    };
-
     if (fcmAdmin && fcmTokens.length > 0) {
+
         fcmTokens.forEach(function(item) {
             if (!item || !item.token) return;
             const uLow = String(item.user || '').trim().toLowerCase();
