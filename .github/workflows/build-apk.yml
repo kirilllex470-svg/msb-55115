@@ -160,61 +160,45 @@ jobs:
               "</paths>"
           ])
           open("android/app/src/main/res/xml/msb_file_paths.xml", "w", encoding="utf-8").write(fp_xml)
-          os.makedirs("android/app/src/main/res/layout", exist_ok=True)
-          card_xml = "\n".join([
-              "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
-              "<FrameLayout xmlns:android=\"http://" + "schemas." + "android.com" + "/apk/res/android\"",
-              "    android:id=\"@+id/notif_root\"",
-              "    android:layout_width=\"match_parent\"",
-              "    android:layout_height=\"88dp\"",
-              "    android:padding=\"0dp\">",
 
-              "    <ImageView",
-              "        android:id=\"@+id/notif_card_bg\"",
-              "        android:layout_width=\"match_parent\"",
-              "        android:layout_height=\"match_parent\"",
-              "        android:scaleType=\"fitXY\" />",
-              "    <LinearLayout",
-              "        android:layout_width=\"match_parent\"",
-              "        android:layout_height=\"match_parent\"",
-              "        android:orientation=\"horizontal\"",
-              "        android:gravity=\"center_vertical\"",
-              "        android:paddingLeft=\"14dp\"",
-              "        android:paddingRight=\"14dp\">",
-              "        <ImageView",
-              "            android:id=\"@+id/notif_bg_img\"",
-              "            android:layout_width=\"46dp\"",
-              "            android:layout_height=\"46dp\"",
-              "            android:scaleType=\"centerCrop\"",
-              "            android:layout_marginEnd=\"12dp\" />",
-              "        <LinearLayout",
-              "            android:layout_width=\"0dp\"",
-              "            android:layout_height=\"wrap_content\"",
-              "            android:layout_weight=\"1\"",
-              "            android:orientation=\"vertical\">",
-              "            <TextView",
-              "                android:id=\"@+id/notif_title\"",
-              "                android:layout_width=\"match_parent\"",
-              "                android:layout_height=\"wrap_content\"",
-              "                android:textStyle=\"bold\"",
-              "                android:textSize=\"14sp\"",
-              "                android:maxLines=\"1\"",
-              "                android:ellipsize=\"end\" />",
-              "            <TextView",
-              "                android:id=\"@+id/notif_body\"",
-              "                android:layout_width=\"match_parent\"",
-              "                android:layout_height=\"wrap_content\"",
-              "                android:layout_marginTop=\"3dp\"",
-              "                android:textColor=\"#F8FAFC\"",
-              "                android:textSize=\"13sp\"",
-              "                android:maxLines=\"2\"",
-              "                android:ellipsize=\"end\" />",
-              "        </LinearLayout>",
-              "    </LinearLayout>",
-              "</FrameLayout>"
-          ])
-          open("android/app/src/main/res/layout/msb_notif_card.xml", "w", encoding="utf-8").write(card_xml)
+          import struct, zlib
+          def make_png(size, mono):
+              raw = bytearray()
+              half = size / 2.0
+              for y in range(size):
+                  raw.append(0)
+                  for x in range(size):
+                      dx = (x - half) / half
+                      dy = (y - half) / half
+                      in_top = (-0.62 <= dy <= 0.05 and abs(dx) <= 0.54)
+                      in_bot = (0.05 < dy <= 0.68 and abs(dx) <= 0.54 * (1.0 - (dy - 0.05) / 0.68))
+                      chev1 = abs((dy + 0.08) - abs(dx) * 0.85) <= 0.08 and abs(dx) <= 0.34
+                      chev2 = abs((dy - 0.16) - abs(dx) * 0.85) <= 0.08 and abs(dx) <= 0.28
+                      if mono:
+                          raw.extend(bytes((255, 255, 255, 255)) if ((in_top or in_bot) and not (chev1 or chev2)) else bytes((0, 0, 0, 0)))
+                      else:
+                          if in_top or in_bot:
+                              raw.extend(bytes((248, 250, 252, 255)) if (chev1 or chev2) else bytes((22, 163, 74, 255)))
+                          else:
+                              raw.extend(bytes((11, 18, 32, 255)))
+              def ch(t, d):
+                  return struct.pack("!I", len(d)) + t + d + struct.pack("!I", zlib.crc32(t + d) & 0xffffffff)
+              ihdr = struct.pack("!IIBBBBB", size, size, 8, 6, 0, 0, 0)
+              return b"\x89PNG\r\n\x1a\n" + ch(b"IHDR", ihdr) + ch(b"IDAT", zlib.compress(bytes(raw))) + ch(b"IEND", b"")
+
+          os.makedirs("android/app/src/main/res/drawable", exist_ok=True)
+          open("android/app/src/main/res/drawable/ic_msb_logo.png", "wb").write(make_png(96, True))
+          for d_name, sz in [("mipmap-mdpi", 48), ("mipmap-hdpi", 72), ("mipmap-xhdpi", 96), ("mipmap-xxhdpi", 144), ("mipmap-xxxhdpi", 192)]:
+              d_dir = "android/app/src/main/res/" + d_name
+              os.makedirs(d_dir, exist_ok=True)
+              png_bytes = make_png(sz, False)
+              open(d_dir + "/ic_launcher.png", "wb").write(png_bytes)
+              open(d_dir + "/ic_launcher_round.png", "wb").write(png_bytes)
+          for xml_f in ["android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml", "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"]:
+              if os.path.exists(xml_f):
+                  os.remove(xml_f)
           '
+
 
       - name: Создание ресивера и фоновой службы
         run: |
@@ -298,42 +282,26 @@ jobs:
                   Context ctx, String channelId, String title, String body,
                   int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
               ) {
-                  Bitmap badgeBmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
-                  Canvas c = new Canvas(badgeBmp);
-                  Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-                  RectF rf = new RectF(4f, 4f, 92f, 92f);
-                  p.setStyle(Paint.Style.FILL);
-                  p.setColor(Color.argb(140, 0, 0, 0));
-                  c.drawOval(rf, p);
-                  if (avatarBmp != null) {
-                      Path clip = new Path();
-                      clip.addOval(rf, Path.Direction.CW);
-                      c.save();
-                      c.clipPath(clip);
-                      c.drawBitmap(avatarBmp, null, rf, p);
-                      c.restore();
-                  }
-                  p.setStyle(Paint.Style.STROKE);
-                  p.setStrokeWidth(6f);
-                  p.setColor(accentCol);
-                  c.drawOval(rf, p);
+                  int smallIcon = ctx.getResources().getIdentifier("ic_msb_logo", "drawable", ctx.getPackageName());
+                  if (smallIcon == 0) smallIcon = android.R.drawable.ic_dialog_info;
 
                   NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
-                      .setSmallIcon(android.R.drawable.ic_dialog_info)
+                      .setSmallIcon(smallIcon)
                       .setContentTitle(title)
                       .setContentText(body)
                       .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-                      .setLargeIcon(badgeBmp)
-                      .setColor(bgCol)
-                      .setColorized(true)
+                      .setColor(accentCol)
                       .setPriority(ongoing ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_HIGH)
                       .setOngoing(ongoing)
                       .setAutoCancel(!ongoing)
                       .setContentIntent(pi);
 
+                  if (avatarBmp != null) {
+                      b.setLargeIcon(avatarBmp);
+                  }
                   return b.build();
-
               }
+
 
               public static void ensureHighPriorityChannel(NotificationManager nm) {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
@@ -559,27 +527,57 @@ jobs:
 
               public class MsbNativeBridge {
                   @JavascriptInterface
-                  public void setTheme(String themeId, String colorHex) {
-                      try {
-                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                          sp.edit().putString("theme_id", themeId != null ? themeId : "military").apply();
-                          NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                          if (nm != null) {
-                              nm.notify(55115, MsbKeepAliveService.buildBgNotification(MainActivity.this));
+                  public void notify(final String title, final String body, String idStr, final String colorHex) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              try {
+                                  NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                                  if (nm == null) return;
+                                  MsbKeepAliveService.ensureHighPriorityChannel(nm);
+
+                                  int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
+                                  android.graphics.Bitmap avatarBmp = null;
+                                  try {
+                                      SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                                      String origin = sp.getString("origin", "");
+                                      if (!origin.isEmpty() && body != null && body.indexOf(':') > 0) {
+                                          String senderRaw = body.substring(0, body.indexOf(':')).replace("👥", "").trim().toLowerCase();
+                                          if (!senderRaw.isEmpty()) {
+                                              String urlStr = origin + "/api/avatar-img/" + java.net.URLEncoder.encode(senderRaw, "UTF-8") + ".jpg";
+                                              HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+                                              conn.setConnectTimeout(2500);
+                                              conn.setReadTimeout(2500);
+                                              conn.connect();
+                                              if (conn.getResponseCode() == 200) {
+                                                  InputStream is = conn.getInputStream();
+                                                  avatarBmp = android.graphics.BitmapFactory.decodeStream(is);
+                                                  is.close();
+                                              }
+                                          }
+                                      }
+                                  } catch (Exception ignored) {}
+
+                                  Intent openIntent = new Intent(MainActivity.this, MainActivity.class);
+                                  openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                      piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                                  }
+                                  PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
+
+                                  int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
+                                  nm.notify(notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                                      MainActivity.this, MsbKeepAliveService.ALERT_CH,
+                                      title != null ? title : "МСБ-55115",
+                                      body != null ? body : "",
+                                      0, accCol, avatarBmp, pi, false
+                                  ));
+                              } catch (Exception ignored) {}
                           }
-                      } catch (Exception ignored) {}
+                      }).start();
                   }
-                  @JavascriptInterface
-                  public void setIdentity(String unit, String callsign, String origin) {
-                      try {
-                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                          sp.edit()
-                              .putString("unit", unit != null ? unit : "")
-                              .putString("callsign", callsign != null ? callsign : "")
-                              .putString("origin", origin != null ? origin : "")
-                              .apply();
-                      } catch (Exception ignored) {}
-                  }
+
 
                   @JavascriptInterface
                   public void notify(String title, String body, String idStr, String colorHex) {
@@ -717,6 +715,7 @@ jobs:
             --out app/build/outputs/apk/release/app-release.apk \
             "$RAW_APK"
           "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
+
 
 
       - name: Отправка нового APK на сервер и удаление старого
