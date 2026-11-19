@@ -198,9 +198,11 @@ jobs:
                   os.remove(xml_f)
 
           os.makedirs("android/app/src/main/res/layout", exist_ok=True)
+          ns_uri = "http://" + "schemas.android.com/apk/res/android"
           notif_xml = "\n".join([
               "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
-              "<LinearLayout xmlns:android=\"http://android.com\"",
+              "<LinearLayout xmlns:android=\"" + ns_uri + "\"",
+
               "    android:id=\"@+id/msb_notif_root\"",
               "    android:layout_width=\"match_parent\"",
               "    android:layout_height=\"wrap_content\"",
@@ -805,3 +807,4 @@ jobs:
         with:
           name: MSB55115-FCM-APK
           path: android/app/build/outputs/apk/release/app-release.apk
+
