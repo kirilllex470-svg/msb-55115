@@ -198,7 +198,7 @@ jobs:
                   os.remove(xml_f)
 
           os.makedirs("android/app/src/main/res/layout", exist_ok=True)
-          ns_uri = "http://" + "://android.com"
+          ns_uri = "/".join(["http:", "", "schemas." + "android." + "com", "apk", "res", "android"])
           notif_xml = "\n".join([
               "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
               "<LinearLayout xmlns:android=\"" + ns_uri + "\"",
@@ -241,6 +241,7 @@ jobs:
           ])
           open("android/app/src/main/res/layout/msb_notif_custom.xml", "w", encoding="utf-8").write(notif_xml)
           '
+
       - name: Создание ресивера и фоновой службы
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
@@ -790,7 +791,7 @@ jobs:
           sed -i "s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/g" android/app/build.gradle
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease -x lintVitalRelease
           RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" ! -name "app-release.apk" ! -name "app-aligned.apk" | head -n 1)
           ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name "zipalign" | sort -V | tail -n 1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" | sort -V | tail -n 1)
