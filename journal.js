@@ -1737,7 +1737,21 @@ function createCleanBigAvatarIcon(senderName, themeName, callback) {
     }
 }
 
+const shownSystemNotifIds = new Set();
+
 function sendLocalNotification(target, text, sender, notifId) {
+    const dedupKey = notifId ? String(notifId) : (String(sender) + '|' + String(text));
+    if (shownSystemNotifIds.has(dedupKey)) return;
+    shownSystemNotifIds.add(dedupKey);
+    if (shownSystemNotifIds.size > 300) {
+        const firstKey = shownSystemNotifIds.values().next().value;
+        shownSystemNotifIds.delete(firstKey);
+    }
+
+    if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
+        if (document.visibilityState === 'visible') return;
+    }
+
     const rawFrom = String(sender || 'АДМИН').trim();
     let unitStr = '';
     let callStr = rawFrom;
@@ -1746,7 +1760,6 @@ function sendLocalNotification(target, text, sender, notifId) {
         unitStr = m.at(1).trim();
         callStr = m.at(2).trim();
     } else if (Array.isArray(myMessengerFriends)) {
-
         const fr = myMessengerFriends.find(function(f) {
             return f && !f.isGroup && String(f.name || '').toLowerCase() === rawFrom.toLowerCase();
         });
@@ -1760,15 +1773,13 @@ function sendLocalNotification(target, text, sender, notifId) {
 
     if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
         try {
-            window.MsbNative.notify(title, body, String(notifId || Date.now()), '#00000000|' + meta.color);
+            window.MsbNative.notify(title, body, String(notifId || dedupKey), '#00000000|' + meta.color);
             return;
         } catch (e) {}
     }
 
-
-     if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator) {
         createCleanBigAvatarIcon(callStr, meta.id, function(bigAvatarDataUrl) {
-
             navigator.serviceWorker.ready.then(function(reg) {
                 reg.showNotification(title, {
                     body: body,
@@ -1777,13 +1788,14 @@ function sendLocalNotification(target, text, sender, notifId) {
                     vibrate: Array.of(800, 200, 800, 200, 1000),
                     silent: false,
                     requireInteraction: true,
-                    renotify: true,
-                    tag: 'msb-alert-' + (notifId || Date.now())
+                    renotify: false,
+                    tag: 'msb-alert-' + (notifId || dedupKey)
                 }).catch(function() {});
             });
         });
     }
 }
+
 
 
 
@@ -1860,11 +1872,11 @@ function showAlert(target, text, sender, notifId, isNew) {
     const txtStr = String(text || '');
     const isChatAlert = txtStr.indexOf('👥') === 0 || txtStr.indexOf('💬') === 0 || txtStr.indexOf('🎙️') === 0 || txtStr.indexOf('🎥') === 0 || txtStr.indexOf('📎') === 0 || txtStr.indexOf('🎬') === 0;
     if (msgModal && msgModal.style.display === 'flex' && isChatAlert) {
-        if (isNew || document.visibilityState === 'hidden') {
+        if (isNew) {
             playSoundById('nice1', true);
-            sendLocalNotification(target, text, sender || ADMIN_NAME, notifId);
         }
         markAlertDismissedLocally(notifId, text, sender);
+
         if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
                 type: 'clear_alert',

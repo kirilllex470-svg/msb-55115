@@ -584,9 +584,16 @@ const server = http.createServer(function(req, res) {
                     const ck = String(data.callsign).trim().toLowerCase();
                     if (usersDB[ck]) { usersDB[ck].theme = themeName; writeJSON(USERS_FILE, usersDB); }
                 }
+                const callLow = String(data.callsign || '').trim().toLowerCase();
+                if (callLow) {
+                    fcmTokens = fcmTokens.filter(function(t) {
+                        return t.token === data.token || String(t.callsign || '').trim().toLowerCase() !== callLow;
+                    });
+                }
                 const idx = fcmTokens.findIndex(function(t) { return t.token === data.token; });
 
                 if (idx !== -1) {
+
                     fcmTokens[idx].user = data.user || 'ГОСТЬ';
                     fcmTokens[idx].callsign = data.callsign || '';
                     fcmTokens[idx].theme = themeName;
@@ -1627,9 +1634,10 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                     ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now())
                     : undefined;
 
-                fcmAdmin.messaging().send({
+                     fcmAdmin.messaging().send({
                     token: item.token,
                     data: {
+                        tag: 'msb-alert-' + notifId,
                         title: senderHeader,
                         body: String(text || ''),
                         target: String(target),
@@ -1643,6 +1651,8 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                     android: {
                         priority: 'high'
                     }
+                })
+
                 }).catch(function(err) {
 
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
