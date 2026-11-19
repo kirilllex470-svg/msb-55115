@@ -1738,17 +1738,34 @@ function createCleanBigAvatarIcon(senderName, themeName, callback) {
 }
 
 function sendLocalNotification(target, text, sender, notifId) {
-    const fromWho = sender || 'АДМИН';
+    const rawFrom = String(sender || 'АДМИН').trim();
+    let unitStr = '';
+    let callStr = rawFrom;
+    const m = rawFrom.match(/^(.+?)\s*\((.+?)\)$/);
+    if (m) {
+        unitStr = m.at(1).trim();
+        callStr = m.at(2).trim();
+    }
+
+    } else if (Array.isArray(myMessengerFriends)) {
+        const fr = myMessengerFriends.find(function(f) {
+            return f && !f.isGroup && String(f.name || '').toLowerCase() === rawFrom.toLowerCase();
+        });
+        if (fr && fr.unit) unitStr = fr.unit;
+    }
+    const title = (unitStr && unitStr.toLowerCase() !== callStr.toLowerCase())
+        ? (unitStr + ' • ' + callStr)
+        : callStr;
+    const body = String(text || '').replace(/^💬\s*Мессенджер:\s*/i, '');
     const meta = getMsbThemeMeta();
-    const title = meta.badge + ' МСБ-55115 • [' + target + ']';
-    const body = fromWho + ': ' + text;
 
     if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
         try {
-            window.MsbNative.notify(title, body, String(notifId || Date.now()), meta.bgColor + '|' + meta.color);
+            window.MsbNative.notify(title, body, String(notifId || Date.now()), '#00000000|' + meta.color);
             return;
         } catch (e) {}
     }
+
 
     if ('serviceWorker' in navigator) {
         createCleanBigAvatarIcon(fromWho, meta.id, function(bigAvatarDataUrl) {

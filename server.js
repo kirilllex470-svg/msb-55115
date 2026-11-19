@@ -309,8 +309,15 @@ function makeTacticalIcon(size) {
     return Buffer.concat(Array.of(sig, chunk('IHDR', ihdr), chunk('IDAT', idat), chunk('IEND', Buffer.alloc(0))));
 }
 
-const TACTICAL_ICON_192 = makeTacticalIcon(192);
-const TACTICAL_ICON_512 = makeTacticalIcon(512);
+const CUSTOM_LOGO_PATH = ['logo.jpg', 'logo.jpeg', 'logo.JPG', 'logo.png']
+    .map(function(name) { return path.join(__dirname, name); })
+    .find(function(full) { return fs.existsSync(full); });
+const CUSTOM_LOGO_BUF = CUSTOM_LOGO_PATH ? fs.readFileSync(CUSTOM_LOGO_PATH) : null;
+const CUSTOM_LOGO_MIME = (CUSTOM_LOGO_PATH && CUSTOM_LOGO_PATH.toLowerCase().endsWith('.png')) ? 'image/png' : 'image/jpeg';
+
+const TACTICAL_ICON_192 = CUSTOM_LOGO_BUF || makeTacticalIcon(192);
+const TACTICAL_ICON_512 = CUSTOM_LOGO_BUF || makeTacticalIcon(512);
+
 
 const MANIFEST_JSON = JSON.stringify({
     name: "МСБ-55115",
@@ -480,12 +487,12 @@ const server = http.createServer(function(req, res) {
     }
 
     if (urlPath === '/icon-192.png' || urlPath === '/favicon.ico') {
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+        res.writeHead(200, { 'Content-Type': CUSTOM_LOGO_MIME, 'Cache-Control': 'public, max-age=86400' });
         return res.end(TACTICAL_ICON_192);
     }
 
-     if (urlPath === '/icon-512.png') {
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    if (urlPath === '/icon-512.png') {
+        res.writeHead(200, { 'Content-Type': CUSTOM_LOGO_MIME, 'Cache-Control': 'public, max-age=86400' });
         return res.end(TACTICAL_ICON_512);
     }
 
@@ -501,16 +508,16 @@ const server = http.createServer(function(req, res) {
             res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=300' });
             return res.end(svgCircle);
         }
-
         if (uObj && uObj.avatar && uObj.avatar.startsWith('data:image/')) {
             const parts = uObj.avatar.split(',');
             const imgBuf = Buffer.from(parts.at(1), 'base64');
             res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=300' });
             return res.end(imgBuf);
         }
-        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300' });
+        res.writeHead(200, { 'Content-Type': CUSTOM_LOGO_MIME, 'Cache-Control': 'public, max-age=300' });
         return res.end(TACTICAL_ICON_192);
     }
+
 
 
 
@@ -573,7 +580,12 @@ const server = http.createServer(function(req, res) {
                 const host = req.headers.host || '';
                 const baseOrigin = host ? (proto + '://' + host) : '';
                 const themeName = data.theme || 'military';
+                if (data.callsign) {
+                    const ck = String(data.callsign).trim().toLowerCase();
+                    if (usersDB[ck]) { usersDB[ck].theme = themeName; writeJSON(USERS_FILE, usersDB); }
+                }
                 const idx = fcmTokens.findIndex(function(t) { return t.token === data.token; });
+
                 if (idx !== -1) {
                     fcmTokens[idx].user = data.user || 'ГОСТЬ';
                     fcmTokens[idx].callsign = data.callsign || '';
@@ -1419,13 +1431,14 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     let cleanText = rawContent || '';
     const isGroupRoom = Boolean(groupsDB[room]);
     const groupTitle = isGroupRoom ? groupsDB[room].name : '';
-    const prefix = isGroupRoom ? ('👥 [' + groupTitle + '] ') : '💬 Мессенджер: ';
+    const prefix = isGroupRoom ? ('👥 [' + groupTitle + '] ') : '';
 
-    if (type === 'audio') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '🎙️ Голосовое сообщение в Мессенджере';
-    else if (type === 'video') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '🎥 Видео-кружок в Мессенджере';
-    else if (type === 'file') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '📎 Файл в Мессенджере';
-    else if (type === 'gif') cleanText = (isGroupRoom ? '👥 [' + groupTitle + '] ' : '') + '🎬 GIF-анимация в Мессенджере';
+    if (type === 'audio') cleanText = prefix + '🎙️ Голосовое сообщение';
+    else if (type === 'video') cleanText = prefix + '🎥 Видео-кружок';
+    else if (type === 'file') cleanText = prefix + '📎 Файл';
+    else if (type === 'gif') cleanText = prefix + '🎬 GIF-анимация';
     else cleanText = prefix + cleanText;
+
 
     let targets = new Array();
     if (isGroupRoom) {
@@ -1534,17 +1547,42 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     activeAlerts[target].push({ id: notifId, text: text, sender: sender, readList: new Array() });
     broadcastWS({ type: 'admin_alert', sender: sender, target: target, text: text, notif: newNotif });
 
-    const cleanSenderKeyForWeb = String(sender).replace(/^👥\s*/, '').trim().toLowerCase();
-    const webAvatarUrl = '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.svg?v=' + Date.now();
+    const themePalettes = {
+        military: { accentColor: '#22c55e' },
+        rocket:   { accentColor: '#f97316' },
+        cosmic:   { accentColor: '#a855f7' }
+    };
 
+    let rawSenderStr = String(sender || 'АДМИН').trim();
+    let parsedCallsign = rawSenderStr.replace(/^👥\s*/, '').trim();
+    let parsedUnit = '';
+    const parenMatch = rawSenderStr.match(/^(.+?)\s*\((.+?)\)$/);
+    if (parenMatch) {
+        parsedUnit = parenMatch.at(1).trim();
+        parsedCallsign = parenMatch.at(2).trim();
+    }
+
+    const senderObj = usersDB[parsedCallsign.toLowerCase()];
+    if (!parsedUnit && senderObj && senderObj.unit) {
+        parsedUnit = senderObj.unit;
+    }
+    const senderHeader = (parsedUnit && parsedUnit.toLowerCase() !== parsedCallsign.toLowerCase())
+        ? (parsedUnit + ' • ' + parsedCallsign)
+        : parsedCallsign;
+    const senderThemeId = (senderObj && senderObj.theme) ? senderObj.theme : 'military';
+    const senderAccent = (themePalettes[senderThemeId] || themePalettes.military).accentColor;
+
+    const cleanSenderKeyForWeb = parsedCallsign.toLowerCase();
+    const webAvatarUrl = '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now();
 
     const payload = JSON.stringify({
-        title: '🛑 СООБЩЕНИЕ ДЛЯ (' + target + ')!',
-        body: sender + ': ' + text,
+        title: senderHeader,
+        body: String(text || ''),
         icon: webAvatarUrl,
         tag: 'msb-alert-' + notifId,
         url: '/'
     });
+
 
     const pushOptions = {
         TTL: 86400,
@@ -1590,28 +1628,23 @@ function broadcastAlert(sender, color, timeStr, target, text) {
             const matchCallsign = cLow && cLow === tLow;
             const matchUnit = isUnitTarget && uLow === tLow;
             if (target === 'ВСЕМ' || matchCallsign || matchUnit) {
-                const st = themePalettes[item.theme] || themePalettes.military;
-                const cleanSenderKey = String(sender).replace(/^👥\s*/, '').trim().toLowerCase();
                 const avatarUrl = item.origin
-                    ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKey) + '.jpg?v=' + Date.now())
+                    ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now())
                     : undefined;
-
-                const pushTitle = st.badge + ' МСБ-55115 • [' + target + ']';
-                const pushBody = sender + ': ' + text;
 
                 fcmAdmin.messaging().send({
                     token: item.token,
                     data: {
-                        title: pushTitle,
-                        body: pushBody,
+                        title: senderHeader,
+                        body: String(text || ''),
                         target: String(target),
-                        sender: String(sender),
+                        sender: parsedCallsign,
                         image: avatarUrl || '',
-                        theme: item.theme || 'military',
-                        accentColor: st.accentColor,
-                        bgColor: st.bgColor,
-                        roundedStyle: 'true'
+                        theme: senderThemeId,
+                        accentColor: senderAccent,
+                        bgColor: '#00000000'
                     },
+
                     android: {
                         priority: 'high'
                     }
