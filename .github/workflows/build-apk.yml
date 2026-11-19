@@ -78,10 +78,11 @@ jobs:
             echo "" >> android/app/build.gradle
             echo "apply plugin: \"com.google.gms.google-services\"" >> android/app/build.gradle
           fi
-          if [ -f android/variables.gradle ]; then
-            sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 30/g' android/variables.gradle
-          fi
-          sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 30/g' android/app/build.gradle
+          find android -name "*.gradle" -exec sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 30/g' {} +
+          find android -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 30/g' {} +
+          find android -name "*.gradle" -exec sed -i 's/targetSdk = [0-9]*/targetSdk = 30/g' {} +
+          find android -name "*.gradle" -exec sed -i 's/targetSdk [0-9]*/targetSdk 30/g' {} +
+
 
       - name: Настройка AndroidManifest.xml
         run: |
@@ -322,17 +323,18 @@ jobs:
                       rv.setTextColor(resTtl, accentCol);
                       rv.setTextViewText(resBody, body);
 
-                      Bitmap cardBmp = Bitmap.createBitmap(800, 180, Bitmap.Config.ARGB_8888);
+                      Bitmap cardBmp = Bitmap.createBitmap(1080, 210, Bitmap.Config.ARGB_8888);
                       Canvas cc = new Canvas(cardBmp);
                       Paint cp = new Paint(Paint.ANTI_ALIAS_FLAG);
-                      RectF cr = new RectF(4f, 4f, 796f, 176f);
+                      RectF cr = new RectF(3f, 3f, 1077f, 207f);
                       cp.setStyle(Paint.Style.FILL);
                       cp.setColor(bgCol);
-                      cc.drawRoundRect(cr, 36f, 36f, cp);
+                      cc.drawRoundRect(cr, 44f, 44f, cp);
                       cp.setStyle(Paint.Style.STROKE);
-                      cp.setStrokeWidth(5f);
+                      cp.setStrokeWidth(6f);
                       cp.setColor(accentCol);
-                      cc.drawRoundRect(cr, 36f, 36f, cp);
+                      cc.drawRoundRect(cr, 44f, 44f, cp);
+
                       if (resCardBg != 0) {
                           rv.setImageViewBitmap(resCardBg, cardBmp);
                       }
