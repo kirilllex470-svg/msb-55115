@@ -208,18 +208,18 @@ jobs:
               "    android:layout_height=\"wrap_content\"",
               "    android:orientation=\"horizontal\"",
               "    android:gravity=\"center_vertical\"",
-              "    android:padding=\"12dp\"",
+              "    android:padding=\"8dp\"",
               "    android:background=\"#102a1a\">",
               "    <ImageView",
               "        android:id=\"@+id/msb_notif_avatar\"",
-              "        android:layout_width=\"104dp\"",
-              "        android:layout_height=\"104dp\"",
+              "        android:layout_width=\"52dp\"",
+              "        android:layout_height=\"52dp\"",
               "        android:scaleType=\"centerCrop\" />",
               "    <LinearLayout",
               "        android:layout_width=\"0dp\"",
               "        android:layout_height=\"wrap_content\"",
               "        android:layout_weight=\"1\"",
-              "        android:layout_marginStart=\"14dp\"",
+              "        android:layout_marginStart=\"12dp\"",
               "        android:orientation=\"vertical\">",
               "        <TextView",
               "            android:id=\"@+id/msb_notif_title\"",
@@ -227,16 +227,17 @@ jobs:
               "            android:layout_height=\"wrap_content\"",
               "            android:textColor=\"#4ade80\"",
               "            android:textStyle=\"bold\"",
-              "            android:textSize=\"15sp\"",
-              "            android:maxLines=\"2\" />",
+              "            android:textSize=\"14sp\"",
+              "            android:maxLines=\"1\" />",
               "        <TextView",
               "            android:id=\"@+id/msb_notif_body\"",
               "            android:layout_width=\"match_parent\"",
               "            android:layout_height=\"wrap_content\"",
-              "            android:layout_marginTop=\"4dp\"",
+              "            android:layout_marginTop=\"2dp\"",
               "            android:textColor=\"#f8fafc\"",
-              "            android:textSize=\"14sp\"",
-              "            android:maxLines=\"5\" />",
+              "            android:textSize=\"13sp\"",
+              "            android:maxLines=\"3\" />",
+
               "    </LinearLayout>",
               "</LinearLayout>"
           ])
@@ -323,8 +324,9 @@ jobs:
 
               public static Bitmap prepareLargeCleanAvatar(Bitmap src) {
                   if (src == null) return null;
-                  int targetSize = 384;
+                  int targetSize = 144;
                   int minSide = Math.min(src.getWidth(), src.getHeight());
+
                   int x = (src.getWidth() - minSide) / 2;
                   int y = (src.getHeight() - minSide) / 2;
                   Bitmap square = Bitmap.createBitmap(src, x, y, minSide, minSide);
@@ -380,10 +382,12 @@ jobs:
                           if (launcherId != 0) rv.setImageViewResource(avId, launcherId);
                       }
 
+                      b.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
                       b.setCustomContentView(rv);
                       b.setCustomBigContentView(rv);
                       b.setCustomHeadsUpContentView(rv);
                   } else if (bigCleanAvatar != null) {
+
                       b.setLargeIcon(bigCleanAvatar);
                   }
                   return b.build();
@@ -698,12 +702,19 @@ jobs:
                   }
                   @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
+                          try {
+                              Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
+                              permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              startActivity(permIntent);
+                          } catch (Exception ignored) {}
+                          return;
+                      }
                       new Thread(new Runnable() {
                           @Override
                           public void run() {
                               try {
-                                  File dir = getExternalCacheDir() != null ? getExternalCacheDir() : getCacheDir();
-                                  File outFile = new File(dir, "update_msb.apk");
+                                  File outFile = new File(getCacheDir(), "update_msb.apk");
                                   if (outFile.exists()) outFile.delete();
                                   HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
                                   conn.setInstanceFollowRedirects(true);
@@ -725,20 +736,27 @@ jobs:
 
                                   if (outFile.length() < 500000) return;
 
-                                  Uri apkUri = FileProvider.getUriForFile(
+                                  final Uri apkUri = FileProvider.getUriForFile(
                                       MainActivity.this,
                                       getPackageName() + ".msbprovider",
                                       outFile
                                   );
-                                  Intent intent = new Intent(Intent.ACTION_VIEW);
-                                  intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-                                  intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-                                  startActivity(intent);
+                                  runOnUiThread(new Runnable() {
+                                      @Override
+                                      public void run() {
+                                          try {
+                                              Intent intent = new Intent(Intent.ACTION_VIEW);
+                                              intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                              intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                              startActivity(intent);
+                                          } catch (Exception ignored) {}
+                                      }
+                                  });
                               } catch (Exception ignored) {}
                           }
                       }).start();
                   }
-              }
+
 
               private void requestRequiredPermissions() {
                   List<String> need = new ArrayList<>();
@@ -767,25 +785,35 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > android/app/msb.keystore
           else
+            echo "⚠️ Секрет KEYSTORE_BASE64 не задан! Сгенерируйте ключ один раз и добавьте в GitHub Secrets."
             keytool -genkey -v -keystore android/app/msb.keystore -alias msbkey \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass msb55115 -keypass msb55115 \
               -dname "CN=MSB55115, OU=Unit, O=MSB, L=RU, S=RU, C=RU"
           fi
           npx cap sync android
+          VER_CODE=$((1000 + ${{ github.run_number }}))
+          sed -i "s/versionCode [0-9]*/versionCode $VER_CODE/g" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/g" android/app/build.gradle
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease
-          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" ! -name "app-release.apk" ! -name "app-aligned.apk" | head -n 1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name "zipalign" | sort -V | tail -n 1)
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" | sort -V | tail -n 1)
+          "$ZIPALIGN" -f -p 4 "$RAW_APK" app/build/outputs/apk/release/app-aligned.apk
           "$APKSIGNER" sign \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
             --ks app/msb.keystore \
             --ks-key-alias msbkey \
             --ks-pass pass:msb55115 \
             --key-pass pass:msb55115 \
             --out app/build/outputs/apk/release/app-release.apk \
-            "$RAW_APK"
+            app/build/outputs/apk/release/app-aligned.apk
           "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
+
 
       - name: Отправка нового APK на сервер и удаление старого
         env:
@@ -794,8 +822,9 @@ jobs:
         run: |
           if [ -n "$SERVER_URL" ]; then
             APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-            VER_CODE="${{ github.run_number }}"
+            VER_CODE=$((1000 + ${{ github.run_number }}))
             curl -f -X POST "$SERVER_URL/api/app/upload-apk" \
+
               -H "x-update-secret: ${UPDATE_SECRET:-msb55115_ota_key}" \
               -H "x-version-code: $VER_CODE" \
               -H "x-version-name: 1.0.$VER_CODE" \
@@ -807,4 +836,3 @@ jobs:
         with:
           name: MSB55115-FCM-APK
           path: android/app/build/outputs/apk/release/app-release.apk
-
