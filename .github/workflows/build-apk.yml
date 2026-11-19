@@ -626,21 +626,28 @@ jobs:
                           @Override
                           public void run() {
                               try {
-                                  File outFile = new File(getCacheDir(), "update_msb.apk");
+                                  File dir = getExternalCacheDir() != null ? getExternalCacheDir() : getCacheDir();
+                                  File outFile = new File(dir, "update_msb.apk");
                                   if (outFile.exists()) outFile.delete();
                                   HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
-                                  conn.setConnectTimeout(15000);
-                                  conn.setReadTimeout(60000);
+                                  conn.setInstanceFollowRedirects(true);
+                                  conn.setConnectTimeout(20000);
+                                  conn.setReadTimeout(90000);
                                   conn.connect();
+                                  if (conn.getResponseCode() != 200) return;
+
                                   InputStream is = conn.getInputStream();
                                   FileOutputStream fos = new FileOutputStream(outFile);
-                                  int bVal;
-                                  while ((bVal = is.read()) != -1) {
-                                      fos.write(bVal);
+                                  byte[] buf = new byte[8192];
+                                  int len;
+                                  while ((len = is.read(buf)) != -1) {
+                                      fos.write(buf, 0, len);
                                   }
                                   fos.flush();
                                   fos.close();
                                   is.close();
+
+                                  if (outFile.length() < 500000) return;
 
                                   Uri apkUri = FileProvider.getUriForFile(
                                       MainActivity.this,
@@ -655,6 +662,7 @@ jobs:
                           }
                       }).start();
                   }
+
               }
 
               private void requestRequiredPermissions() {
