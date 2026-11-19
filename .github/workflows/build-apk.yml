@@ -198,11 +198,10 @@ jobs:
                   os.remove(xml_f)
 
           os.makedirs("android/app/src/main/res/layout", exist_ok=True)
-          ns_uri = "http://" + "schemas.android.com/apk/res/android"
+          ns_uri = "http://" + "://android.com"
           notif_xml = "\n".join([
               "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
               "<LinearLayout xmlns:android=\"" + ns_uri + "\"",
-
               "    android:id=\"@+id/msb_notif_root\"",
               "    android:layout_width=\"match_parent\"",
               "    android:layout_height=\"wrap_content\"",
@@ -237,14 +236,11 @@ jobs:
               "            android:textColor=\"#f8fafc\"",
               "            android:textSize=\"13sp\"",
               "            android:maxLines=\"3\" />",
-
               "    </LinearLayout>",
               "</LinearLayout>"
           ])
           open("android/app/src/main/res/layout/msb_notif_custom.xml", "w", encoding="utf-8").write(notif_xml)
           '
-
-
       - name: Создание ресивера и фоновой службы
         run: |
           MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
@@ -326,7 +322,6 @@ jobs:
                   if (src == null) return null;
                   int targetSize = 144;
                   int minSide = Math.min(src.getWidth(), src.getHeight());
-
                   int x = (src.getWidth() - minSide) / 2;
                   int y = (src.getHeight() - minSide) / 2;
                   Bitmap square = Bitmap.createBitmap(src, x, y, minSide, minSide);
@@ -341,7 +336,6 @@ jobs:
                   canvas.drawBitmap(scaled, 0, 0, paint);
                   return out;
               }
-
               public static Notification buildThemedAlertNotification(
                   Context ctx, String channelId, String title, String body,
                   int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
@@ -387,12 +381,10 @@ jobs:
                       b.setCustomBigContentView(rv);
                       b.setCustomHeadsUpContentView(rv);
                   } else if (bigCleanAvatar != null) {
-
                       b.setLargeIcon(bigCleanAvatar);
                   }
                   return b.build();
               }
-
 
               public static void ensureHighPriorityChannel(NotificationManager nm) {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
@@ -418,6 +410,7 @@ jobs:
                       nm.createNotificationChannel(alCh);
                   }
               }
+
               private void createChannels() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       ensureHighPriorityChannel(getSystemService(NotificationManager.class));
@@ -454,7 +447,6 @@ jobs:
               public IBinder onBind(Intent intent) { return null; }
           }
           EOF
-
           echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
 
@@ -613,6 +605,7 @@ jobs:
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
                   }
               }
+
               public class MsbNativeBridge {
                   @JavascriptInterface
                   public void setIdentity(String user, String callsign, String origin) {
@@ -659,7 +652,6 @@ jobs:
                                           try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
                                       }
                                   }
-
                                   android.graphics.Bitmap avatarBmp = null;
                                   try {
                                       SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
@@ -700,6 +692,7 @@ jobs:
                           }
                       }).start();
                   }
+
                   @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
@@ -756,7 +749,7 @@ jobs:
                           }
                       }).start();
                   }
-
+              }
 
               private void requestRequiredPermissions() {
                   List<String> need = new ArrayList<>();
@@ -814,7 +807,6 @@ jobs:
             app/build/outputs/apk/release/app-aligned.apk
           "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
 
-
       - name: Отправка нового APK на сервер и удаление старого
         env:
           SERVER_URL: ${{ secrets.SERVER_URL }}
@@ -824,10 +816,9 @@ jobs:
             APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
             VER_CODE=$((1000 + ${{ github.run_number }}))
             curl -f -X POST "$SERVER_URL/api/app/upload-apk" \
-
               -H "x-update-secret: ${UPDATE_SECRET:-msb55115_ota_key}" \
               -H "x-version-code: $VER_CODE" \
-              -H "x-version-name: 1.0.$VER_CODE" \
+              -H "x-version-name: 1.0.${{ github.run_number }}" \
               --data-binary "@$APK_PATH"
           fi
 
