@@ -580,10 +580,16 @@ const server = http.createServer(function(req, res) {
                 const host = req.headers.host || '';
                 const baseOrigin = host ? (proto + '://' + host) : '';
                 const themeName = data.theme || 'military';
+                const soundId = data.soundId || 'alarm1';
                 if (data.callsign) {
                     const ck = String(data.callsign).trim().toLowerCase();
-                    if (usersDB[ck]) { usersDB[ck].theme = themeName; writeJSON(USERS_FILE, usersDB); }
+                    if (usersDB[ck]) {
+                        usersDB[ck].theme = themeName;
+                        usersDB[ck].soundId = soundId;
+                        writeJSON(USERS_FILE, usersDB);
+                    }
                 }
+
                 const callLow = String(data.callsign || '').trim().toLowerCase();
                 if (callLow) {
                     fcmTokens = fcmTokens.filter(function(t) {
@@ -1274,6 +1280,52 @@ const server = http.createServer(function(req, res) {
         return;
     }
 
+    // ⬇️ ВСТАВЛЯТЬ ОБРАБОТЧИК ИМЕННО СЮДА (ПЕРЕД fs.readFile) ⬇️
+    if (req.method === 'POST' && urlPath === '/api/reply-from-notif') {
+        return readBodyJSON(req, function(err, data) {
+            if (err || !data || !data.sender || !data.target || !data.text) {
+                return sendJsonCompressed(req, res, 400, { ok: false });
+            }
+            const fromUser = String(data.sender).trim();
+            const toRaw = String(data.target).trim();
+            const replyText = String(data.text).trim();
+            if (!replyText) return sendJsonCompressed(req, res, 200, { ok: false });
+
+            let roomId = '';
+            if (toRaw.startsWith('👥')) {
+                const gName = toRaw.replace(/^👥\s*/, '').trim().toLowerCase();
+                const foundGId = Object.keys(groupsDB).find(function(gid) {
+                    return groupsDB[gid] && String(groupsDB[gid].name || '').trim().toLowerCase() === gName;
+                });
+                if (foundGId) roomId = foundGId;
+            }
+            if (!roomId) {
+                const sorted = [fromUser.toLowerCase(), toRaw.toLowerCase()].sort();
+                const pair = sorted.join(',');
+                roomId = pair + '_' + pair;
+            }
+
+            if (!Array.isArray(roomsDB[roomId])) roomsDB[roomId] = [];
+            const timeStr = getServerDateTime();
+            const newMsgObj = {
+                id: crypto.randomBytes(8).toString('hex'),
+                sender: fromUser,
+                text: replyText,
+                type: 'text',
+                time: timeStr,
+                timestamp: Date.now()
+            };
+            roomsDB[roomId].push(newMsgObj);
+            if (roomsDB[roomId].length > 150) roomsDB[roomId].shift();
+            writeJSON(CHAT_ROOMS_FILE, roomsDB);
+
+            broadcastWS({ type: 'chat_new_msg', room: roomId, msg: newMsgObj });
+            notifyJournalFromMessenger(roomId, fromUser, replyText, 'text', timeStr);
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+    // ⬆️ КОНЕЦ ВСТАВКИ ⬆️
+
     fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
         if (err) {
             res.writeHead(500);
@@ -1284,6 +1336,7 @@ const server = http.createServer(function(req, res) {
         }
     });
 });
+
 
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup, omitAvatars) {
     const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
@@ -1634,6 +1687,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                     ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now())
                     : undefined;
 
+                const targetSound = (usersDB[cLow] && usersDB[cLow].soundId) ? usersDB[cLow].soundId : 'alarm1';
                 fcmAdmin.messaging().send({
                     token: item.token,
                     data: {
@@ -1642,6 +1696,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                         body: String(text || ''),
                         target: String(target),
                         sender: parsedCallsign,
+                        soundId: targetSound,
                         image: avatarUrl || '',
                         theme: senderThemeId,
                         accentColor: senderAccent,
@@ -1650,6 +1705,8 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                     android: {
                         priority: 'high'
                     }
+            
+
                 }).catch(function(err) {
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {

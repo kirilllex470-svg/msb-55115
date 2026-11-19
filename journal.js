@@ -368,9 +368,16 @@ function openSoundModal() {
         row.onclick = function() {
             selectedSoundId = s.id;
             localStorage.setItem('msb_sound_id', s.id);
+            if (window.MsbNative && typeof window.MsbNative.setSound === 'function') {
+                try { window.MsbNative.setSound(s.id); } catch (e) {}
+            }
+            if (typeof sendFcmTokenToServer === 'function') {
+                sendFcmTokenToServer();
+            }
             playSoundById(s.id, true);
             openSoundModal();
         };
+
         list.appendChild(row);
     });
     modal.style.display = 'flex';
@@ -1889,26 +1896,26 @@ function showAlert(target, text, sender, notifId, isNew) {
         return;
     }
 
-    currentAlertId = notifId || null;
-    currentAlertTarget = target;
-    currentAlertText = text;
-    currentAlertSender = sender || ADMIN_NAME;
-    const queueLen = getAlertsQueue(target).filter(isUnreadForMe).length;
-    document.getElementById('alert-target-label').innerText = 'ДЛЯ [' + target + '] ОТ [' + currentAlertSender + ']' + (queueLen > 1 ? ' (1 из ' + queueLen + ')' : '') + ':';
-    document.getElementById('alert-text').innerText = text;
-    document.getElementById('alert-modal').style.display = 'flex';
+    const modal = document.getElementById('alert-modal');
+    if (modal) modal.style.display = 'none';
+    stopAlertVisuals();
+
     if (isNew || document.visibilityState === 'hidden') {
-        sendLocalNotification(target, text, currentAlertSender, currentAlertId);
+        playSoundById(selectedSoundId, true);
+        sendLocalNotification(target, text, sender || ADMIN_NAME, notifId);
     }
-    if (!titleInterval) {
-        let flag = false;
-        titleInterval = setInterval(function() {
-            document.title = flag ? "🛑 ТРЕВОГА!" : "⚠️ СООБЩЕНИЕ!";
-            flag = !flag;
-        }, 600);
+
+    markAlertDismissedLocally(notifId, text, sender);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'clear_alert',
+            target: target,
+            notifId: notifId,
+            readBy: currentCallsign || currentUser || 'Просмотр',
+            readTime: new Date().toLocaleTimeString().slice(0, 5)
+        }));
     }
-    playBeep();
-    if (!soundInterval) soundInterval = setInterval(playBeep, 2000);
+
 }
 
 
@@ -2676,11 +2683,13 @@ function sendFcmTokenToServer(tok) {
     const u = currentUser || localStorage.getItem('journal_user') || 'ГОСТЬ';
     const c = currentCallsign || localStorage.getItem('journal_callsign') || '';
     const th = localStorage.getItem('msb_app_theme') || 'military';
+    const snd = localStorage.getItem('msb_sound_id') || 'alarm1';
     fetch('/api/fcm/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: u, callsign: c, token: token, theme: th })
+        body: JSON.stringify({ user: u, callsign: c, token: token, theme: th, soundId: snd })
     }).catch(function() {});
+
 }
 
 function checkApkRemoteUpdate(forcePrompt) {
