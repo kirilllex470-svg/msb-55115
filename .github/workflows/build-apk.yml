@@ -196,7 +196,51 @@ jobs:
           for xml_f in ["android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml", "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"]:
               if os.path.exists(xml_f):
                   os.remove(xml_f)
+
+          os.makedirs("android/app/src/main/res/layout", exist_ok=True)
+          notif_xml = "\n".join([
+              "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+              "<LinearLayout xmlns:android=\"http://android.com\"",
+              "    android:id=\"@+id/msb_notif_root\"",
+              "    android:layout_width=\"match_parent\"",
+              "    android:layout_height=\"wrap_content\"",
+              "    android:orientation=\"horizontal\"",
+              "    android:gravity=\"center_vertical\"",
+              "    android:padding=\"12dp\"",
+              "    android:background=\"#102a1a\">",
+              "    <ImageView",
+              "        android:id=\"@+id/msb_notif_avatar\"",
+              "        android:layout_width=\"104dp\"",
+              "        android:layout_height=\"104dp\"",
+              "        android:scaleType=\"centerCrop\" />",
+              "    <LinearLayout",
+              "        android:layout_width=\"0dp\"",
+              "        android:layout_height=\"wrap_content\"",
+              "        android:layout_weight=\"1\"",
+              "        android:layout_marginStart=\"14dp\"",
+              "        android:orientation=\"vertical\">",
+              "        <TextView",
+              "            android:id=\"@+id/msb_notif_title\"",
+              "            android:layout_width=\"match_parent\"",
+              "            android:layout_height=\"wrap_content\"",
+              "            android:textColor=\"#4ade80\"",
+              "            android:textStyle=\"bold\"",
+              "            android:textSize=\"15sp\"",
+              "            android:maxLines=\"2\" />",
+              "        <TextView",
+              "            android:id=\"@+id/msb_notif_body\"",
+              "            android:layout_width=\"match_parent\"",
+              "            android:layout_height=\"wrap_content\"",
+              "            android:layout_marginTop=\"4dp\"",
+              "            android:textColor=\"#f8fafc\"",
+              "            android:textSize=\"14sp\"",
+              "            android:maxLines=\"5\" />",
+              "    </LinearLayout>",
+              "</LinearLayout>"
+          ])
+          open("android/app/src/main/res/layout/msb_notif_custom.xml", "w", encoding="utf-8").write(notif_xml)
           '
+
 
       - name: Создание ресивера и фоновой службы
         run: |
@@ -296,27 +340,51 @@ jobs:
                   Context ctx, String channelId, String title, String body,
                   int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
               ) {
-                  int smallIcon = ctx.getResources().getIdentifier("ic_msb_logo", "drawable", ctx.getPackageName());
+                  String pkg = ctx.getPackageName();
+                  int smallIcon = ctx.getResources().getIdentifier("ic_msb_logo", "drawable", pkg);
                   if (smallIcon == 0) smallIcon = android.R.drawable.ic_dialog_info;
 
                   Bitmap bigCleanAvatar = prepareLargeCleanAvatar(avatarBmp);
+                  int layoutId = ctx.getResources().getIdentifier("msb_notif_custom", "layout", pkg);
 
                   NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
                       .setSmallIcon(smallIcon)
                       .setContentTitle(title)
                       .setContentText(body)
-                      .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                       .setColor(accentCol)
                       .setPriority(ongoing ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_HIGH)
                       .setOngoing(ongoing)
                       .setAutoCancel(!ongoing)
                       .setContentIntent(pi);
 
-                  if (bigCleanAvatar != null) {
+                  if (!ongoing && layoutId != 0) {
+                      int rootId = ctx.getResources().getIdentifier("msb_notif_root", "id", pkg);
+                      int avId = ctx.getResources().getIdentifier("msb_notif_avatar", "id", pkg);
+                      int titleId = ctx.getResources().getIdentifier("msb_notif_title", "id", pkg);
+                      int bodyId = ctx.getResources().getIdentifier("msb_notif_body", "id", pkg);
+
+                      RemoteViews rv = new RemoteViews(pkg, layoutId);
+                      if (bgCol != 0) rv.setInt(rootId, "setBackgroundColor", bgCol);
+                      rv.setTextViewText(titleId, title);
+                      if (accentCol != 0) rv.setTextColor(titleId, accentCol);
+                      rv.setTextViewText(bodyId, body);
+
+                      if (bigCleanAvatar != null) {
+                          rv.setImageViewBitmap(avId, bigCleanAvatar);
+                      } else {
+                          int launcherId = ctx.getResources().getIdentifier("ic_launcher", "mipmap", pkg);
+                          if (launcherId != 0) rv.setImageViewResource(avId, launcherId);
+                      }
+
+                      b.setCustomContentView(rv);
+                      b.setCustomBigContentView(rv);
+                      b.setCustomHeadsUpContentView(rv);
+                  } else if (bigCleanAvatar != null) {
                       b.setLargeIcon(bigCleanAvatar);
                   }
                   return b.build();
               }
+
 
               public static void ensureHighPriorityChannel(NotificationManager nm) {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
