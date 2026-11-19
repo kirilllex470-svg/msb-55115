@@ -145,8 +145,11 @@ jobs:
               "                <action android:name=\"android.intent.action.MY_PACKAGE_REPLACED\" />",
               "            </intent-filter>",
               "        </receiver>",
+              "        <receiver android:name=\".MsbNotifReplyReceiver\"",
+              "            android:enabled=\"true\" android:exported=\"false\" />",
               "    </application>"
           ])
+
           s = s.replace("</application>", svc, 1)
           open(p, "w", encoding="utf-8").write(s)
 
@@ -397,11 +400,31 @@ jobs:
                       }
 
 
+                      if (replyTarget != null && !replyTarget.isEmpty()) {
+                          androidx.core.app.RemoteInput remoteInput = new androidx.core.app.RemoteInput.Builder(MsbNotifReplyReceiver.KEY_TEXT_REPLY)
+                              .setLabel("Написать ответ...")
+                              .build();
+                          Intent replyIntent = new Intent(ctx, MsbNotifReplyReceiver.class);
+                          replyIntent.putExtra("reply_to", replyTarget);
+                          replyIntent.putExtra("notif_tag", notifTag);
+                          replyIntent.putExtra("notif_id", notifId);
+                          int rFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                              rFlags |= PendingIntent.FLAG_MUTABLE;
+                          }
+                          PendingIntent replyPi = PendingIntent.getBroadcast(ctx, notifId, replyIntent, rFlags);
+                          NotificationCompat.Action replyAction = new NotificationCompat.Action.Builder(
+                              android.R.drawable.ic_menu_send, "Ответить", replyPi
+                          ).addRemoteInput(remoteInput).build();
+                          b.addAction(replyAction);
+                      }
+
                       b.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
                       b.setCustomContentView(rv);
                       b.setCustomBigContentView(rv);
                       b.setCustomHeadsUpContentView(rv);
                   } else if (bigCleanAvatar != null) {
+
                       b.setLargeIcon(bigCleanAvatar);
                   }
                   return b.build();
@@ -537,6 +560,8 @@ jobs:
                   }
                   PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
 
+                  MsbKeepAliveService.playSelectedMelody(this, data.get("soundId"));
+
                   String notifTag = data.get("tag");
                   if (notifTag == null || notifTag.isEmpty()) {
                       notifTag = "msb_alert_" + (title + "_" + body).hashCode();
@@ -544,12 +569,13 @@ jobs:
                   int notifId = notifTag.hashCode() & 0x7fffffff;
                   nm.notify(notifTag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
                       this, MsbKeepAliveService.ALERT_CH,
-                      title, body, bgCol, accCol, avatarBmp, pi, false
+                      title, body, bgCol, accCol, avatarBmp, pi, false,
+                      data.get("sender"), notifTag, notifId
                   ));
-
               }
           }
           EOF
+
 
       - name: Настройка MainActivity
         run: |
@@ -656,6 +682,17 @@ jobs:
                   }
 
                   @JavascriptInterface
+                  public void setSound(String soundId) {
+                      try {
+                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                          sp.edit()
+                              .putString("sound_id", soundId != null ? soundId : "alarm1")
+                              .apply();
+                      } catch (Exception ignored) {}
+                  }
+
+
+                  @JavascriptInterface
                   public void notify(final String title, final String body, String idStr, final String colorHex) {
                       new Thread(new Runnable() {
                           @Override
@@ -721,6 +758,7 @@ jobs:
                                   ));
 
                               } catch (Exception ignored) {}
+                              
                           }
                       }).start();
                   }
