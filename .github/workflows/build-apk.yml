@@ -78,9 +78,6 @@ jobs:
             echo "" >> android/app/build.gradle
             echo "apply plugin: \"com.google.gms.google-services\"" >> android/app/build.gradle
           fi
-
-
-
       - name: Настройка AndroidManifest.xml
         run: |
           python3 -c '
@@ -160,7 +157,6 @@ jobs:
               "</paths>"
           ])
           open("android/app/src/main/res/xml/msb_file_paths.xml", "w", encoding="utf-8").write(fp_xml)
-
           import struct, zlib, math
           def make_png(size, mono):
               raw = bytearray()
@@ -189,7 +185,6 @@ jobs:
               ihdr = struct.pack("!IIBBBBB", size, size, 8, 6, 0, 0, 0)
               return b"\x89PNG\r\n\x1a\n" + ch(b"IHDR", ihdr) + ch(b"IDAT", zlib.compress(bytes(raw))) + ch(b"IEND", b"")
 
-
           os.makedirs("android/app/src/main/res/drawable", exist_ok=True)
           open("android/app/src/main/res/drawable/ic_msb_logo.png", "wb").write(make_png(96, True))
           for d_name, sz in [("mipmap-mdpi", 48), ("mipmap-hdpi", 72), ("mipmap-xhdpi", 96), ("mipmap-xxhdpi", 144), ("mipmap-xxxhdpi", 192)]:
@@ -202,7 +197,6 @@ jobs:
               if os.path.exists(xml_f):
                   os.remove(xml_f)
           '
-
 
       - name: Создание ресивера и фоновой службы
         run: |
@@ -248,15 +242,12 @@ jobs:
           import android.graphics.Color;
           import android.graphics.Paint;
           import android.graphics.Path;
-          import android.graphics.RectF;
           import android.media.AudioAttributes;
           import android.media.RingtoneManager;
           import android.net.Uri;
           import android.os.Build;
           import android.os.IBinder;
-          import android.widget.RemoteViews;
           import androidx.core.app.NotificationCompat;
-
           public class MsbKeepAliveService extends Service {
               public static final String ALERT_CH = "msb_alerts_high_v5";
 
@@ -327,8 +318,6 @@ jobs:
                   return b.build();
               }
 
-
-
               public static void ensureHighPriorityChannel(NotificationManager nm) {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
                       NotificationChannel bgCh = new NotificationChannel(
@@ -353,7 +342,6 @@ jobs:
                       nm.createNotificationChannel(alCh);
                   }
               }
-
               private void createChannels() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       ensureHighPriorityChannel(getSystemService(NotificationManager.class));
@@ -448,7 +436,6 @@ jobs:
                           is.close();
                       } catch (Exception ignored) {}
                   }
-
                   NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                   if (nm == null) return;
                   MsbKeepAliveService.ensureHighPriorityChannel(nm);
@@ -550,8 +537,29 @@ jobs:
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
                   }
               }
-
               public class MsbNativeBridge {
+                  @JavascriptInterface
+                  public void setIdentity(String user, String callsign, String origin) {
+                      try {
+                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                          sp.edit()
+                              .putString("user", user != null ? user : "")
+                              .putString("callsign", callsign != null ? callsign : "")
+                              .putString("origin", origin != null ? origin : "")
+                              .apply();
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void setTheme(String themeId, String colorHex) {
+                      try {
+                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                          sp.edit()
+                              .putString("theme_id", themeId != null ? themeId : "military")
+                              .apply();
+                      } catch (Exception ignored) {}
+                  }
+
                   @JavascriptInterface
                   public void notify(final String title, final String body, String idStr, final String colorHex) {
                       new Thread(new Runnable() {
@@ -616,48 +624,6 @@ jobs:
                           }
                       }).start();
                   }
-
-
-
-                  @JavascriptInterface
-                  public void notify(String title, String body, String idStr, String colorHex) {
-                      try {
-                          NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                          if (nm == null) return;
-                          MsbKeepAliveService.ensureHighPriorityChannel(nm);
-
-                          int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
-                          int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
-                          if (colorHex != null) {
-                              int sep = colorHex.indexOf('|');
-                              if (sep > 0) {
-                                  String bgStr = colorHex.substring(0, sep);
-                                  String accStr = colorHex.substring(sep + 1);
-                                  try { bgCol = Color.parseColor(bgStr); } catch (Exception ignored) {}
-                                  try { accCol = Color.parseColor(accStr); } catch (Exception ignored) {}
-                              } else if (colorHex.startsWith("#")) {
-                                  try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
-                              }
-                          }
-
-                          Intent openIntent = new Intent(MainActivity.this, MainActivity.class);
-                          openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                          int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                              piFlags |= PendingIntent.FLAG_IMMUTABLE;
-                          }
-                          PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
-
-                          int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
-                          nm.notify(notifId, MsbKeepAliveService.buildThemedAlertNotification(
-                              MainActivity.this, MsbKeepAliveService.ALERT_CH,
-                              title != null ? title : "МСБ-55115",
-                              body != null ? body : "",
-                              bgCol, accCol, null, pi, false
-                          ));
-                      } catch (Exception ignored) {}
-                  }
-
                   @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
                       new Thread(new Runnable() {
@@ -676,7 +642,7 @@ jobs:
 
                                   InputStream is = conn.getInputStream();
                                   FileOutputStream fos = new FileOutputStream(outFile);
-                                  byte[] buf = new byte[8192];
+                                  byte[] buf = (byte[]) Array.newInstance(byte.class, 8192);
                                   int len;
                                   while ((len = is.read(buf)) != -1) {
                                       fos.write(buf, 0, len);
@@ -700,7 +666,6 @@ jobs:
                           }
                       }).start();
                   }
-
               }
 
               private void requestRequiredPermissions() {
@@ -708,18 +673,12 @@ jobs:
                   int granted = PackageManager.PERMISSION_GRANTED;
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                       String pNotif = Manifest.permission.POST_NOTIFICATIONS;
-                      if (ContextCompat.checkSelfPermission(this, pNotif) != granted) {
-                          need.add(pNotif);
-                      }
+                      if (ContextCompat.checkSelfPermission(this, pNotif) != granted) need.add(pNotif);
                   }
                   String pAudio = Manifest.permission.RECORD_AUDIO;
-                  if (ContextCompat.checkSelfPermission(this, pAudio) != granted) {
-                      need.add(pAudio);
-                  }
+                  if (ContextCompat.checkSelfPermission(this, pAudio) != granted) need.add(pAudio);
                   String pCam = Manifest.permission.CAMERA;
-                  if (ContextCompat.checkSelfPermission(this, pCam) != granted) {
-                      need.add(pCam);
-                  }
+                  if (ContextCompat.checkSelfPermission(this, pCam) != granted) need.add(pCam);
                   if (!need.isEmpty()) {
                       String[] arr = (String[]) Array.newInstance(String.class, need.size());
                       need.toArray(arr);
@@ -755,8 +714,6 @@ jobs:
             --out app/build/outputs/apk/release/app-release.apk \
             "$RAW_APK"
           "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
-
-
 
       - name: Отправка нового APK на сервер и удаление старого
         env:
