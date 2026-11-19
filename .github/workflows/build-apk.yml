@@ -650,8 +650,6 @@ jobs:
                   }
                   PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
 
-                  MsbKeepAliveService.playSelectedMelody(this, data.get("soundId"));
-
                   String notifTag = data.get("tag");
                   if (notifTag == null || notifTag.isEmpty()) {
                       notifTag = "msb_alert_" + (title + "_" + body).hashCode();
@@ -662,6 +660,7 @@ jobs:
                       title, body, bgCol, accCol, avatarBmp, pi, false,
                       data.get("sender"), notifTag, notifId
                   ));
+
               }
           }
           EOF
