@@ -706,11 +706,18 @@ jobs:
           npx cap sync android
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=$(pwd)/app/msb.keystore \
-            -Pandroid.injected.signing.store.password=msb55115 \
-            -Pandroid.injected.signing.key.alias=msbkey \
-            -Pandroid.injected.signing.key.password=msb55115
+          ./gradlew assembleRelease
+          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" | sort -V | tail -n 1)
+          "$APKSIGNER" sign \
+            --ks app/msb.keystore \
+            --ks-key-alias msbkey \
+            --ks-pass pass:msb55115 \
+            --key-pass pass:msb55115 \
+            --out app/build/outputs/apk/release/app-release.apk \
+            "$RAW_APK"
+          "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
+
 
       - name: Отправка нового APK на сервер и удаление старого
         env:
