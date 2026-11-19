@@ -132,7 +132,7 @@ jobs:
               "            android:foregroundServiceType=\"dataSync\" />",
               "        <service android:name=\".MsbFcmService\"",
               "            android:exported=\"false\">",
-              "            <intent-filter>",
+              "            <intent-filter android:priority=\"999\">",
               "                <action android:name=\"com.google.firebase.MESSAGING_EVENT\" />",
               "            </intent-filter>",
               "        </service>",
@@ -160,43 +160,54 @@ jobs:
           os.makedirs("android/app/src/main/res/layout", exist_ok=True)
           card_xml = "\n".join([
               "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
-              "<LinearLayout xmlns:android=\"http://" + "schemas." + "android.com" + "/apk/res/android\"",
+              "<FrameLayout xmlns:android=\"http://" + "schemas." + "android.com" + "/apk/res/android\"",
               "    android:id=\"@+id/notif_root\"",
               "    android:layout_width=\"match_parent\"",
-              "    android:layout_height=\"wrap_content\"",
-              "    android:orientation=\"horizontal\"",
-              "    android:gravity=\"center_vertical\"",
-              "    android:padding=\"12dp\">",
+              "    android:layout_height=\"84dp\"",
+              "    android:padding=\"2dp\">",
               "    <ImageView",
-              "        android:id=\"@+id/notif_bg_img\"",
-              "        android:layout_width=\"44dp\"",
-              "        android:layout_height=\"44dp\"",
-              "        android:scaleType=\"centerCrop\"",
-              "        android:layout_marginEnd=\"12dp\" />",
+              "        android:id=\"@+id/notif_card_bg\"",
+              "        android:layout_width=\"match_parent\"",
+              "        android:layout_height=\"match_parent\"",
+              "        android:scaleType=\"fitXY\" />",
               "    <LinearLayout",
-              "        android:layout_width=\"0dp\"",
-              "        android:layout_height=\"wrap_content\"",
-              "        android:layout_weight=\"1\"",
-              "        android:orientation=\"vertical\">",
-              "        <TextView",
-              "            android:id=\"@+id/notif_title\"",
-              "            android:layout_width=\"match_parent\"",
+              "        android:layout_width=\"match_parent\"",
+              "        android:layout_height=\"match_parent\"",
+              "        android:orientation=\"horizontal\"",
+              "        android:gravity=\"center_vertical\"",
+              "        android:paddingLeft=\"14dp\"",
+              "        android:paddingRight=\"14dp\">",
+              "        <ImageView",
+              "            android:id=\"@+id/notif_bg_img\"",
+              "            android:layout_width=\"46dp\"",
+              "            android:layout_height=\"46dp\"",
+              "            android:scaleType=\"centerCrop\"",
+              "            android:layout_marginEnd=\"12dp\" />",
+              "        <LinearLayout",
+              "            android:layout_width=\"0dp\"",
               "            android:layout_height=\"wrap_content\"",
-              "            android:textStyle=\"bold\"",
-              "            android:textSize=\"14sp\"",
-              "            android:maxLines=\"1\"",
-              "            android:ellipsize=\"end\" />",
-              "        <TextView",
-              "            android:id=\"@+id/notif_body\"",
-              "            android:layout_width=\"match_parent\"",
-              "            android:layout_height=\"wrap_content\"",
-              "            android:layout_marginTop=\"3dp\"",
-              "            android:textColor=\"#F8FAFC\"",
-              "            android:textSize=\"13sp\"",
-              "            android:maxLines=\"3\"",
-              "            android:ellipsize=\"end\" />",
+              "            android:layout_weight=\"1\"",
+              "            android:orientation=\"vertical\">",
+              "            <TextView",
+              "                android:id=\"@+id/notif_title\"",
+              "                android:layout_width=\"match_parent\"",
+              "                android:layout_height=\"wrap_content\"",
+              "                android:textStyle=\"bold\"",
+              "                android:textSize=\"14sp\"",
+              "                android:maxLines=\"1\"",
+              "                android:ellipsize=\"end\" />",
+              "            <TextView",
+              "                android:id=\"@+id/notif_body\"",
+              "                android:layout_width=\"match_parent\"",
+              "                android:layout_height=\"wrap_content\"",
+              "                android:layout_marginTop=\"3dp\"",
+              "                android:textColor=\"#F8FAFC\"",
+              "                android:textSize=\"13sp\"",
+              "                android:maxLines=\"2\"",
+              "                android:ellipsize=\"end\" />",
+              "        </LinearLayout>",
               "    </LinearLayout>",
-              "</LinearLayout>"
+              "</FrameLayout>"
           ])
           open("android/app/src/main/res/layout/msb_notif_card.xml", "w", encoding="utf-8").write(card_xml)
           '
@@ -283,11 +294,11 @@ jobs:
                   Context ctx, String channelId, String title, String body,
                   int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing
               ) {
-                  int resCard = ctx.getResources().getIdentifier("msb_notif_card", "layout", ctx.getPackageName());
-                  int resRoot = ctx.getResources().getIdentifier("notif_root", "id", ctx.getPackageName());
-                  int resImg  = ctx.getResources().getIdentifier("notif_bg_img", "id", ctx.getPackageName());
-                  int resTtl  = ctx.getResources().getIdentifier("notif_title", "id", ctx.getPackageName());
-                  int resBody = ctx.getResources().getIdentifier("notif_body", "id", ctx.getPackageName());
+                  int resCard   = ctx.getResources().getIdentifier("msb_notif_card", "layout", ctx.getPackageName());
+                  int resCardBg = ctx.getResources().getIdentifier("notif_card_bg", "id", ctx.getPackageName());
+                  int resImg    = ctx.getResources().getIdentifier("notif_bg_img", "id", ctx.getPackageName());
+                  int resTtl    = ctx.getResources().getIdentifier("notif_title", "id", ctx.getPackageName());
+                  int resBody   = ctx.getResources().getIdentifier("notif_body", "id", ctx.getPackageName());
 
                   NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
                       .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -299,13 +310,27 @@ jobs:
                       .setOngoing(ongoing)
                       .setAutoCancel(!ongoing)
                       .setContentIntent(pi);
-
                   if (resCard != 0) {
                       RemoteViews rv = new RemoteViews(ctx.getPackageName(), resCard);
-                      rv.setInt(resRoot, "setBackgroundColor", bgCol);
                       rv.setTextViewText(resTtl, title);
                       rv.setTextColor(resTtl, accentCol);
                       rv.setTextViewText(resBody, body);
+
+                      Bitmap cardBmp = Bitmap.createBitmap(800, 180, Bitmap.Config.ARGB_8888);
+                      Canvas cc = new Canvas(cardBmp);
+                      Paint cp = new Paint(Paint.ANTI_ALIAS_FLAG);
+                      RectF cr = new RectF(4f, 4f, 796f, 176f);
+                      cp.setStyle(Paint.Style.FILL);
+                      cp.setColor(bgCol);
+                      cc.drawRoundRect(cr, 36f, 36f, cp);
+                      cp.setStyle(Paint.Style.STROKE);
+                      cp.setStrokeWidth(5f);
+                      cp.setColor(accentCol);
+                      cc.drawRoundRect(cr, 36f, 36f, cp);
+                      if (resCardBg != 0) {
+                          rv.setImageViewBitmap(resCardBg, cardBmp);
+                      }
+
                       Bitmap badgeBmp = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
                       Canvas c = new Canvas(badgeBmp);
                       Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -329,7 +354,7 @@ jobs:
                       rv.setImageViewBitmap(resImg, badgeBmp);
                       b.setCustomContentView(rv);
                       b.setCustomBigContentView(rv);
-                      b.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                      b.setCustomHeadsUpContentView(rv);
                   }
                   return b.build();
               }
@@ -395,6 +420,7 @@ jobs:
               public IBinder onBind(Intent intent) { return null; }
           }
           EOF
+
           echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
 
