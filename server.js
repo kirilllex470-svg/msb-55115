@@ -1634,7 +1634,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                     ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now())
                     : undefined;
 
-                     fcmAdmin.messaging().send({
+                fcmAdmin.messaging().send({
                     token: item.token,
                     data: {
                         tag: 'msb-alert-' + notifId,
@@ -1647,14 +1647,10 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                         accentColor: senderAccent,
                         bgColor: '#00000000'
                     },
-
                     android: {
                         priority: 'high'
                     }
-                })
-
                 }).catch(function(err) {
-
                     console.error('❌ Ошибка отправки FCM:', err.code, err.message);
                     if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
                         const badIdx = fcmTokens.indexOf(item);
@@ -1664,6 +1660,7 @@ function broadcastAlert(sender, color, timeStr, target, text) {
                         }
                     }
                 });
+
             }
         });
     }
