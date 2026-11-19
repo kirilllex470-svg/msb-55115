@@ -216,38 +216,44 @@ jobs:
               "    android:layout_height=\"wrap_content\"",
               "    android:orientation=\"horizontal\"",
               "    android:gravity=\"center_vertical\"",
-              "    android:padding=\"6dp\"",
+              "    android:paddingStart=\"0dp\"",
+              "    android:paddingEnd=\"6dp\"",
+              "    android:paddingTop=\"4dp\"",
+              "    android:paddingBottom=\"4dp\"",
               "    android:background=\"@android:color/transparent\">",
               "    <ImageView",
               "        android:id=\"@+id/msb_notif_avatar\"",
-              "        android:layout_width=\"48dp\"",
-              "        android:layout_height=\"48dp\"",
+              "        android:layout_width=\"36dp\"",
+              "        android:layout_height=\"36dp\"",
+              "        android:layout_marginStart=\"0dp\"",
               "        android:scaleType=\"centerCrop\" />",
               "    <LinearLayout",
               "        android:layout_width=\"0dp\"",
               "        android:layout_height=\"wrap_content\"",
               "        android:layout_weight=\"1\"",
-              "        android:layout_marginStart=\"12dp\"",
+              "        android:layout_marginStart=\"8dp\"",
               "        android:orientation=\"vertical\">",
               "        <TextView",
               "            android:id=\"@+id/msb_notif_title\"",
               "            android:layout_width=\"match_parent\"",
               "            android:layout_height=\"wrap_content\"",
-              "            android:textColor=\"#22c55e\"",
+              "            android:textColor=\"#166534\"",
               "            android:textStyle=\"bold\"",
-              "            android:textSize=\"15sp\"",
+              "            android:textSize=\"14sp\"",
               "            android:maxLines=\"1\" />",
               "        <TextView",
               "            android:id=\"@+id/msb_notif_body\"",
               "            android:layout_width=\"match_parent\"",
               "            android:layout_height=\"wrap_content\"",
               "            android:layout_marginTop=\"2dp\"",
+              "            android:textColor=\"#111827\"",
               "            android:textStyle=\"normal\"",
               "            android:textSize=\"14sp\"",
               "            android:maxLines=\"3\" />",
               "    </LinearLayout>",
               "</LinearLayout>"
           ])
+
           open("android/app/src/main/res/layout/msb_notif_custom.xml", "w", encoding="utf-8").write(notif_xml)
           '
 
@@ -328,10 +334,10 @@ jobs:
                   if ("cosmic".equals(t)) return Color.parseColor("#a855f7");
                   return Color.parseColor("#22c55e");
               }
-
               public static Bitmap prepareLargeCleanAvatar(Bitmap src) {
                   if (src == null) return null;
-                  int targetSize = 144;
+                  int targetSize = 96;
+
                   int minSide = Math.min(src.getWidth(), src.getHeight());
                   int x = (src.getWidth() - minSide) / 2;
                   int y = (src.getHeight() - minSide) / 2;
@@ -379,6 +385,8 @@ jobs:
                       rv.setTextViewText(titleId, title);
                       if (accentCol != 0) rv.setTextColor(titleId, accentCol);
                       rv.setTextViewText(bodyId, body);
+                      rv.setTextColor(bodyId, Color.parseColor("#111827"));
+
 
                       if (bigCleanAvatar != null) {
                           rv.setImageViewBitmap(avId, bigCleanAvatar);
@@ -529,11 +537,16 @@ jobs:
                   }
                   PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
 
-                  int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
-                  nm.notify(notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                  String notifTag = data.get("tag");
+                  if (notifTag == null || notifTag.isEmpty()) {
+                      notifTag = "msb_alert_" + (title + "_" + body).hashCode();
+                  }
+                  int notifId = notifTag.hashCode() & 0x7fffffff;
+                  nm.notify(notifTag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
                       this, MsbKeepAliveService.ALERT_CH,
                       title, body, bgCol, accCol, avatarBmp, pi, false
                   ));
+
               }
           }
           EOF
@@ -696,13 +709,17 @@ jobs:
                                   }
                                   PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
 
-                                  int notifId = (int) (System.currentTimeMillis() & 0x7fffffff);
-                                  nm.notify(notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                                  String tag = (idStr != null && !idStr.isEmpty())
+                                      ? ("msb-alert-" + idStr)
+                                      : ("msb-alert-" + (title + "_" + body).hashCode());
+                                  int notifId = tag.hashCode() & 0x7fffffff;
+                                  nm.notify(tag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
                                       MainActivity.this, MsbKeepAliveService.ALERT_CH,
                                       title != null ? title : "МСБ-55115",
                                       body != null ? body : "",
                                       bgCol, accCol, avatarBmp, pi, false
                                   ));
+
                               } catch (Exception ignored) {}
                           }
                       }).start();
