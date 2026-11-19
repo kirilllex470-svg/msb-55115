@@ -494,13 +494,14 @@ const server = http.createServer(function(req, res) {
         const rawName = decodeURIComponent(urlPath.replace('/api/avatar-img/', '').replace(/\.(jpg|svg)$/i, '')).trim().toLowerCase();
         const uObj = usersDB[rawName];
         if (isSvgReq && uObj && uObj.avatar && uObj.avatar.startsWith('data:image/')) {
-            const svgCircle = '<svg xmlns="http://w3.org" width="384" height="384" viewBox="0 0 384 384">' +
-                '<defs><clipPath id="c"><circle cx="192" cy="192" r="192"/></clipPath></defs>' +
-                '<image href="' + uObj.avatar + '" width="384" height="384" preserveAspectRatio="xMidYMid slice" clip-path="url(#c)"/>' +
+            const svgCircle = '<svg xmlns="http://w3.org" width="192" height="192" viewBox="0 0 192 192">' +
+                '<defs><clipPath id="c"><circle cx="96" cy="96" r="96"/></clipPath></defs>' +
+                '<image href="' + uObj.avatar + '" width="192" height="192" preserveAspectRatio="xMidYMid slice" clip-path="url(#c)"/>' +
                 '</svg>';
             res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=300' });
             return res.end(svgCircle);
         }
+
         if (uObj && uObj.avatar && uObj.avatar.startsWith('data:image/')) {
             const parts = uObj.avatar.split(',');
             const imgBuf = Buffer.from(parts.at(1), 'base64');

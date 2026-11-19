@@ -163,8 +163,10 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function subscribeToWebPush(forceRenew) {
+    if (window.MsbNative || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) return;
     if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
     try {
+
         if (Notification.permission === 'denied') return;
         const permission = (Notification.permission === 'granted')
             ? 'granted'
@@ -2652,7 +2654,6 @@ function sendFcmTokenToServer(tok) {
     }).catch(function() {});
 }
 
-
 function checkApkRemoteUpdate(forcePrompt) {
     if (!window.MsbNative || typeof window.MsbNative.installApkUpdate !== 'function') return;
     fetch('/api/app/version?t=' + Date.now())
@@ -2661,13 +2662,15 @@ function checkApkRemoteUpdate(forcePrompt) {
             if (!meta || !meta.hasApk || !meta.versionCode) return;
             const localVer = Number(localStorage.getItem('msb_installed_apk_ver') || 0);
             if (forcePrompt || meta.versionCode > localVer) {
-                if (confirm('📲 Доступна новая версия МСБ-55115 (' + meta.versionName + '). Установить поверх без удаления?')) {
+                const msg = '📲 Доступна новая версия МСБ-55115 (' + meta.versionName + ').\n\nНажмите ОК для загрузки и установки поверх (если система попросит разрешение на установку пакетов — включите переключатель и нажмите Обновить ещё раз).';
+                if (confirm(msg)) {
                     localStorage.setItem('msb_installed_apk_ver', String(meta.versionCode));
                     window.MsbNative.installApkUpdate(location.origin + '/api/app/download.apk?t=' + Date.now());
                 }
             }
         }).catch(function() {});
 }
+
 
 function manualCheckApkUpdate() {
     if (!window.MsbNative || typeof window.MsbNative.installApkUpdate !== 'function') {
