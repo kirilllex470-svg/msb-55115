@@ -41,19 +41,14 @@ jobs:
           else:
               cfg = {"appName": "МСБ-55115", "webDir": "www"}
           cfg["appId"] = pkg
-          plugins = cfg.setdefault("plugins", {})
-          plugins["PushNotifications"] = {
+          cfg.setdefault("plugins", {})["PushNotifications"] = {
               "presentationOptions": ["badge", "sound", "alert"]
-          }
-          plugins["Keyboard"] = {
-              "resize": "body",
-              "resizeOnFullScreen": True
           }
           json.dump(cfg, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
           print("Установлен appId:", pkg)
           '
 
-      - name: Установка Capacitor 8, Keyboard и Push Notifications
+      - name: Установка Capacitor 8 и Push Notifications
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
           mkdir -p www
@@ -64,10 +59,8 @@ jobs:
             @capacitor/core@8 \
             @capacitor/cli@8 \
             @capacitor/android@8 \
-            @capacitor/push-notifications@8 \
-            @capacitor/keyboard@8
+            @capacitor/push-notifications@8
           npx cap add android
-
 
       - name: Подключение google-services.json в Gradle
         run: |
@@ -118,9 +111,10 @@ jobs:
               s = s.replace("<application", ct, 1)
 
           if "windowSoftInputMode" in s:
-              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:windowSoftInputMode=\"adjustResize\"")
+              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:windowSoftInputMode=\"adjustNothing\"")
+              s = s.replace("android:windowSoftInputMode=\"adjustResize\"", "android:windowSoftInputMode=\"adjustNothing\"")
           else:
-              s = s.replace("<activity", "<activity android:windowSoftInputMode=\"adjustResize\"", 1)
+              s = s.replace("<activity", "<activity android:windowSoftInputMode=\"adjustNothing\"", 1)
 
           svc = "\n".join([
               "        <meta-data",
@@ -211,8 +205,6 @@ jobs:
               ic.save(d_dir + "/ic_launcher_round.png", "PNG")
 
           for xml_f in ["android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml", "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"]:
-
-
               if os.path.exists(xml_f):
                   os.remove(xml_f)
 
@@ -338,31 +330,26 @@ jobs:
                   }
 
                   if (origin.isEmpty() || myName.isEmpty() || targetSender == null) return;
-                  new Thread(new Runnable() {
-                      @Override
-                      public void run() {
-                          try {
-                              URL url = new URL(origin + "/api/reply-from-notif");
-                              HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                              conn.setRequestMethod("POST");
-                              conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                              conn.setConnectTimeout(8000);
-                              conn.setReadTimeout(8000);
-                              conn.setDoOutput(true);
-
-                              JSONObject json = new JSONObject();
-                              json.put("sender", myName);
-                              json.put("target", targetSender);
-                              json.put("text", replyText);
-
-                              OutputStream os = conn.getOutputStream();
-                              os.write(json.toString().getBytes("UTF-8"));
-                              os.flush();
-                              os.close();
-                              conn.getResponseCode();
-                              conn.disconnect();
-                          } catch (Exception ignored) {}
-                      }
+                  new Thread(() -> {
+                      try {
+                          URL url = new URL(origin + "/api/reply-from-notif");
+                          HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                          conn.setRequestMethod("POST");
+                          conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                          conn.setConnectTimeout(8000);
+                          conn.setReadTimeout(8000);
+                          conn.setDoOutput(true);
+                          JSONObject json = new JSONObject();
+                          json.put("sender", myName);
+                          json.put("target", targetSender);
+                          json.put("text", replyText);
+                          OutputStream os = conn.getOutputStream();
+                          os.write(json.toString().getBytes("UTF-8"));
+                          os.flush();
+                          os.close();
+                          conn.getResponseCode();
+                          conn.disconnect();
+                      } catch (Exception ignored) {}
                   }).start();
               }
           }
@@ -385,9 +372,7 @@ jobs:
           import android.graphics.Paint;
           import android.graphics.Path;
           import android.media.AudioAttributes;
-          import android.media.AudioManager;
           import android.media.RingtoneManager;
-          import android.media.ToneGenerator;
           import android.net.Uri;
           import android.os.Build;
           import android.os.IBinder;
@@ -404,22 +389,6 @@ jobs:
                   createChannels();
               }
 
-              public static void playSelectedMelody(Context ctx, String soundId) {
-                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                  String id = (soundId != null && !soundId.isEmpty()) ? soundId : sp.getString("sound_id", "alarm1");
-                  try {
-                      ToneGenerator tg = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 95);
-                      if ("bank1".equals(id) || "bank2".equals(id)) {
-                          tg.startTone(ToneGenerator.TONE_PROP_ACK, 280);
-                      } else if ("nice1".equals(id) || "nice2".equals(id) || "nice3".equals(id)) {
-                          tg.startTone(ToneGenerator.TONE_PROP_BEEP2, 320);
-                      } else if ("alarm2".equals(id)) {
-                          tg.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 450);
-                      } else {
-                          tg.startTone(ToneGenerator.TONE_PROP_NACK, 400);
-                      }
-                  } catch (Exception ignored) {}
-              }
               public static int resolveThemeBgColor(Context ctx) {
                   SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
                   String t = sp.getString("theme_id", "military");
@@ -535,9 +504,7 @@ jobs:
                       );
                       nm.createNotificationChannel(bgCh);
 
-                      Uri snd = RingtoneManager.getDefaultUri(
-                          RingtoneManager.TYPE_NOTIFICATION
-                      );
+                      Uri snd = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
                       AudioAttributes attrs = new AudioAttributes.Builder()
                           .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
                           .build();
@@ -551,7 +518,6 @@ jobs:
                       nm.createNotificationChannel(alCh);
                   }
               }
-
               private void createChannels() {
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       ensureHighPriorityChannel(getSystemService(NotificationManager.class));
@@ -566,13 +532,10 @@ jobs:
                   }
                   PendingIntent pi = PendingIntent.getActivity(ctx, 0, openIntent, piFlags);
                   return buildThemedAlertNotification(
-                      ctx, "msb_bg_service",
-                      "МСБ-55115 на связи",
+                      ctx, "msb_bg_service", "МСБ-55115 на связи",
                       "Защищенный канал оповещений активен",
-                      resolveThemeBgColor(ctx),
-                      resolveThemeAccentColor(ctx),
-                      null, pi, true,
-                      null, null, 0
+                      resolveThemeBgColor(ctx), resolveThemeAccentColor(ctx),
+                      null, pi, true, null, null, 0
                   );
               }
 
@@ -582,11 +545,8 @@ jobs:
                   return START_STICKY;
               }
 
-              @Override
-              public void onDestroy() { super.onDestroy(); }
-
-              @Override
-              public IBinder onBind(Intent intent) { return null; }
+              @Override public void onDestroy() { super.onDestroy(); }
+              @Override public IBinder onBind(Intent intent) { return null; }
           }
           EOF
 
@@ -614,12 +574,8 @@ jobs:
                   Map<String, String> data = msg.getData();
                   String title = data.get("title");
                   String body = data.get("body");
-                  if (title == null && msg.getNotification() != null) {
-                      title = msg.getNotification().getTitle();
-                  }
-                  if (body == null && msg.getNotification() != null) {
-                      body = msg.getNotification().getBody();
-                  }
+                  if (title == null && msg.getNotification() != null) title = msg.getNotification().getTitle();
+                  if (body == null && msg.getNotification() != null) body = msg.getNotification().getBody();
                   if (title == null) title = "МСБ-55115";
                   if (body == null) body = "Новое оповещение";
 
@@ -650,26 +606,19 @@ jobs:
                   NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                   if (nm == null) return;
                   MsbKeepAliveService.ensureHighPriorityChannel(nm);
-
                   Intent openIntent = new Intent(this, MainActivity.class);
                   openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                   int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                      piFlags |= PendingIntent.FLAG_IMMUTABLE;
-                  }
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
                   PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
 
                   String notifTag = data.get("tag");
-                  if (notifTag == null || notifTag.isEmpty()) {
-                      notifTag = "msb_alert_" + (title + "_" + body).hashCode();
-                  }
+                  if (notifTag == null || notifTag.isEmpty()) notifTag = "msb_alert_" + (title + "_" + body).hashCode();
                   int notifId = notifTag.hashCode() & 0x7fffffff;
                   nm.notify(notifTag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
-                      this, MsbKeepAliveService.ALERT_CH,
-                      title, body, bgCol, accCol, avatarBmp, pi, false,
-                      data.get("sender"), notifTag, notifId
+                      this, MsbKeepAliveService.ALERT_CH, title, body,
+                      bgCol, accCol, avatarBmp, pi, false, data.get("sender"), notifTag, notifId
                   ));
-
               }
           }
           EOF
@@ -684,20 +633,34 @@ jobs:
           import android.Manifest;
           import android.app.NotificationManager;
           import android.app.PendingIntent;
+          import android.content.Context;
           import android.content.Intent;
           import android.content.SharedPreferences;
           import android.content.pm.PackageManager;
           import android.graphics.Color;
+          import android.graphics.drawable.GradientDrawable;
           import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
           import android.os.PowerManager;
           import android.provider.Settings;
+          import android.text.Editable;
+          import android.text.InputType;
+          import android.text.TextWatcher;
+          import android.util.TypedValue;
+          import android.view.Gravity;
           import android.view.View;
+          import android.view.ViewGroup;
+          import android.view.WindowManager;
+          import android.view.inputmethod.EditorInfo;
+          import android.view.inputmethod.InputMethodManager;
           import android.webkit.JavascriptInterface;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
-          import android.view.WindowManager;
+          import android.widget.EditText;
+          import android.widget.FrameLayout;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
           import androidx.core.app.ActivityCompat;
           import androidx.core.content.ContextCompat;
           import androidx.core.content.FileProvider;
@@ -714,30 +677,28 @@ jobs:
           import java.net.URL;
           import java.util.ArrayList;
           import java.util.List;
+          import org.json.JSONObject;
 
           public class MainActivity extends BridgeActivity {
+              private LinearLayout nativeChatWrap;
+              private LinearLayout nativeCapsule;
+              private EditText nativeEdit;
+              private TextView nativeSendBtn;
+
+              private int dp(int v) {
+                  return Math.round(v * getResources().getDisplayMetrics().density);
+              }
+
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-
-                  // 1. Возвращаем честный системный ресайз окна под клавиатуру Android (отключаем перекрытие клавиатурой в Capacitor 8)
-                  WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
-                  getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-
-                  View rootView = findViewById(android.R.id.content);
-                  if (rootView != null) {
-                      ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
-                          Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars());
-                          v.setPadding(ime.left, ime.top, ime.right, ime.bottom);
-                          return WindowInsetsCompat.CONSUMED;
-                      });
-                  }
-
+                  WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                  getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+                  getWindow().getDecorView().setBackgroundColor(Color.parseColor("#0f172a"));
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       NotificationManager nm = getSystemService(NotificationManager.class);
                       MsbKeepAliveService.ensureHighPriorityChannel(nm);
                   }
-
                   requestRequiredPermissions();
 
                   try {
@@ -745,8 +706,7 @@ jobs:
                           PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
                           String pkg = getPackageName();
                           if (pm != null && !pm.isIgnoringBatteryOptimizations(pkg)) {
-                              String act = Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS;
-                              Intent bi = new Intent(act);
+                              Intent bi = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
                               bi.setData(Uri.parse("package:" + pkg));
                               startActivity(bi);
                           }
@@ -755,201 +715,329 @@ jobs:
 
                   try {
                       Intent svc = new Intent(this, MsbKeepAliveService.class);
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                          startForegroundService(svc);
-                      } else {
-                          startService(svc);
-                      }
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
+                      else startService(svc);
                   } catch (Exception ignored) {}
 
                   if (getBridge() != null && getBridge().getWebView() != null) {
                       WebView wv = getBridge().getWebView();
-                      // 2. Убираем принудительный LAYER_TYPE_HARDWARE (он сбивает курсор клавиатуры при удалении)
-                      // и сбрасываем старый кэш WebView при запуске APK
+                      wv.setBackgroundColor(Color.parseColor("#0f172a"));
                       wv.clearCache(true);
                       WebSettings ws = wv.getSettings();
                       ws.setJavaScriptEnabled(true);
                       ws.setDomStorageEnabled(true);
-                      ws.setCacheMode(WebSettings.LOAD_DEFAULT);
                       ws.setMediaPlaybackRequiresUserGesture(false);
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
                   }
+                  setupNativeMaxComposer();
               }
 
+              private void setupNativeMaxComposer() {
+                  FrameLayout root = findViewById(android.R.id.content);
+                  if (root == null) return;
+                  final View webChild = root.getChildAt(0);
+                  ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+                      Insets sys = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                      Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+                      if (webChild != null) webChild.setPadding(sys.left, sys.top, sys.right, sys.bottom);
+                      if (nativeChatWrap != null) {
+                          int bottomOffset = Math.max(ime.bottom, sys.bottom);
+                          FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) nativeChatWrap.getLayoutParams();
+                          if (lp.bottomMargin != bottomOffset) {
+                              lp.bottomMargin = bottomOffset;
+                              nativeChatWrap.setLayoutParams(lp);
+                          }
+                          boolean kbOpen = ime.bottom > dp(100);
+                          int bDp = Math.round(bottomOffset / getResources().getDisplayMetrics().density);
+                          evalJs("if(window.onMsbNativeKbHeight)window.onMsbNativeKbHeight(" + bDp + "," + kbOpen + ");");
+                      }
+                      return WindowInsetsCompat.CONSUMED;
+                  });
 
+                  nativeChatWrap = new LinearLayout(this);
+                  nativeChatWrap.setOrientation(LinearLayout.VERTICAL);
+                  nativeChatWrap.setBackgroundColor(Color.parseColor("#111827"));
+                  nativeChatWrap.setPadding(dp(8), dp(6), dp(8), dp(6));
+                  nativeChatWrap.setVisibility(View.GONE);
+
+                  nativeCapsule = new LinearLayout(this);
+                  nativeCapsule.setOrientation(LinearLayout.HORIZONTAL);
+                  nativeCapsule.setGravity(Gravity.BOTTOM);
+                  nativeCapsule.setPadding(dp(6), dp(4), dp(5), dp(4));
+
+                  TextView smileBtn = new TextView(this);
+                  smileBtn.setText("😊");
+                  smileBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+                  smileBtn.setGravity(Gravity.CENTER);
+                  smileBtn.setLayoutParams(new LinearLayout.LayoutParams(dp(36), dp(36)));
+                  smileBtn.setOnClickListener(v -> {
+                      hideNativeKeyboard();
+                      evalJs("if(window.toggleTgEmojiDrawer)window.toggleTgEmojiDrawer();");
+                  });
+
+                  nativeEdit = new EditText(this);
+                  nativeEdit.setHint("Написать сообщение...");
+                  nativeEdit.setHintTextColor(Color.parseColor("#94a3b8"));
+                  nativeEdit.setTextColor(Color.WHITE);
+                  nativeEdit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+                  nativeEdit.setBackgroundColor(Color.TRANSPARENT);
+                  nativeEdit.setMinLines(1);
+                  nativeEdit.setMaxLines(5);
+                  nativeEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT);
+                  nativeEdit.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+                  nativeEdit.setPadding(dp(6), dp(6), dp(6), dp(6));
+                  nativeEdit.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                  nativeEdit.addTextChangedListener(new TextWatcher() {
+                      @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+                      @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
+                          evalJs("if(window.onMsbNativeTyping)window.onMsbNativeTyping(" + (s.length() > 0) + ");");
+                      }
+                      @Override public void afterTextChanged(Editable s) {}
+                  });
+
+                  TextView plusBtn = new TextView(this);
+                  plusBtn.setText("➕");
+                  plusBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+                  plusBtn.setTextColor(Color.parseColor("#4ade80"));
+                  plusBtn.setGravity(Gravity.CENTER);
+                  plusBtn.setLayoutParams(new LinearLayout.LayoutParams(dp(36), dp(36)));
+                  plusBtn.setOnClickListener(v -> {
+                      hideNativeKeyboard();
+                      evalJs("if(window.toggleMsbRadialToolbar)window.toggleMsbRadialToolbar();");
+                  });
+
+                  nativeSendBtn = new TextView(this);
+                  nativeSendBtn.setText("➤");
+                  nativeSendBtn.setTextColor(Color.WHITE);
+                  nativeSendBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+                  nativeSendBtn.setGravity(Gravity.CENTER);
+                  LinearLayout.LayoutParams sendLp = new LinearLayout.LayoutParams(dp(38), dp(38));
+                  sendLp.leftMargin = dp(4);
+                  nativeSendBtn.setLayoutParams(sendLp);
+                  nativeSendBtn.setOnClickListener(v -> {
+                      String txt = nativeEdit.getText().toString().trim();
+                      if (txt.isEmpty()) return;
+                      nativeEdit.setText("");
+                      String qTxt = JSONObject.quote(txt);
+                      evalJs("if(window.sendFromNativeMaxBar)window.sendFromNativeMaxBar(" + qTxt + ");");
+                  });
+
+                  nativeCapsule.addView(smileBtn);
+                  nativeCapsule.addView(nativeEdit);
+                  nativeCapsule.addView(plusBtn);
+                  nativeCapsule.addView(nativeSendBtn);
+                  nativeChatWrap.addView(nativeCapsule);
+
+                  FrameLayout.LayoutParams wrapLp = new FrameLayout.LayoutParams(
+                      ViewGroup.LayoutParams.MATCH_PARENT,
+                      ViewGroup.LayoutParams.WRAP_CONTENT,
+                      Gravity.BOTTOM
+                  );
+                  root.addView(nativeChatWrap, wrapLp);
+                  applyNativeBarTheme();
+              }
+
+              private void applyNativeBarTheme() {
+                  if (nativeCapsule == null) return;
+                  int acc = MsbKeepAliveService.resolveThemeAccentColor(this);
+                  GradientDrawable bg = new GradientDrawable();
+                  bg.setColor(Color.parseColor("#0f172a"));
+                  bg.setCornerRadius(dp(23));
+                  bg.setStroke(dp(2), acc);
+                  nativeCapsule.setBackground(bg);
+                  if (nativeSendBtn != null) {
+                      GradientDrawable sBg = new GradientDrawable();
+                      sBg.setShape(GradientDrawable.OVAL);
+                      sBg.setColor(acc);
+                      nativeSendBtn.setBackground(sBg);
+                  }
+              }
+
+              private void hideNativeKeyboard() {
+                  if (nativeEdit == null) return;
+                  InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                  if (imm != null) imm.hideSoftInputFromWindow(nativeEdit.getWindowToken(), 0);
+              }
+
+              private void evalJs(final String script) {
+                  runOnUiThread(() -> {
+                      if (getBridge() != null && getBridge().getWebView() != null) {
+                          getBridge().getWebView().evaluateJavascript(script, null);
+                      }
+                  });
+              }
               public class MsbNativeBridge {
                   @JavascriptInterface
-                  public void setIdentity(String user, String callsign, String origin) {
+                  public void setChatBarVisible(final boolean v) {
+                      runOnUiThread(() -> {
+                          if (nativeChatWrap != null) {
+                              applyNativeBarTheme();
+                              nativeChatWrap.setVisibility(v ? View.VISIBLE : View.GONE);
+                              if (!v) hideNativeKeyboard();
+                          }
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void setChatBarText(final String t, final boolean f) {
+                      runOnUiThread(() -> {
+                          if (nativeEdit != null) {
+                              nativeEdit.setText(t != null ? t : "");
+                              nativeEdit.setSelection(nativeEdit.getText().length());
+                              if (f) {
+                                  nativeEdit.requestFocus();
+                                  InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                                  if (imm != null) imm.showSoftInput(nativeEdit, InputMethodManager.SHOW_IMPLICIT);
+                              }
+                          }
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void appendChatEmoji(final String em) {
+                      runOnUiThread(() -> {
+                          if (nativeEdit != null && em != null) {
+                              int st = Math.max(nativeEdit.getSelectionStart(), 0);
+                              int en = Math.max(nativeEdit.getSelectionEnd(), 0);
+                              nativeEdit.getText().replace(Math.min(st, en), Math.max(st, en), em);
+                          }
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void setIdentity(String u, String c, String o) {
                       try {
-                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                          sp.edit()
-                              .putString("user", user != null ? user : "")
-                              .putString("callsign", callsign != null ? callsign : "")
-                              .putString("origin", origin != null ? origin : "")
+                          getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
+                              .putString("user", u != null ? u : "")
+                              .putString("callsign", c != null ? c : "")
+                              .putString("origin", o != null ? o : "")
                               .apply();
                       } catch (Exception ignored) {}
                   }
 
                   @JavascriptInterface
-                  public void setTheme(String themeId, String colorHex) {
+                  public void setTheme(String t, String hex) {
                       try {
-                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                          sp.edit()
-                              .putString("theme_id", themeId != null ? themeId : "military")
+                          getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
+                              .putString("theme_id", t != null ? t : "military")
                               .apply();
+                          runOnUiThread(() -> applyNativeBarTheme());
                       } catch (Exception ignored) {}
                   }
 
                   @JavascriptInterface
-                  public void setSound(String soundId) {
+                  public void setSound(String s) {
                       try {
-                          SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                          sp.edit()
-                              .putString("sound_id", soundId != null ? soundId : "alarm1")
+                          getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
+                              .putString("sound_id", s != null ? s : "alarm1")
                               .apply();
                       } catch (Exception ignored) {}
                   }
+
                   @JavascriptInterface
                   public void notify(final String title, final String body, final String idStr, final String colorHex) {
-                      new Thread(new Runnable() {
-                          @Override
-                          public void run() {
+                      new Thread(() -> {
+                          try {
+                              NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                              if (nm == null) return;
+                              MsbKeepAliveService.ensureHighPriorityChannel(nm);
+                              int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
+                              int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
+                              android.graphics.Bitmap avatarBmp = null;
                               try {
-                                  NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                                  if (nm == null) return;
-                                  MsbKeepAliveService.ensureHighPriorityChannel(nm);
-
-                                  int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
-                                  int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
-                                  if (colorHex != null) {
-                                      int sep = colorHex.indexOf('|');
-                                      if (sep > 0) {
-                                          String bgStr = colorHex.substring(0, sep);
-                                          String accStr = colorHex.substring(sep + 1);
-                                          try { bgCol = Color.parseColor(bgStr); } catch (Exception ignored) {}
-                                          try { accCol = Color.parseColor(accStr); } catch (Exception ignored) {}
-                                      } else if (colorHex.startsWith("#")) {
-                                          try { bgCol = Color.parseColor(colorHex); } catch (Exception ignored) {}
-                                      }
-                                  }
-                                  android.graphics.Bitmap avatarBmp = null;
-                                  try {
-                                      SharedPreferences sp = getSharedPreferences("msb_prefs", MODE_PRIVATE);
-                                      String origin = sp.getString("origin", "");
-                                      if (!origin.isEmpty() && title != null) {
-                                          String senderRaw = title.contains("•") ? title.substring(title.lastIndexOf('•') + 1) : title;
-                                          senderRaw = senderRaw.replace("👥", "").trim().toLowerCase();
-
-                                          if (!senderRaw.isEmpty()) {
-                                              String urlStr = origin + "/api/avatar-img/" + java.net.URLEncoder.encode(senderRaw, "UTF-8") + ".jpg";
-                                              HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-                                              conn.setConnectTimeout(2500);
-                                              conn.setReadTimeout(2500);
-                                              conn.connect();
-                                              if (conn.getResponseCode() == 200) {
-                                                  InputStream is = conn.getInputStream();
-                                                  avatarBmp = android.graphics.BitmapFactory.decodeStream(is);
-                                                  is.close();
-                                              }
+                                  String origin = getSharedPreferences("msb_prefs", MODE_PRIVATE).getString("origin", "");
+                                  if (!origin.isEmpty() && title != null) {
+                                      String raw = title.contains("•") ? title.substring(title.lastIndexOf('•') + 1) : title;
+                                      String sRaw = raw.replace("👥", "").trim().toLowerCase();
+                                      if (!sRaw.isEmpty()) {
+                                          String u = origin + "/api/avatar-img/" + java.net.URLEncoder.encode(sRaw, "UTF-8") + ".jpg";
+                                          HttpURLConnection conn = (HttpURLConnection) new URL(u).openConnection();
+                                          conn.setConnectTimeout(2500);
+                                          conn.setReadTimeout(2500);
+                                          conn.connect();
+                                          if (conn.getResponseCode() == 200) {
+                                              InputStream is = conn.getInputStream();
+                                              avatarBmp = android.graphics.BitmapFactory.decodeStream(is);
+                                              is.close();
                                           }
                                       }
-                                  } catch (Exception ignored) {}
-
-                                  Intent openIntent = new Intent(MainActivity.this, MainActivity.class);
-                                  openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                      piFlags |= PendingIntent.FLAG_IMMUTABLE;
                                   }
-                                  PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
-
-                                  String tag = (idStr != null && !idStr.isEmpty())
-                                      ? ("msb-alert-" + idStr)
-                                      : ("msb-alert-" + (title + "_" + body).hashCode());
-                                  int notifId = tag.hashCode() & 0x7fffffff;
-                                  String replyTarget = (title != null && title.contains("•"))
-                                      ? title.substring(title.lastIndexOf('•') + 1).trim()
-                                      : title;
-                                  nm.notify(tag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
-                                      MainActivity.this, MsbKeepAliveService.ALERT_CH,
-                                      title != null ? title : "МСБ-55115",
-                                      body != null ? body : "",
-                                      bgCol, accCol, avatarBmp, pi, false,
-                                      replyTarget, tag, notifId
-                                  ));
                               } catch (Exception ignored) {}
-                          }
+                              Intent openIntent = new Intent(MainActivity.this, MainActivity.class);
+                              openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                              int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+                              PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
+                              String tag = (idStr != null && !idStr.isEmpty())
+                                  ? ("msb-alert-" + idStr)
+                                  : ("msb-alert-" + (title + "_" + body).hashCode());
+                              int notifId = tag.hashCode() & 0x7fffffff;
+                              String replyTarget = (title != null && title.contains("•"))
+                                  ? title.substring(title.lastIndexOf('•') + 1).trim()
+                                  : title;
+                              nm.notify(tag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                                  MainActivity.this, MsbKeepAliveService.ALERT_CH,
+                                  title != null ? title : "МСБ-55115",
+                                  body != null ? body : "",
+                                  bgCol, accCol, avatarBmp, pi, false,
+                                  replyTarget, tag, notifId
+                              ));
+                          } catch (Exception ignored) {}
                       }).start();
                   }
+
                   @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
                           try {
-                              Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
-                              permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                              startActivity(permIntent);
+                              Intent perm = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
+                              perm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              startActivity(perm);
                           } catch (Exception ignored) {}
                           return;
                       }
-                      new Thread(new Runnable() {
-                          @Override
-                          public void run() {
-                              try {
-                                  File outFile = new File(getCacheDir(), "update_msb.apk");
-                                  if (outFile.exists()) outFile.delete();
-                                  HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
-                                  conn.setInstanceFollowRedirects(true);
-                                  conn.setConnectTimeout(20000);
-                                  conn.setReadTimeout(90000);
-                                  conn.connect();
-                                  if (conn.getResponseCode() != 200) return;
-
-                                  InputStream is = conn.getInputStream();
-                                  FileOutputStream fos = new FileOutputStream(outFile);
-                                  byte[] buf = (byte[]) Array.newInstance(byte.class, 8192);
-                                  int len;
-                                  while ((len = is.read(buf)) != -1) {
-                                      fos.write(buf, 0, len);
-                                  }
-                                  fos.flush();
-                                  fos.close();
-                                  is.close();
-
-                                  if (outFile.length() < 500000) return;
-
-                                  final Uri apkUri = FileProvider.getUriForFile(
-                                      MainActivity.this,
-                                      getPackageName() + ".msbprovider",
-                                      outFile
-                                  );
-                                  runOnUiThread(new Runnable() {
-                                      @Override
-                                      public void run() {
-                                          try {
-                                              Intent intent = new Intent(Intent.ACTION_VIEW);
-                                              intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-                                              intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                                              startActivity(intent);
-                                          } catch (Exception ignored) {}
-                                      }
-                                  });
-                              } catch (Exception ignored) {}
-                          }
+                      new Thread(() -> {
+                          try {
+                              File outFile = new File(getCacheDir(), "update_msb.apk");
+                              if (outFile.exists()) outFile.delete();
+                              HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
+                              conn.setInstanceFollowRedirects(true);
+                              conn.setConnectTimeout(20000);
+                              conn.setReadTimeout(90000);
+                              conn.connect();
+                              if (conn.getResponseCode() != 200) return;
+                              InputStream is = conn.getInputStream();
+                              FileOutputStream fos = new FileOutputStream(outFile);
+                              byte[] buf = (byte[]) Array.newInstance(byte.class, 8192);
+                              int len;
+                              while ((len = is.read(buf)) != -1) fos.write(buf, 0, len);
+                              fos.flush();
+                              fos.close();
+                              is.close();
+                              if (outFile.length() < 500000) return;
+                              final Uri apkUri = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".msbprovider", outFile);
+                              runOnUiThread(() -> {
+                                  try {
+                                      Intent i = new Intent(Intent.ACTION_VIEW);
+                                      i.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                      i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                      startActivity(i);
+                                  } catch (Exception ignored) {}
+                              });
+                          } catch (Exception ignored) {}
                       }).start();
                   }
               }
 
               private void requestRequiredPermissions() {
                   List<String> need = new ArrayList<>();
-                  int granted = PackageManager.PERMISSION_GRANTED;
+                  int g = PackageManager.PERMISSION_GRANTED;
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                      String pNotif = Manifest.permission.POST_NOTIFICATIONS;
-                      if (ContextCompat.checkSelfPermission(this, pNotif) != granted) need.add(pNotif);
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != g) {
+                          need.add(Manifest.permission.POST_NOTIFICATIONS);
+                      }
                   }
-                  String pAudio = Manifest.permission.RECORD_AUDIO;
-                  if (ContextCompat.checkSelfPermission(this, pAudio) != granted) need.add(pAudio);
-                  String pCam = Manifest.permission.CAMERA;
-                  if (ContextCompat.checkSelfPermission(this, pCam) != granted) need.add(pCam);
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != g) need.add(Manifest.permission.RECORD_AUDIO);
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != g) need.add(Manifest.permission.CAMERA);
                   if (!need.isEmpty()) {
                       String[] arr = (String[]) Array.newInstance(String.class, need.size());
                       need.toArray(arr);
@@ -966,7 +1054,6 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > android/app/msb.keystore
           else
-            echo "⚠️ Секрет KEYSTORE_BASE64 не задан! Сгенерируйте ключ один раз и добавьте в GitHub Secrets."
             keytool -genkey -v -keystore android/app/msb.keystore -alias msbkey \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass msb55115 -keypass msb55115 \
