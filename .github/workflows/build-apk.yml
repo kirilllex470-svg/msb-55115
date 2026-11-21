@@ -61,7 +61,6 @@ jobs:
             @capacitor/android@8 \
             @capacitor/push-notifications@8
           npx cap add android
-
       - name: Подключение google-services.json в Gradle
         run: |
           cp google-services.json android/app/google-services.json
@@ -111,11 +110,9 @@ jobs:
               s = s.replace("<application", ct, 1)
 
           if "windowSoftInputMode" in s:
-              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:windowSoftInputMode=\"adjustNothing\"")
-              s = s.replace("android:windowSoftInputMode=\"adjustResize\"", "android:windowSoftInputMode=\"adjustNothing\"")
+              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:windowSoftInputMode=\"adjustResize\"")
           else:
-              s = s.replace("<activity", "<activity android:windowSoftInputMode=\"adjustNothing\"", 1)
-
+              s = s.replace("<activity", "<activity android:windowSoftInputMode=\"adjustResize\"", 1)
           svc = "\n".join([
               "        <meta-data",
               "            android:name=\"com.google.firebase.messaging.default_notification_channel_id\"",
@@ -192,7 +189,6 @@ jobs:
               col = (255, 255, 255, 255) if silhouette_only else (34, 197, 94, 255)
               d.ellipse((4, 4, size - 5, size - 5), outline=col, width=max(2, size // 12))
               return out
-
           os.makedirs("android/app/src/main/res/drawable", exist_ok=True)
           build_logo_png(96, True).save("android/app/src/main/res/drawable/ic_msb_logo.png", "PNG")
           build_logo_png(192, False).save("android/app/src/main/res/drawable/msb_brand_logo.png", "PNG")
@@ -271,7 +267,6 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.os.Build;
-
           public class MsbRestartReceiver extends BroadcastReceiver {
               @Override
               public void onReceive(Context ctx, Intent intent) {
@@ -354,7 +349,6 @@ jobs:
               }
           }
           EOF
-
           echo "$PKG_LINE" > "$JAVA_DIR/MsbKeepAliveService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbKeepAliveService.java"
 
@@ -435,7 +429,6 @@ jobs:
 
                   Bitmap bigCleanAvatar = prepareLargeCleanAvatar(avatarBmp);
                   int layoutId = ctx.getResources().getIdentifier("msb_notif_custom", "layout", pkg);
-
                   NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
                       .setSmallIcon(smallIcon)
                       .setContentTitle(title)
@@ -606,6 +599,7 @@ jobs:
                   NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                   if (nm == null) return;
                   MsbKeepAliveService.ensureHighPriorityChannel(nm);
+
                   Intent openIntent = new Intent(this, MainActivity.class);
                   openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                   int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -638,6 +632,7 @@ jobs:
           import android.content.SharedPreferences;
           import android.content.pm.PackageManager;
           import android.graphics.Color;
+          import android.graphics.Rect;
           import android.graphics.drawable.GradientDrawable;
           import android.net.Uri;
           import android.os.Build;
@@ -651,6 +646,7 @@ jobs:
           import android.view.Gravity;
           import android.view.View;
           import android.view.ViewGroup;
+          import android.view.ViewTreeObserver;
           import android.view.WindowManager;
           import android.view.inputmethod.EditorInfo;
           import android.view.inputmethod.InputMethodManager;
@@ -664,10 +660,6 @@ jobs:
           import androidx.core.app.ActivityCompat;
           import androidx.core.content.ContextCompat;
           import androidx.core.content.FileProvider;
-          import androidx.core.graphics.Insets;
-          import androidx.core.view.ViewCompat;
-          import androidx.core.view.WindowCompat;
-          import androidx.core.view.WindowInsetsCompat;
           import com.getcapacitor.BridgeActivity;
           import java.io.File;
           import java.io.FileOutputStream;
@@ -684,17 +676,17 @@ jobs:
               private LinearLayout nativeCapsule;
               private EditText nativeEdit;
               private TextView nativeSendBtn;
+              private int lastKbHeight = -1;
 
               private int dp(int v) {
                   return Math.round(v * getResources().getDisplayMetrics().density);
               }
-
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
                   getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
                   getWindow().getDecorView().setBackgroundColor(Color.parseColor("#0f172a"));
+
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       NotificationManager nm = getSystemService(NotificationManager.class);
                       MsbKeepAliveService.ensureHighPriorityChannel(nm);
@@ -733,26 +725,8 @@ jobs:
               }
 
               private void setupNativeMaxComposer() {
-                  FrameLayout root = findViewById(android.R.id.content);
+                  final FrameLayout root = findViewById(android.R.id.content);
                   if (root == null) return;
-                  final View webChild = root.getChildAt(0);
-                  ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-                      Insets sys = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                      Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-                      if (webChild != null) webChild.setPadding(sys.left, sys.top, sys.right, sys.bottom);
-                      if (nativeChatWrap != null) {
-                          int bottomOffset = Math.max(ime.bottom, sys.bottom);
-                          FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) nativeChatWrap.getLayoutParams();
-                          if (lp.bottomMargin != bottomOffset) {
-                              lp.bottomMargin = bottomOffset;
-                              nativeChatWrap.setLayoutParams(lp);
-                          }
-                          boolean kbOpen = ime.bottom > dp(100);
-                          int bDp = Math.round(bottomOffset / getResources().getDisplayMetrics().density);
-                          evalJs("if(window.onMsbNativeKbHeight)window.onMsbNativeKbHeight(" + bDp + "," + kbOpen + ");");
-                      }
-                      return WindowInsetsCompat.CONSUMED;
-                  });
 
                   nativeChatWrap = new LinearLayout(this);
                   nativeChatWrap.setOrientation(LinearLayout.VERTICAL);
@@ -783,14 +757,19 @@ jobs:
                   nativeEdit.setBackgroundColor(Color.TRANSPARENT);
                   nativeEdit.setMinLines(1);
                   nativeEdit.setMaxLines(5);
-                  nativeEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT);
+                  nativeEdit.setInputType(
+                      InputType.TYPE_CLASS_TEXT |
+                      InputType.TYPE_TEXT_FLAG_CAP_SENTENCES |
+                      InputType.TYPE_TEXT_FLAG_MULTI_LINE |
+                      InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
+                  );
                   nativeEdit.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
                   nativeEdit.setPadding(dp(6), dp(6), dp(6), dp(6));
                   nativeEdit.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                   nativeEdit.addTextChangedListener(new TextWatcher() {
                       @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
                       @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
-                          evalJs("if(window.onMsbNativeTyping)window.onMsbNativeTyping(" + (s.length() > 0) + ");");
+                          evalJs("if(typeof notifyServerTyping==='function')notifyServerTyping(" + (s.length() > 0) + ");");
                       }
                       @Override public void afterTextChanged(Editable s) {}
                   });
@@ -819,7 +798,7 @@ jobs:
                       if (txt.isEmpty()) return;
                       nativeEdit.setText("");
                       String qTxt = JSONObject.quote(txt);
-                      evalJs("if(window.sendFromNativeMaxBar)window.sendFromNativeMaxBar(" + qTxt + ");");
+                      evalJs("(function(){var i=document.getElementById('text-input');if(i){i.value=" + qTxt + ";if(typeof sendMessage==='function')sendMessage();}})();");
                   });
 
                   nativeCapsule.addView(smileBtn);
@@ -827,16 +806,56 @@ jobs:
                   nativeCapsule.addView(plusBtn);
                   nativeCapsule.addView(nativeSendBtn);
                   nativeChatWrap.addView(nativeCapsule);
-
-                  FrameLayout.LayoutParams wrapLp = new FrameLayout.LayoutParams(
+                  root.addView(nativeChatWrap, new FrameLayout.LayoutParams(
                       ViewGroup.LayoutParams.MATCH_PARENT,
                       ViewGroup.LayoutParams.WRAP_CONTENT,
                       Gravity.BOTTOM
-                  );
-                  root.addView(nativeChatWrap, wrapLp);
+                  ));
                   applyNativeBarTheme();
-              }
 
+                  root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+                      @Override
+                      public void onGlobalLayout() {
+                          Rect r = new Rect();
+                          root.getWindowVisibleDisplayFrame(r);
+                          int screenHeight = root.getRootView().getHeight();
+                          int navBottom = screenHeight - root.getHeight();
+                          int kbHeight = Math.max(0, (screenHeight - r.bottom) - Math.max(0, navBottom));
+                          if (kbHeight != lastKbHeight) {
+                              lastKbHeight = kbHeight;
+                              FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) nativeChatWrap.getLayoutParams();
+                              lp.bottomMargin = kbHeight;
+                              nativeChatWrap.setLayoutParams(lp);
+                              int padPx = Math.round((kbHeight + nativeChatWrap.getHeight() + dp(12)) / getResources().getDisplayMetrics().density);
+                              evalJs("(function(){var m=document.getElementById('messages');if(m&&window.__msbNatActive){m.style.paddingBottom='" + padPx + "px';if(" + (kbHeight > dp(80)) + ")m.scrollTop=m.scrollHeight;}})();");
+                          }
+                      }
+                  });
+
+                  root.postDelayed(new Runnable() {
+                      @Override
+                      public void run() {
+                          String autoHookJs =
+                              "(function(){" +
+                              "var m=document.getElementById('messenger-modal');" +
+                              "var sb=document.getElementById('app-sidebar');" +
+                              "var w=document.getElementById('msb-work-window-modal');" +
+                              "var open=Boolean(m&&m.style.display==='flex')&&Boolean(typeof currentRoomId!=='undefined'&&currentRoomId)&&(window.innerWidth>768||(sb&&sb.classList.contains('hidden')))&&!(w&&w.style.display==='flex');" +
+                              "window.__msbNatActive=open;" +
+                              "var cap=document.getElementById('tg-capsule-wrap');" +
+                              "if(cap)cap.style.display=open?'none':'flex';" +
+                              "if(!window.__msbEmojiHooked&&typeof window.insertTgEmoji==='function'){" +
+                              "window.__msbEmojiHooked=true;" +
+                              "var orig=window.insertTgEmoji;" +
+                              "window.insertTgEmoji=function(em){if(window.__msbNatActive&&window.MsbNative){if(typeof saveRecentEmoji==='function')saveRecentEmoji(em);window.MsbNative.appendChatEmoji(em);}else{orig(em);}};" +
+                              "}" +
+                              "if(window.MsbNative)window.MsbNative.setChatBarVisible(open);" +
+                              "})();";
+                          evalJs(autoHookJs);
+                          root.postDelayed(this, 300);
+                      }
+                  }, 800);
+              }
               private void applyNativeBarTheme() {
                   if (nativeCapsule == null) return;
                   int acc = MsbKeepAliveService.resolveThemeAccentColor(this);
@@ -866,9 +885,14 @@ jobs:
                       }
                   });
               }
+
               public class MsbNativeBridge {
+                  private boolean lastBarVis = false;
+
                   @JavascriptInterface
                   public void setChatBarVisible(final boolean v) {
+                      if (v == lastBarVis) return;
+                      lastBarVis = v;
                       runOnUiThread(() -> {
                           if (nativeChatWrap != null) {
                               applyNativeBarTheme();
@@ -903,7 +927,6 @@ jobs:
                           }
                       });
                   }
-
                   @JavascriptInterface
                   public void setIdentity(String u, String c, String o) {
                       try {
@@ -984,7 +1007,6 @@ jobs:
                           } catch (Exception ignored) {}
                       }).start();
                   }
-
                   @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
