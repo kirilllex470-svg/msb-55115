@@ -1513,7 +1513,6 @@ function sendMessage() {
     if (text === '' || !chatUser || !currentRoomId) return;
 
     if (editingMessageId) {
-    if (editingMessageId) {
         var editId = editingMessageId;
         editingMessageId = null;
         textInput.value = '';
@@ -1530,6 +1529,7 @@ function sendMessage() {
         });
         return;
     }
+
 
     var qId = quotedMessageId || null;
 

@@ -333,7 +333,8 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v8';",
+   const SHELL_CACHE = 'msb55115-shell-v9';
+
 
 
     "const MEDIA_CACHE = 'msb55115-media-v1';",
