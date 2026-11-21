@@ -41,14 +41,19 @@ jobs:
           else:
               cfg = {"appName": "МСБ-55115", "webDir": "www"}
           cfg["appId"] = pkg
-          cfg.setdefault("plugins", {})["PushNotifications"] = {
+          plugins = cfg.setdefault("plugins", {})
+          plugins["PushNotifications"] = {
               "presentationOptions": ["badge", "sound", "alert"]
+          }
+          plugins["Keyboard"] = {
+              "resize": "body",
+              "resizeOnFullScreen": True
           }
           json.dump(cfg, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
           print("Установлен appId:", pkg)
           '
 
-      - name: Установка Capacitor 8 и Push Notifications
+      - name: Установка Capacitor 8, Keyboard и Push Notifications
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
           mkdir -p www
@@ -59,8 +64,10 @@ jobs:
             @capacitor/core@8 \
             @capacitor/cli@8 \
             @capacitor/android@8 \
-            @capacitor/push-notifications@8
+            @capacitor/push-notifications@8 \
+            @capacitor/keyboard@8
           npx cap add android
+
 
       - name: Подключение google-services.json в Gradle
         run: |
@@ -204,6 +211,8 @@ jobs:
               ic.save(d_dir + "/ic_launcher_round.png", "PNG")
 
           for xml_f in ["android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml", "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"]:
+
+
               if os.path.exists(xml_f):
                   os.remove(xml_f)
 
@@ -688,9 +697,14 @@ jobs:
           import android.webkit.JavascriptInterface;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
+          import android.view.WindowManager;
           import androidx.core.app.ActivityCompat;
           import androidx.core.content.ContextCompat;
           import androidx.core.content.FileProvider;
+          import androidx.core.graphics.Insets;
+          import androidx.core.view.ViewCompat;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
           import com.getcapacitor.BridgeActivity;
           import java.io.File;
           import java.io.FileOutputStream;
@@ -705,6 +719,19 @@ jobs:
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+
+                  // 1. Возвращаем честный системный ресайз окна под клавиатуру Android (отключаем перекрытие клавиатурой в Capacitor 8)
+                  WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+                  getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+
+                  View rootView = findViewById(android.R.id.content);
+                  if (rootView != null) {
+                      ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
+                          Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars());
+                          v.setPadding(ime.left, ime.top, ime.right, ime.bottom);
+                          return WindowInsetsCompat.CONSUMED;
+                      });
+                  }
 
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       NotificationManager nm = getSystemService(NotificationManager.class);
@@ -737,14 +764,18 @@ jobs:
 
                   if (getBridge() != null && getBridge().getWebView() != null) {
                       WebView wv = getBridge().getWebView();
-                      wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                      // 2. Убираем принудительный LAYER_TYPE_HARDWARE (он сбивает курсор клавиатуры при удалении)
+                      // и сбрасываем старый кэш WebView при запуске APK
+                      wv.clearCache(true);
                       WebSettings ws = wv.getSettings();
                       ws.setJavaScriptEnabled(true);
                       ws.setDomStorageEnabled(true);
+                      ws.setCacheMode(WebSettings.LOAD_DEFAULT);
                       ws.setMediaPlaybackRequiresUserGesture(false);
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
                   }
               }
+
 
               public class MsbNativeBridge {
                   @JavascriptInterface
