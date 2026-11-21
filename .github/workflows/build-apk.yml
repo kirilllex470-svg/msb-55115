@@ -817,28 +817,24 @@ jobs:
                   ));
                   applyNativeBarTheme();
 
-                  WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-                  final View webChild = root.getChildAt(0);
+                  WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
                   ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-                      Insets sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
                       Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+                      Insets sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                      int kbHeight = Math.max(0, ime.bottom - sysBars.bottom);
 
-                      if (webChild != null && webChild != nativeChatWrap) {
-                          webChild.setPadding(sysBars.left, sysBars.top, sysBars.right, sysBars.bottom);
-                      }
+                      if (kbHeight != lastKbHeight) {
+                          lastKbHeight = kbHeight;
+                          nativeChatWrap.setTranslationY(-kbHeight);
 
-                      int bottomLift = Math.max(ime.bottom, sysBars.bottom);
-                      if (bottomLift != lastKbHeight) {
-                          lastKbHeight = bottomLift;
-                          nativeChatWrap.setTranslationY(-bottomLift);
-
-                          int extraWebPadDp = Math.round((bottomLift + dp(62)) / getResources().getDisplayMetrics().density);
-                          boolean isKbOpen = ime.bottom > dp(80);
+                          int extraWebPadDp = Math.round((kbHeight + dp(64)) / getResources().getDisplayMetrics().density);
+                          boolean isKbOpen = kbHeight > dp(80);
                           evalJs("(function(){var m=document.getElementById('messages');if(m&&window.__msbNatActive){m.style.paddingBottom='" + extraWebPadDp + "px';if(" + isKbOpen + ")m.scrollTop=m.scrollHeight;}})();");
                       }
-                      return WindowInsetsCompat.CONSUMED;
+                      return ViewCompat.onApplyWindowInsets(v, insets);
                   });
+
 
 
                   root.postDelayed(new Runnable() {
@@ -1133,4 +1129,3 @@ jobs:
         with:
           name: MSB55115-FCM-APK
           path: android/app/build/outputs/apk/release/app-release.apk
-
