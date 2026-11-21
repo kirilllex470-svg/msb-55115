@@ -1081,11 +1081,26 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
+        var lastKnownScrollH = 36;
         tInput.addEventListener('input', function(e) {
-            tInput.style.height = '34px';
-            tInput.style.height = Math.min(tInput.scrollHeight, 112) + 'px';
+            requestAnimationFrame(function() {
+                if (!tInput.value) {
+                    if (lastKnownScrollH !== 36) {
+                        tInput.style.height = '36px';
+                        lastKnownScrollH = 36;
+                    }
+                    return;
+                }
+                var curH = tInput.scrollHeight;
+                if (curH > lastKnownScrollH) {
+                    var nextH = Math.min(curH, 110);
+                    tInput.style.height = nextH + 'px';
+                    lastKnownScrollH = nextH;
+                }
+            });
             if (isAndroidComposing || (e && e.isComposing)) return;
             if (!currentRoomId) return;
+
 
             var hasVal = tInput.value.trim().length > 0;
             if (hasVal) {
@@ -1504,6 +1519,7 @@ function markChatAsRead(roomId) {
 }
 
 var editingMessageId = null;
+var lastKnownScrollH = 36;
 
 function sendMessage() {
     chatUser = getActiveChatIdentity();
@@ -1516,7 +1532,8 @@ function sendMessage() {
         var editId = editingMessageId;
         editingMessageId = null;
         textInput.value = '';
-        textInput.style.height = '34px';
+        textInput.style.height = '36px';
+        lastKnownScrollH = 36;
         cancelReply();
         fetch('/api/messages/edit', {
             method: 'POST',
@@ -1529,6 +1546,17 @@ function sendMessage() {
         });
         return;
     }
+
+    var qId = quotedMessageId || null;
+
+    var qTxt = quotedMessageText || null;
+    var qSnd = quotedMessageSender || null;
+
+    textInput.value = '';
+    textInput.style.height = '36px';
+    lastKnownScrollH = 36;
+    if (stopTypingDebounce) clearTimeout(stopTypingDebounce);
+
 
 
     var qId = quotedMessageId || null;
