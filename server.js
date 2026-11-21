@@ -1182,6 +1182,9 @@ const server = http.createServer(function(req, res) {
     }
 
     if (urlPath.startsWith('/uploads/')) {
+        const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        const isDownload = myUrl.searchParams.get('dl') === '1';
+        const customName = myUrl.searchParams.get('name') || path.basename(urlPath);
         const fileName = path.basename(urlPath);
         const filePath = path.join(UPLOADS_DIR, fileName);
         fs.stat(filePath, function(err, stat) {
@@ -1191,14 +1194,16 @@ const server = http.createServer(function(req, res) {
             }
             let contentType = 'application/octet-stream';
             const ext = path.extname(urlPath).toLowerCase();
-            if (ext === '.mp4') contentType = 'video/mp4';
-            else if (ext === '.webm') contentType = fileName.startsWith('audio_') ? 'audio/webm' : 'video/webm';
-            else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
-            else if (ext === '.png') contentType = 'image/png';
-            else if (ext === '.gif') contentType = 'image/gif';
-            else if (ext === '.pdf') contentType = 'application/pdf';
+            if (!isDownload) {
+                if (ext === '.mp4') contentType = 'video/mp4';
+                else if (ext === '.webm') contentType = fileName.startsWith('audio_') ? 'audio/webm' : 'video/webm';
+                else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+                else if (ext === '.png') contentType = 'image/png';
+                else if (ext === '.gif') contentType = 'image/gif';
+                else if (ext === '.pdf') contentType = 'application/pdf';
+            }
             const range = req.headers.range;
-            if (range) {
+            if (range && !isDownload) {
                 const parts = range.replace(/bytes=/, "").split("-");
                 const start = parseInt(parts.at(0), 10);
                 const end = parts.at(1) ? parseInt(parts.at(1), 10) : stat.size - 1;
@@ -1215,17 +1220,22 @@ const server = http.createServer(function(req, res) {
                 });
                 fs.createReadStream(filePath, { start: start, end: end }).pipe(res);
             } else {
-                res.writeHead(200, {
+                const headers = {
                     'Content-Length': stat.size,
                     'Content-Type': contentType,
                     'Accept-Ranges': 'bytes',
-                    'Cache-Control': 'public, max-age=86400'
-                });
+                    'Cache-Control': isDownload ? 'no-store' : 'public, max-age=86400'
+                };
+                if (isDownload) {
+                    headers['Content-Disposition'] = "attachment; filename*=UTF-8''" + encodeURIComponent(customName);
+                }
+                res.writeHead(200, headers);
                 fs.createReadStream(filePath).pipe(res);
             }
         });
         return;
     }
+
 
     const APK_FILE_PATH = path.join(storagePath, 'msb55115-latest.apk');
     const APK_META_FILE = path.join(storagePath, 'apk_meta.json');

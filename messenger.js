@@ -627,8 +627,10 @@ function openUserProfileModal() {
             '📊 Работа',
             '</button>',
             '<button type="button" class="msb-themed-btn-alt" style="margin-bottom:10px;" ',
-            'onclick="manualCheckApkUpdate()">',
-            '🔄 Проверить обновление APK',
+            'onclick="downloadMsbApkDirect()">',
+            '📥 Скачать APK приложения и обновить',
+            '</button>',
+
             '</button>',
             '<button type="button" class="viewer-btn" onclick="closeUserProfileModal()">',
             'Закрыть',
@@ -1951,8 +1953,11 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
             if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) {
                 contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото\')">';
             } else {
-                contentHTML = '<a href="' + fileObj.path + '" target="_blank" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + escapeEdgeHtml(fileObj.name) + '</span><span class="chat-file-action">Скачать</span></div></a>';
+                var safeUrl = String(fileObj.path || '').replace(/'/g, "\\'");
+                var safeFn = String(fileObj.name || 'file').replace(/'/g, "\\'");
+                contentHTML = '<a href="' + fileObj.path + '" download="' + escapeEdgeHtml(fileObj.name) + '" onclick="return downloadChatAttachment(event, \'' + safeUrl + '\', \'' + safeFn + '\')" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + escapeEdgeHtml(fileObj.name) + '</span><span class="chat-file-action">📥 Скачать файл</span></div></a>';
             }
+
         } catch (e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
     } else {
         contentHTML = '<div class="msg-text">' + renderMessageTextWithLiveEmojis(msg.text) + '</div>';
@@ -1971,7 +1976,27 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
     attachLongPressActions(row, msg, isMy);
 }
 
+function downloadChatAttachment(e, filePath, fileName) {
+    var fullUrl = filePath.indexOf('http') === 0 ? filePath : (location.origin + filePath);
+    var dlUrl = fullUrl + (fullUrl.indexOf('?') === -1 ? '?' : '&') + 'dl=1&name=' + encodeURIComponent(fileName || 'file');
+    if (window.MsbNative && typeof window.MsbNative.downloadFile === 'function') {
+        if (e) e.preventDefault();
+        window.MsbNative.downloadFile(dlUrl, fileName || 'file');
+        return false;
+    }
+    if (e) e.preventDefault();
+    var a = document.createElement('a');
+    a.href = dlUrl;
+    a.download = fileName || 'file';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return false;
+}
+window.downloadChatAttachment = downloadChatAttachment;
+
 function copyTextUniversal(text) {
+
     if (!text) return;
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).catch(function() {});
