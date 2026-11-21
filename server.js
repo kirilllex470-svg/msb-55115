@@ -1261,6 +1261,47 @@ const server = http.createServer(function(req, res) {
         return fs.createReadStream(APK_FILE_PATH).pipe(res);
     }
 
+    if (req.method === 'POST' && urlPath === '/api/app/upload-apk-chunk') {
+        const secret = req.headers['x-update-secret'] || '';
+        const expected = process.env.UPDATE_SECRET || 'msb55115_ota_key';
+        if (secret !== expected) {
+            res.writeHead(403);
+            return res.end('Forbidden');
+        }
+        const idx = Number(req.headers['x-chunk-index'] || 0);
+        const total = Number(req.headers['x-total-chunks'] || 1);
+        const verCode = Number(req.headers['x-version-code'] || Math.floor(Date.now() / 1000));
+        const verName = decodeURIComponent(req.headers['x-version-name'] || getServerDateTime());
+        const tmpPath = APK_FILE_PATH + '.part';
+        const chunks = [];
+        req.on('data', function(c) { chunks.push(c); });
+        req.on('end', function() {
+            try {
+                const buf = Buffer.concat(chunks);
+                if (idx === 0 && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+                fs.appendFileSync(tmpPath, buf);
+                if (idx + 1 >= total) {
+                    if (fs.existsSync(APK_FILE_PATH)) fs.unlinkSync(APK_FILE_PATH);
+                    fs.renameSync(tmpPath, APK_FILE_PATH);
+                    const stat = fs.statSync(APK_FILE_PATH);
+                    writeJSON(APK_META_FILE, {
+                        versionCode: verCode,
+                        versionName: verName,
+                        size: stat.size,
+                        updatedAt: getServerDateTime()
+                    }, true);
+                    broadcastWS({ type: 'apk_updated', versionCode: verCode, versionName: verName });
+                    return sendJsonCompressed(req, res, 200, { ok: true, done: true, size: stat.size });
+                }
+                return sendJsonCompressed(req, res, 200, { ok: true, done: false, index: idx });
+            } catch (e) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ ok: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
     if (req.method === 'POST' && urlPath === '/api/app/upload-apk') {
         const secret = req.headers['x-update-secret'] || '';
         const expected = process.env.UPDATE_SECRET || 'msb55115_ota_key';
@@ -1268,8 +1309,8 @@ const server = http.createServer(function(req, res) {
             res.writeHead(403);
             return res.end('Forbidden');
         }
-        const verCode = Number(req.headers['x-version-code'] || Date.now());
-        const verName = String(req.headers['x-version-name'] || getServerDateTime());
+        const verCode = Number(req.headers['x-version-code'] || Math.floor(Date.now() / 1000));
+        const verName = decodeURIComponent(req.headers['x-version-name'] || getServerDateTime());
         const tmpPath = APK_FILE_PATH + '.tmp';
         const wsApk = fs.createWriteStream(tmpPath);
         req.pipe(wsApk);
@@ -1287,6 +1328,7 @@ const server = http.createServer(function(req, res) {
         });
         return;
     }
+
 
     // ⬇️ ВСТАВЛЯТЬ ОБРАБОТЧИК ИМЕННО СЮДА (ПЕРЕД fs.readFile) ⬇️
     if (req.method === 'POST' && urlPath === '/api/reply-from-notif') {

@@ -2713,119 +2713,182 @@ function checkApkRemoteUpdate(forcePrompt) {
 }
 
 
-function downloadMsbApkDirect() {
+async function downloadMsbApkDirect() {
     var dlBtn = document.getElementById('msb-profile-dl-apk-btn');
-    fetch('/api/app/version?t=' + Date.now())
-        .then(function(r) { return r.json(); })
-        .then(function(meta) {
-            if (!meta || !meta.hasApk) {
-                alert('⚠️ На сервере пока нет загруженного APK-файла. Администратор ещё не загрузил его.');
-                return;
+    var origText = '📥 Скачать и установить APK';
+    try {
+        if (dlBtn) {
+            dlBtn.disabled = true;
+            dlBtn.textContent = '🔍 Проверка файла на сервере...';
+        }
+        var metaRes = await fetch('/api/app/version?t=' + Date.now());
+        var meta = await metaRes.json();
+        if (!meta || !meta.hasApk) {
+            if (dlBtn) {
+                dlBtn.disabled = false;
+                dlBtn.textContent = origText;
             }
-            var apkUrl = location.origin + '/api/app/download.apk?t=' + Date.now();
-            var fileName = 'MSB55115.apk';
+            alert('⚠️ На сервере пока нет загруженного APK-файла. Сначала загрузите его через профиль Админа.');
+            return;
+        }
 
-            if (window.MsbNative && typeof window.MsbNative.installApkUpdate === 'function') {
-                if (dlBtn) dlBtn.textContent = '⏳ Скачивание и открытие APK...';
-                setTimeout(function() {
-                    if (dlBtn) dlBtn.textContent = '📥 Скачать и установить APK';
-                }, 8000);
-                if (meta.versionCode) {
-                    localStorage.setItem('msb_installed_apk_ver', String(meta.versionCode));
-                }
-                if (typeof window.MsbNative.downloadFile === 'function') {
-                    try { window.MsbNative.downloadFile(apkUrl, fileName); } catch (e) {}
-                }
+        var apkUrl = location.origin + '/api/app/download.apk?t=' + Date.now();
+        var fileName = 'MSB55115.apk';
+
+        // 1. Если открыто внутри Android APK: запускаем шторку загрузки + автооткрытие установщика
+        if (window.MsbNative) {
+            if (meta.versionCode) {
+                localStorage.setItem('msb_installed_apk_ver', String(meta.versionCode));
+            }
+            if (typeof window.MsbNative.downloadFile === 'function') {
+                try { window.MsbNative.downloadFile(apkUrl, fileName); } catch (e) {}
+            }
+            if (typeof window.MsbNative.installApkUpdate === 'function') {
+                var sec = 0;
+                var timer = setInterval(function() {
+                    sec++;
+                    if (dlBtn) dlBtn.textContent = '📥 Скачиваем пакет (' + sec + ' сек)... Ждите окно установки!';
+                    if (sec >= 12) {
+                        clearInterval(timer);
+                        if (dlBtn) {
+                            dlBtn.disabled = false;
+                            dlBtn.textContent = origText;
+                        }
+                    }
+                }, 1000);
                 window.MsbNative.installApkUpdate(apkUrl);
                 return;
             }
+        }
 
+        // 2. Если открыто в браузере: скачиваем с точным показом процентов 0% -> 100% на кнопке!
+        var res = await fetch(apkUrl);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var total = Number(res.headers.get('Content-Length') || meta.size || 0);
+
+        if (res.body && res.body.getReader) {
+            var reader = res.body.getReader();
+            var chunks = [];
+            var loaded = 0;
+            while (true) {
+                var part = await reader.read();
+                if (part.done) break;
+                chunks.push(part.value);
+                loaded += part.value.length;
+                if (dlBtn) {
+                    if (total > 0) {
+                        var pct = Math.min(100, Math.round((loaded / total) * 100));
+                        dlBtn.textContent = '📥 Скачивание APK: ' + pct + '% (' + (loaded / 1048576).toFixed(1) + ' МБ)';
+                    } else {
+                        dlBtn.textContent = '📥 Скачано: ' + (loaded / 1048576).toFixed(1) + ' МБ...';
+                    }
+                }
+            }
+            var blob = new Blob(chunks, { type: 'application/vnd.android.package-archive' });
+            var blobUrl = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 30000);
+            if (dlBtn) {
+                dlBtn.disabled = false;
+                dlBtn.textContent = '✅ Скачано! Нажмите «Открыть» вверху/внизу браузера';
+                setTimeout(function() { if (dlBtn) dlBtn.textContent = origText; }, 7000);
+            }
+        } else {
+            if (dlBtn) {
+                dlBtn.disabled = false;
+                dlBtn.textContent = origText;
+            }
             window.location.href = apkUrl;
-        })
-        .catch(function() {
-            window.location.href = '/api/app/download.apk?t=' + Date.now();
-        });
+        }
+    } catch (err) {
+        if (dlBtn) {
+            dlBtn.disabled = false;
+            dlBtn.textContent = origText;
+        }
+        window.location.href = '/api/app/download.apk?t=' + Date.now();
+    }
 }
 
-function adminUploadApkForAll(inputEl) {
+async function adminUploadApkForAll(inputEl) {
     if (!inputEl || !inputEl.files || inputEl.files.length === 0) return;
     var file = inputEl.files.item(0);
+    inputEl.value = '';
+
     if (!file.name.toLowerCase().endsWith('.apk')) {
         alert('❌ Выберите файл с расширением .apk!');
-        inputEl.value = '';
         return;
     }
 
     var statusEl = document.getElementById('msb-admin-apk-status');
     var btnEl = document.getElementById('msb-admin-upload-apk-btn');
+    var chunkSize = 512 * 1024; // 512 КБ — проходит через любой прокси Amvera/Nginx
+    var totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
     var verCode = Math.floor(Date.now() / 1000);
-    var verName = 'от ' + getStaticDateTime();
+    var verName = encodeURIComponent('от ' + getStaticDateTime());
+    var secret = localStorage.getItem('msb_custom_ota_secret') || 'msb55115_ota_key';
 
+    if (btnEl) btnEl.disabled = true;
     if (statusEl) {
         statusEl.style.display = 'block';
         statusEl.style.color = '#facc15';
-        statusEl.textContent = '⏳ Загрузка APK на сервер: 0%...';
+        statusEl.textContent = '⏳ Отправка APK: 0% (0 / ' + totalChunks + ' частей)...';
     }
-    if (btnEl) btnEl.disabled = true;
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/app/upload-apk', true);
-    var savedSecret = localStorage.getItem('msb_custom_ota_secret') || 'msb55115_ota_key';
-    xhr.setRequestHeader('x-update-secret', savedSecret);
-    xhr.setRequestHeader('x-version-code', String(verCode));
-    xhr.setRequestHeader('x-version-name', verName);
-    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    try {
+        for (var i = 0; i < totalChunks; i++) {
+            var start = i * chunkSize;
+            var end = Math.min(file.size, start + chunkSize);
+            var slice = file.slice(start, end);
 
-    xhr.upload.onprogress = function(e) {
-        if (e.lengthComputable && statusEl) {
-            var pct = Math.round((e.loaded / e.total) * 100);
-            statusEl.textContent = '⏳ Загрузка APK на сервер: ' + pct + '%...';
-        }
-    };
+            var resp = await fetch('/api/app/upload-apk-chunk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                    'x-update-secret': secret,
+                    'x-chunk-index': String(i),
+                    'x-total-chunks': String(totalChunks),
+                    'x-version-code': String(verCode),
+                    'x-version-name': verName
+                },
+                body: slice
+            });
 
-    xhr.onload = function() {
-        if (btnEl) btnEl.disabled = false;
-        inputEl.value = '';
-        if (xhr.status >= 200 && xhr.status < 300) {
-            if (statusEl) {
-                statusEl.style.color = '#4ade80';
-                statusEl.textContent = '✅ Новый APK загружен! Доступен всем в Профиле.';
+            if (resp.status === 403) {
+                var newSec = prompt('Введите секретный ключ сервера (UPDATE_SECRET):', '');
+                if (newSec) localStorage.setItem('msb_custom_ota_secret', newSec.trim());
+                throw new Error('Неверный ключ UPDATE_SECRET (403). Повторите выбор файла.');
             }
-            alert('✅ APK-файл успешно загружен на сервер!\nТеперь все пользователи могут скачать и установить его из своего Профиля.');
-        } else if (xhr.status === 403) {
-            var customSecret = prompt('Введите секретный ключ обновления сервера (UPDATE_SECRET):', '');
-            if (customSecret) {
-                localStorage.setItem('msb_custom_ota_secret', customSecret);
-                alert('Повторите выбор файла с введённым ключом.');
+            if (!resp.ok) {
+                throw new Error('Ошибка сервера на части #' + (i + 1) + ' (код ' + resp.status + ')');
             }
+
+            var pct = Math.round(((i + 1) / totalChunks) * 100);
             if (statusEl) {
-                statusEl.style.color = '#ef4444';
-                statusEl.textContent = '❌ Неверный секретный ключ сервера (403)';
-            }
-        } else {
-            if (statusEl) {
-                statusEl.style.color = '#ef4444';
-                statusEl.textContent = '❌ Ошибка загрузки (' + xhr.status + ')';
+                statusEl.textContent = '⏳ Загрузка APK на сервер: ' + pct + '% (' + (end / 1048576).toFixed(1) + ' из ' + (file.size / 1048576).toFixed(1) + ' МБ)';
             }
         }
-    };
 
-    xhr.onerror = function() {
-        if (btnEl) btnEl.disabled = false;
-        inputEl.value = '';
+        if (statusEl) {
+            statusEl.style.color = '#4ade80';
+            statusEl.textContent = '✅ Готово (100%)! APK сохранён и доступен всем бойцам в Профиле.';
+        }
+        alert('✅ APK успешно загружен на сервер (100%)!\nТеперь все пользователи могут скачать его в своём Профиле.');
+    } catch (err) {
         if (statusEl) {
             statusEl.style.color = '#ef4444';
-            statusEl.textContent = '❌ Сбой сети при передаче APK';
+            statusEl.textContent = '❌ ' + (err.message || 'Сбой при загрузке APK');
         }
-    };
-
-    xhr.send(file);
+        alert('❌ Не удалось загрузить APK: ' + (err.message || 'ошибка сети'));
+    } finally {
+        if (btnEl) btnEl.disabled = false;
+    }
 }
 
 window.downloadMsbApkDirect = downloadMsbApkDirect;
 window.manualCheckApkUpdate = downloadMsbApkDirect;
 window.adminUploadApkForAll = adminUploadApkForAll;
-
-initNativeFcmPush();
-setTimeout(function() { checkApkRemoteUpdate(false); }, 4000);
-setInterval(function() { sendFcmTokenToServer(); }, 300000);
