@@ -1751,24 +1751,36 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
     animation: msbLiveBounce 2s ease-in-out infinite;
 }
 
-/* === ГИБКОЕ СЖАТИЕ ЛЕНТЫ ЧАТА ПРИ РОСТЕ СТРОКИ ВВОДА ВВЕРХ === */
+/* === ГИБКОЕ СЖАТИЕ ЛЕНТЫ ЧАТА НАД КЛАВИАТУРОЙ ANDROID === */
+#messenger-modal {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden !important;
+}
+
+#messenger-modal #app-screen {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+}
+
 #messenger-modal .chat-area {
     display: flex !important;
     flex-direction: column !important;
     height: 100% !important;
+    max-height: 100% !important;
     overflow: hidden !important;
 }
 
 #messenger-modal #messages {
     flex: 1 1 auto !important;
     min-height: 0 !important;
+    overflow-y: auto !important;
 }
 
-/* === ЖЁСТКОЕ СКРЫТИЕ КНОПКИ «НАЗАД» В СПИСКЕ ДРУЗЕЙ === */
-#msb-unified-topbar:not(.has-back-btn) #msb-top-back-btn {
-    display: none !important;
+#messenger-modal .input-container {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    z-index: 30 !important;
 }
 
-#msb-unified-topbar.has-back-btn #msb-top-back-btn {
-    display: inline-flex !important;
-}

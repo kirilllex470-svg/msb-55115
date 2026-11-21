@@ -1049,6 +1049,24 @@ document.addEventListener('DOMContentLoaded', function() {
         inp.setAttribute('spellcheck', 'false');
     });
 
+    // Подстраиваем высоту окна мессенджера строго под реальную область НАД клавиатурой телефона
+    function bindVisualViewportForAndroidKeyboard() {
+        if (!window.visualViewport) return;
+        var updateVp = function() {
+            var modal = document.getElementById('messenger-modal');
+            if (!modal || modal.style.display !== 'flex') return;
+            var vh = window.visualViewport.height;
+            var offsetTop = window.visualViewport.offsetTop || 0;
+            modal.style.height = vh + 'px';
+            modal.style.top = offsetTop + 'px';
+            var mBox = getMessagesDiv();
+            if (mBox) mBox.scrollTop = mBox.scrollHeight;
+        };
+        window.visualViewport.addEventListener('resize', updateVp);
+        window.visualViewport.addEventListener('scroll', updateVp);
+    }
+    bindVisualViewportForAndroidKeyboard();
+
     if (tInput && tInput.tagName === 'INPUT') {
         var ta = document.createElement('textarea');
         ta.id = tInput.id;
@@ -1065,33 +1083,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tInput.setAttribute('autocorrect', 'off');
         tInput.setAttribute('autocapitalize', 'off');
         tInput.setAttribute('spellcheck', 'false');
-
-        function syncInputHeightSafe() {
-            if (!tInput) return;
-            if (!tInput.value) {
-                tInput.style.height = '36px';
-                lastKnownScrollH = 36;
-                return;
-            }
-            var prevH = tInput.offsetHeight || 36;
-            tInput.style.height = '36px';
-            var neededH = Math.min(Math.max(tInput.scrollHeight, 36), 116);
-            tInput.style.height = neededH + 'px';
-            lastKnownScrollH = neededH;
-            if (neededH !== prevH) {
-                var mBox = getMessagesDiv();
-                if (mBox) mBox.scrollTop = mBox.scrollHeight;
-            }
-        }
-
-        var isAndroidComposing = false;
-        tInput.addEventListener('compositionstart', function() {
-            isAndroidComposing = true;
-        });
-        tInput.addEventListener('compositionend', function() {
-            isAndroidComposing = false;
-            syncInputHeightSafe();
-        });
+        tInput.setAttribute('data-gramm', 'false');
 
         tInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -1100,13 +1092,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        tInput.addEventListener('input', function(e) {
-            // Во время набора/исправления слова в буфере Android IME не трогаем DOM-высоту, чтобы курсор не прыгал в конец!
-            if (!isAndroidComposing && !(e && e.isComposing)) {
-                syncInputHeightSafe();
+        tInput.addEventListener('input', function() {
+            // Пересчитываем высоту ТОЛЬКО через css-переменную без сброса style.height = '36px',
+            // иначе Android-клавиатура теряет курсор при удалении букв!
+            var lines = Math.min(4, Math.max(1, Math.ceil(tInput.scrollHeight / 22)));
+            var targetPx = (tInput.value.length === 0) ? 36 : Math.min(110, Math.max(36, lines * 22 + 10));
+            if (tInput.style.height !== targetPx + 'px') {
+                tInput.style.height = targetPx + 'px';
             }
-            if (isAndroidComposing || (e && e.isComposing)) return;
+
             if (!currentRoomId) return;
+
 
 
             var hasVal = tInput.value.trim().length > 0;
