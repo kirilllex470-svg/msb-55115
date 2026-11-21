@@ -686,10 +686,12 @@ jobs:
                   return Math.round(v * getResources().getDisplayMetrics().density);
               }
               @Override
+              @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+                  getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
                   getWindow().getDecorView().setBackgroundColor(Color.parseColor("#0f172a"));
+
 
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       NotificationManager nm = getSystemService(NotificationManager.class);
@@ -817,23 +819,24 @@ jobs:
                   ));
                   applyNativeBarTheme();
 
-                  WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
-
-                  ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
-                      Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
-                      Insets sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                      int kbHeight = Math.max(0, ime.bottom - sysBars.bottom);
+                  root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                      Rect r = new Rect();
+                      root.getWindowVisibleDisplayFrame(r);
+                      int screenHeight = root.getRootView().getHeight();
+                      int diff = screenHeight - r.bottom;
+                      int kbHeight = (diff > screenHeight * 0.15) ? diff : 0;
 
                       if (kbHeight != lastKbHeight) {
                           lastKbHeight = kbHeight;
-                          nativeChatWrap.setTranslationY(-kbHeight);
+                          boolean isResizeActive = (root.getHeight() <= r.bottom + dp(20));
+                          nativeChatWrap.setTranslationY(isResizeActive ? 0 : -kbHeight);
 
-                          int extraWebPadDp = Math.round((kbHeight + dp(64)) / getResources().getDisplayMetrics().density);
+                          int padDp = Math.round(((isResizeActive ? 0 : kbHeight) + dp(64)) / getResources().getDisplayMetrics().density);
                           boolean isKbOpen = kbHeight > dp(80);
-                          evalJs("(function(){var m=document.getElementById('messages');if(m&&window.__msbNatActive){m.style.paddingBottom='" + extraWebPadDp + "px';if(" + isKbOpen + ")m.scrollTop=m.scrollHeight;}})();");
+                          evalJs("(function(){var m=document.getElementById('messages');if(m&&window.__msbNatActive){m.style.paddingBottom='" + padDp + "px';if(" + isKbOpen + ")m.scrollTop=m.scrollHeight;}})();");
                       }
-                      return ViewCompat.onApplyWindowInsets(v, insets);
                   });
+
 
 
 
