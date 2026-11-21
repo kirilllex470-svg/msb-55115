@@ -730,7 +730,12 @@ jobs:
                       ws.setDomStorageEnabled(true);
                       ws.setMediaPlaybackRequiresUserGesture(false);
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
+                      wv.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+                          String fn = URLUtil.guessFileName(url, contentDisposition, mimeType);
+                          enqueueSystemDownload(url, fn);
+                      });
                   }
+
                   setupNativeMaxComposer();
               }
 
@@ -898,8 +903,40 @@ jobs:
                   });
               }
 
+              private void enqueueSystemDownload(final String fileUrl, final String fileName) {
+                  runOnUiThread(() -> {
+                      try {
+                          String cleanName = (fileName != null && !fileName.trim().isEmpty())
+                              ? fileName.replaceAll("[\\\\/:*?\"<>|]", "_")
+                              : "file_" + System.currentTimeMillis();
+                          DownloadManager.Request req = new DownloadManager.Request(Uri.parse(fileUrl));
+                          req.setTitle(cleanName);
+                          req.setDescription("Загрузка файла МСБ-55115...");
+                          req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                          req.allowScanningByMediaScanner();
+                          req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, cleanName);
+                          DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                          if (dm != null) {
+                              dm.enqueue(req);
+                              Toast.makeText(MainActivity.this, "📥 Загрузка началась: " + cleanName, Toast.LENGTH_LONG).show();
+                          }
+                      } catch (Exception e) {
+                          try {
+                              Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
+                              startActivity(browserIntent);
+                          } catch (Exception ignored) {}
+                      }
+                  });
+              }
+
               public class MsbNativeBridge {
                   private boolean lastBarVis = false;
+
+                  @JavascriptInterface
+                  public void downloadFile(final String url, final String fileName) {
+                      enqueueSystemDownload(url, fileName);
+                  }
+
 
                   @JavascriptInterface
                   public void setChatBarVisible(final boolean v) {
