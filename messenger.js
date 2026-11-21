@@ -469,8 +469,9 @@ window.handleIncomingChatWS = function(packet) {
             var rowEd = document.querySelector(selEd);
             if (rowEd) {
                 var txtEl = rowEd.querySelector('.msg-text');
-                if (txtEl) txtEl.textContent = packet.text;
+                if (txtEl) txtEl.innerHTML = renderMessageTextWithLiveEmojis(packet.text);
                 var timeEl = rowEd.querySelector('.msg-time');
+
                 if (timeEl && timeEl.textContent.indexOf('изм.') === -1) {
                     var badge = '<span class="msg-edited-tag">(изм.)</span>';
                     timeEl.insertAdjacentHTML('afterbegin', badge);
@@ -1038,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ensureCleanMessengerTopbar();
     var tInput = document.getElementById('text-input');
     var fInput = document.getElementById('new-friend-name');
-    [tInput, fInput, document.getElementById('login-callsign'), document.getElementById('reg-callsign'), document.getElementById('mini-notif-input')].forEach(function(inp) {
+    [fInput, document.getElementById('login-callsign'), document.getElementById('reg-callsign'), document.getElementById('mini-notif-input')].forEach(function(inp) {
         if (!inp) return;
         inp.setAttribute('lang', 'ru');
         inp.setAttribute('inputmode', 'text');
@@ -1048,11 +1049,22 @@ document.addEventListener('DOMContentLoaded', function() {
         inp.setAttribute('spellcheck', 'false');
     });
 
+    if (tInput && tInput.tagName === 'INPUT') {
+        var ta = document.createElement('textarea');
+        ta.id = tInput.id;
+        ta.placeholder = tInput.placeholder || 'Написать сообщение...';
+        ta.disabled = tInput.disabled;
+        ta.rows = 1;
+        tInput.parentNode.replaceChild(ta, tInput);
+        tInput = ta;
+    }
+
     if (tInput) {
-        tInput.setAttribute('autocomplete', 'off');
-        tInput.setAttribute('autocorrect', 'off');
-        tInput.setAttribute('autocapitalize', 'off');
-        tInput.setAttribute('spellcheck', 'false');
+        tInput.setAttribute('rows', '1');
+        tInput.removeAttribute('autocomplete');
+        tInput.removeAttribute('autocorrect');
+        tInput.setAttribute('autocapitalize', 'sentences');
+        tInput.setAttribute('spellcheck', 'true');
 
         var isAndroidComposing = false;
         tInput.addEventListener('compositionstart', function() {
@@ -1070,8 +1082,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         tInput.addEventListener('input', function(e) {
+            tInput.style.height = '34px';
+            tInput.style.height = Math.min(tInput.scrollHeight, 112) + 'px';
             if (isAndroidComposing || (e && e.isComposing)) return;
             if (!currentRoomId) return;
+
             var hasVal = tInput.value.trim().length > 0;
             if (hasVal) {
                 notifyServerTyping(true);
@@ -1498,9 +1513,11 @@ function sendMessage() {
     if (text === '' || !chatUser || !currentRoomId) return;
 
     if (editingMessageId) {
+    if (editingMessageId) {
         var editId = editingMessageId;
         editingMessageId = null;
         textInput.value = '';
+        textInput.style.height = '34px';
         cancelReply();
         fetch('/api/messages/edit', {
             method: 'POST',
@@ -1520,7 +1537,9 @@ function sendMessage() {
     var qSnd = quotedMessageSender || null;
 
     textInput.value = '';
+    textInput.style.height = '34px';
     if (stopTypingDebounce) clearTimeout(stopTypingDebounce);
+
     notifyServerTyping(false);
     cancelReply();
 
@@ -1912,8 +1931,9 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
             }
         } catch (e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
     } else {
-        contentHTML = '<div class="msg-text">' + escapeEdgeHtml(msg.text) + '</div>';
+        contentHTML = '<div class="msg-text">' + renderMessageTextWithLiveEmojis(msg.text) + '</div>';
     }
+
     var editedBadge = msg.edited
         ? '<span class="msg-edited-tag">(изм.)</span>'
         : '';
@@ -2107,11 +2127,87 @@ window.flushRetryQueue = flushRetryQueue;
 var msbExtraClockTimer = null;
 var msbToolbarExpanded = false;
 
+var RECENT_EMOJIS_KEY = 'msb_recent_emojis_v1';
+
+function getRecentEmojis() {
+    try {
+        var raw = localStorage.getItem(RECENT_EMOJIS_KEY);
+        var parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.slice(0, 24) : [];
+    } catch (e) { return []; }
+}
+
+function saveRecentEmoji(em) {
+    if (!em) return;
+    var list = getRecentEmojis().filter(function(x) { return x !== em; });
+    list.unshift(em);
+    if (list.length > 24) list = list.slice(0, 24);
+    try { localStorage.setItem(RECENT_EMOJIS_KEY, JSON.stringify(list)); } catch (e) {}
+    refreshRecentEmojisGrid();
+}
+
+function refreshRecentEmojisGrid() {
+    var grid = document.getElementById('tg-recent-emoji-grid');
+    var title = document.getElementById('tg-ecat-recent');
+    if (!grid || !title) return;
+    var recents = getRecentEmojis();
+    if (recents.length === 0) {
+        title.style.display = 'none';
+        grid.style.display = 'none';
+        grid.innerHTML = '';
+        return;
+    }
+    title.style.display = 'block';
+    grid.style.display = 'grid';
+    grid.innerHTML = recents.map(function(em) {
+        var liveCls = getLiveEmojiAnimClass(em) ? ' live-preview' : '';
+        return '<button type="button" class="tg-emoji-item' + liveCls + '" onclick="insertTgEmoji(\'' + em + '\')">' + em + '</button>';
+    }).join('');
+}
+
+var LIVE_EMOJI_MAP = {
+    '❤️':'anim-heart','🧡':'anim-heart','💛':'anim-heart','💚':'anim-heart','💙':'anim-heart','💜':'anim-heart','💖':'anim-heart','💗':'anim-heart','💓':'anim-heart','💔':'anim-heart',
+    '🔥':'anim-fire','💥':'anim-fire','⚡':'anim-fire','✨':'anim-fire','🌟':'anim-fire','🎆':'anim-fire',
+    '😂':'anim-bounce','🤣':'anim-bounce','😍':'anim-bounce','🥳':'anim-bounce','🤩':'anim-bounce','😎':'anim-bounce','🚀':'anim-bounce','🚁':'anim-bounce','🛸':'anim-bounce','🏆':'anim-bounce',
+    '👍':'anim-shake','👋':'anim-shake','👏':'anim-shake','🤝':'anim-shake','🙏':'anim-shake','💪':'anim-shake','🚨':'anim-shake','⚠️':'anim-shake','🎉':'anim-shake'
+};
+
+function getLiveEmojiAnimClass(em) {
+    return LIVE_EMOJI_MAP[em] || '';
+}
+
+function renderMessageTextWithLiveEmojis(rawText) {
+    var safe = escapeEdgeHtml(rawText || '');
+    var trimmed = safe.trim();
+    var emojiKeys = Object.keys(LIVE_EMOJI_MAP);
+    var onlySmallCount = Array.from(trimmed).length <= 3 && emojiKeys.some(function(k) { return trimmed.indexOf(k) !== -1; });
+    var isSolo = onlySmallCount && trimmed.replace(/[\s\uFE0F]/g, '').length <= 6;
+
+    emojiKeys.forEach(function(em) {
+        if (safe.indexOf(em) !== -1) {
+            var cls = 'msb-live-emoji ' + LIVE_EMOJI_MAP[em] + (isSolo ? ' big-solo' : '');
+            safe = safe.split(em).join('<span class="' + cls + '">' + em + '</span>');
+        }
+    });
+    return safe;
+}
+
 var TG_EMOJI_CATEGORIES = [
+    {
+        id: 'live',
+        icon: '✨',
+        title: '✨ Живые смайлики',
+        items: [
+            '❤️','🔥','😂','🤣','👍','😍','🥳','🤩','🚀','💥',
+            '⚡','👋','👏','🤝','🙏','💪','😎','💖','💗','💔',
+            '✨','🌟','🚁','🏆','🎉','⚠️'
+        ]
+    },
     {
         id: 'faces',
         icon: '😀',
         title: 'Эмоции',
+
         items: [
             '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
             '😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐',
@@ -2202,15 +2298,21 @@ function buildTelegramComposerLayout() {
         emojiDrawer.id = 'tg-emoji-drawer';
         emojiDrawer.className = 'tg-emoji-drawer';
 
-        var tabsHtml = TG_EMOJI_CATEGORIES.map(function(cat, idx) {
-            return '<button type="button" class="tg-emoji-tab' + (idx === 0 ? ' active' : '') + '" ' +
+        var recentTabBtn = '<button type="button" class="tg-emoji-tab active" data-cat="recent" onclick="scrollToEmojiCat(\'recent\')" title="Недавние">🕘</button>';
+        var tabsHtml = recentTabBtn + TG_EMOJI_CATEGORIES.map(function(cat) {
+            return '<button type="button" class="tg-emoji-tab" ' +
                    'data-cat="' + cat.id + '" onclick="scrollToEmojiCat(\'' + cat.id + '\')" title="' + cat.title + '">' +
                    cat.icon + '</button>';
         }).join('');
 
-        var bodyHtml = TG_EMOJI_CATEGORIES.map(function(cat) {
+        var recentBlockHtml =
+            '<div class="tg-emoji-cat-title" id="tg-ecat-recent" style="display:none;">🕘 Недавние</div>' +
+            '<div class="tg-emoji-grid" id="tg-recent-emoji-grid" style="display:none;"></div>';
+
+        var bodyHtml = recentBlockHtml + TG_EMOJI_CATEGORIES.map(function(cat) {
             var btns = cat.items.map(function(em) {
-                return '<button type="button" class="tg-emoji-item" onclick="insertTgEmoji(\'' + em + '\')">' + em + '</button>';
+                var liveCls = (cat.id === 'live' || getLiveEmojiAnimClass(em)) ? ' live-preview' : '';
+                return '<button type="button" class="tg-emoji-item' + liveCls + '" onclick="insertTgEmoji(\'' + em + '\')">' + em + '</button>';
             }).join('');
             return '<div class="tg-emoji-cat-title" id="tg-ecat-' + cat.id + '">' + cat.title + '</div>' +
                    '<div class="tg-emoji-grid">' + btns + '</div>';
@@ -2225,7 +2327,9 @@ function buildTelegramComposerLayout() {
             '<div class="tg-emoji-scroll-area" id="tg-emoji-scroll-area">' + bodyHtml + '</div>';
 
         inputContainer.insertBefore(emojiDrawer, toolsRow);
+        refreshRecentEmojisGrid();
     }
+
 
     if (!document.getElementById('tg-capsule-wrap')) {
         inputRow.classList.add('tg-full-input-row');
@@ -2297,11 +2401,12 @@ function scrollToEmojiCat(catId) {
 function insertTgEmoji(emojiChar) {
     var inp = document.getElementById('text-input');
     if (!inp || inp.disabled) return;
-    var start = inp.selectionStart || inp.value.length;
-    var end = inp.selectionEnd || inp.value.length;
-    inp.value = inp.value.substring(0, start) + emojiChar + inp.value.substring(end);
-    inp.focus();
-    inp.selectionStart = inp.selectionEnd = start + emojiChar.length;
+    saveRecentEmoji(emojiChar);
+    var start = (typeof inp.selectionStart === 'number') ? inp.selectionStart : inp.value.length;
+    var end = (typeof inp.selectionEnd === 'number') ? inp.selectionEnd : inp.value.length;
+    inp.value = inp.value.slice(0, start) + emojiChar + inp.value.slice(end);
+    var nextPos = start + emojiChar.length;
+    inp.setSelectionRange(nextPos, nextPos);
     inp.dispatchEvent(new Event('input'));
 }
 
