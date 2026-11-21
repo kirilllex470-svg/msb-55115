@@ -660,6 +660,10 @@ jobs:
           import androidx.core.app.ActivityCompat;
           import androidx.core.content.ContextCompat;
           import androidx.core.content.FileProvider;
+          import androidx.core.graphics.Insets;
+          import androidx.core.view.ViewCompat;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
           import com.getcapacitor.BridgeActivity;
           import java.io.File;
           import java.io.FileOutputStream;
@@ -813,24 +817,29 @@ jobs:
                   ));
                   applyNativeBarTheme();
 
-                  root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-                      @Override
-                      public void onGlobalLayout() {
-                          Rect r = new Rect();
-                          root.getWindowVisibleDisplayFrame(r);
-                          int screenHeight = root.getRootView().getHeight();
-                          int navBottom = screenHeight - root.getHeight();
-                          int kbHeight = Math.max(0, (screenHeight - r.bottom) - Math.max(0, navBottom));
-                          if (kbHeight != lastKbHeight) {
-                              lastKbHeight = kbHeight;
-                              FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) nativeChatWrap.getLayoutParams();
-                              lp.bottomMargin = kbHeight;
-                              nativeChatWrap.setLayoutParams(lp);
-                              int padPx = Math.round((kbHeight + nativeChatWrap.getHeight() + dp(12)) / getResources().getDisplayMetrics().density);
-                              evalJs("(function(){var m=document.getElementById('messages');if(m&&window.__msbNatActive){m.style.paddingBottom='" + padPx + "px';if(" + (kbHeight > dp(80)) + ")m.scrollTop=m.scrollHeight;}})();");
-                          }
+                  WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                  final View webChild = root.getChildAt(0);
+
+                  ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+                      Insets sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                      Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+
+                      if (webChild != null && webChild != nativeChatWrap) {
+                          webChild.setPadding(sysBars.left, sysBars.top, sysBars.right, sysBars.bottom);
                       }
+
+                      int bottomLift = Math.max(ime.bottom, sysBars.bottom);
+                      if (bottomLift != lastKbHeight) {
+                          lastKbHeight = bottomLift;
+                          nativeChatWrap.setTranslationY(-bottomLift);
+
+                          int extraWebPadDp = Math.round((bottomLift + dp(62)) / getResources().getDisplayMetrics().density);
+                          boolean isKbOpen = ime.bottom > dp(80);
+                          evalJs("(function(){var m=document.getElementById('messages');if(m&&window.__msbNatActive){m.style.paddingBottom='" + extraWebPadDp + "px';if(" + isKbOpen + ")m.scrollTop=m.scrollHeight;}})();");
+                      }
+                      return WindowInsetsCompat.CONSUMED;
                   });
+
 
                   root.postDelayed(new Runnable() {
                       @Override
@@ -1124,3 +1133,4 @@ jobs:
         with:
           name: MSB55115-FCM-APK
           path: android/app/build/outputs/apk/release/app-release.apk
+
