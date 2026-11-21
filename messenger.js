@@ -622,20 +622,25 @@ function openUserProfileModal() {
             'onclick="closeUserProfileModal(); openPinSetupModal();">',
             '🔐 Создать ПИН-код',
             '</button>',
-                       '<button type="button" class="msb-themed-btn" style="margin-bottom:10px;" ',
+            '<button type="button" class="msb-themed-btn" style="margin-bottom:10px;" ',
             'onclick="openWorkNewWindow()">',
             '📊 Работа',
             '</button>',
-            '<button type="button" class="msb-themed-btn-alt" style="margin-bottom:10px;" ',
+            '<button type="button" id="msb-profile-dl-apk-btn" class="msb-themed-btn-alt" style="margin-bottom:10px;" ',
             'onclick="downloadMsbApkDirect()">',
-            '📥 Скачать APK приложения и обновить',
+            '📥 Скачать и установить APK',
             '</button>',
-
+            '<button type="button" id="msb-admin-upload-apk-btn" class="msb-themed-btn" ',
+            'style="display:none; margin-bottom:10px; background:linear-gradient(135deg,#dc2626,#991b1b)!important; border-color:#f87171!important;" ',
+            'onclick="document.getElementById(\'msb-admin-apk-input\').click()">',
+            '📤 Загрузить APK файл для всех',
             '</button>',
+            '<input type="file" id="msb-admin-apk-input" accept=".apk,application/vnd.android.package-archive" ',
+            'style="display:none;" onchange="adminUploadApkForAll(this)">',
+            '<div id="msb-admin-apk-status" style="display:none; font-size:12px; color:#facc15; font-weight:bold; margin-bottom:8px;"></div>',
             '<button type="button" class="viewer-btn" onclick="closeUserProfileModal()">',
             'Закрыть',
             '</button>',
-
             '</div>'
         ].join('');
 
@@ -645,11 +650,17 @@ function openUserProfileModal() {
         document.body.appendChild(modal);
     }
 
+    var isAdm = (typeof currentUser !== 'undefined' && typeof ADMIN_NAME !== 'undefined' && currentUser === ADMIN_NAME) ||
+                (String(chatUser).toLowerCase() === 'муравей');
+    var admBtn = document.getElementById('msb-admin-upload-apk-btn');
+    if (admBtn) admBtn.style.display = isAdm ? 'block' : 'none';
+
     document.getElementById('profile-modal-name').textContent = chatUser;
     var avBox = document.getElementById('profile-modal-avatar');
     renderAvatarElement(avBox, chatUser, getCachedUserAvatar(chatUser, ''));
     modal.style.display = 'flex';
 }
+
 
 function openWorkNewWindow() {
     closeUserProfileModal();
