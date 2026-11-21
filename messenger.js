@@ -1744,7 +1744,11 @@ function cancelReply() {
     quotedMessageSender = null;
     var bar = document.getElementById('reply-bar');
     if (bar) bar.style.display = 'none';
+    if (window.MsbNative && typeof window.MsbNative.setChatBarText === 'function') {
+        window.MsbNative.setChatBarText('', false);
+    }
 }
+
 
 
 function handleForwardTrigger(id, text, type, sender) {
@@ -2088,11 +2092,14 @@ function startEditingMessage(msgId, oldText) {
     var input = document.getElementById('text-input');
     if (textEl) textEl.textContent = '✏️ Исправление: ' + oldText;
     if (bar) bar.style.display = 'flex';
-    if (input) {
+    if (window.MsbNative && typeof window.MsbNative.setChatBarText === 'function') {
+        window.MsbNative.setChatBarText(oldText, true);
+    } else if (input) {
         input.value = oldText;
         input.focus();
     }
 }
+
 
 
 function playVideoWithSound(v) {
