@@ -373,10 +373,10 @@ body.theme-cosmic .other-msg .bubble { background: linear-gradient(145deg, #1e1b
     .audio-player { width: 190px; max-width: 65vw; }
     .chat-image { max-width: 68vw; max-height: 220px; }
     .chat-gifs-grid { grid-template-columns: repeat(2, 1fr); }
-    .input-container { padding: 6px 8px; gap: 6px; }
+    .input-container { padding: 6px 8px; gap: 6px; flex-shrink: 0; }
     .media-btn { height: 35px; min-width: 30px; font-size: 14px; padding: 0 4px; }
-    #text-input { height: 38px; font-size: 14px; }
-    #send-btn { height: 38px; padding: 0 10px; font-size: 12px; }
+    #send-btn { height: 36px; padding: 0 10px; font-size: 12px; }
+
 }
 @media (max-width: 480px) { .inputs-grid, .maps-grid { grid-template-columns: 1fr; } }
 /* === АНИМАЦИЯ ПРЫГАЮЩЕГО ТЕКСТА МСБ55115 И ОКНА СЛАБОЙ СЕТИ === */
@@ -1749,6 +1749,19 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
 
 .tg-emoji-item.live-preview {
     animation: msbLiveBounce 2s ease-in-out infinite;
+}
+
+/* === ГИБКОЕ СЖАТИЕ ЛЕНТЫ ЧАТА ПРИ РОСТЕ СТРОКИ ВВОДА ВВЕРХ === */
+#messenger-modal .chat-area {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    overflow: hidden !important;
+}
+
+#messenger-modal #messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
 }
 
 /* === ЖЁСТКОЕ СКРЫТИЕ КНОПКИ «НАЗАД» В СПИСКЕ ДРУЗЕЙ === */

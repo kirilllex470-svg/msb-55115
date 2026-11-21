@@ -1061,10 +1061,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (tInput) {
         tInput.setAttribute('rows', '1');
-        tInput.removeAttribute('autocomplete');
-        tInput.removeAttribute('autocorrect');
-        tInput.setAttribute('autocapitalize', 'sentences');
-        tInput.setAttribute('spellcheck', 'true');
+        tInput.setAttribute('autocomplete', 'off');
+        tInput.setAttribute('autocorrect', 'off');
+        tInput.setAttribute('autocapitalize', 'off');
+        tInput.setAttribute('spellcheck', 'false');
+
+        function syncInputHeightSafe() {
+            if (!tInput) return;
+            if (!tInput.value) {
+                tInput.style.height = '36px';
+                lastKnownScrollH = 36;
+                return;
+            }
+            var prevH = tInput.offsetHeight || 36;
+            tInput.style.height = '36px';
+            var neededH = Math.min(Math.max(tInput.scrollHeight, 36), 116);
+            tInput.style.height = neededH + 'px';
+            lastKnownScrollH = neededH;
+            if (neededH !== prevH) {
+                var mBox = getMessagesDiv();
+                if (mBox) mBox.scrollTop = mBox.scrollHeight;
+            }
+        }
 
         var isAndroidComposing = false;
         tInput.addEventListener('compositionstart', function() {
@@ -1072,6 +1090,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         tInput.addEventListener('compositionend', function() {
             isAndroidComposing = false;
+            syncInputHeightSafe();
         });
 
         tInput.addEventListener('keydown', function(e) {
@@ -1081,23 +1100,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        var lastKnownScrollH = 36;
         tInput.addEventListener('input', function(e) {
-            requestAnimationFrame(function() {
-                if (!tInput.value) {
-                    if (lastKnownScrollH !== 36) {
-                        tInput.style.height = '36px';
-                        lastKnownScrollH = 36;
-                    }
-                    return;
-                }
-                var curH = tInput.scrollHeight;
-                if (curH > lastKnownScrollH) {
-                    var nextH = Math.min(curH, 110);
-                    tInput.style.height = nextH + 'px';
-                    lastKnownScrollH = nextH;
-                }
-            });
+            // Во время набора/исправления слова в буфере Android IME не трогаем DOM-высоту, чтобы курсор не прыгал в конец!
+            if (!isAndroidComposing && !(e && e.isComposing)) {
+                syncInputHeightSafe();
+            }
             if (isAndroidComposing || (e && e.isComposing)) return;
             if (!currentRoomId) return;
 
@@ -1548,7 +1555,6 @@ function sendMessage() {
     }
 
     var qId = quotedMessageId || null;
-
     var qTxt = quotedMessageText || null;
     var qSnd = quotedMessageSender || null;
 
@@ -1557,16 +1563,6 @@ function sendMessage() {
     lastKnownScrollH = 36;
     if (stopTypingDebounce) clearTimeout(stopTypingDebounce);
 
-
-
-    var qId = quotedMessageId || null;
-
-    var qTxt = quotedMessageText || null;
-    var qSnd = quotedMessageSender || null;
-
-    textInput.value = '';
-    textInput.style.height = '34px';
-    if (stopTypingDebounce) clearTimeout(stopTypingDebounce);
 
     notifyServerTyping(false);
     cancelReply();
