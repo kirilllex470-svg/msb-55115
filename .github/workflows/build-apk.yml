@@ -686,7 +686,7 @@ jobs:
                   return Math.round(v * getResources().getDisplayMetrics().density);
               }
               @Override
-              @Override
+            
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
