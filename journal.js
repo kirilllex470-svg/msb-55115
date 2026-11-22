@@ -1759,9 +1759,16 @@ function sendLocalNotification(target, text, sender, notifId) {
         shownSystemNotifIds.delete(firstKey);
     }
 
-    if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
+       if (window.MsbNative && typeof window.MsbNative.notify === 'function') {
         if (document.visibilityState === 'visible') return;
+    } else if (typeof document.hasFocus === 'function' && document.hasFocus()) {
+        // На ПК: если окно браузера прямо сейчас в фокусе и открыт этот чат — шторку не дублируем
+        var msgWin = document.getElementById('messenger-modal');
+        if (msgWin && msgWin.style.display === 'flex' && typeof currentRoomId !== 'undefined' && currentRoomId) {
+            return;
+        }
     }
+
 
     const rawFrom = String(sender || 'АДМИН').trim();
     let unitStr = '';
