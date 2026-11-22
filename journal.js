@@ -1384,11 +1384,14 @@ function initApp() {
     }
     fetchMapsFromServer(false);
     connectWS(false);
-
     if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
         window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
     }
+    if (typeof initNativeFcmPush === 'function') {
+        initNativeFcmPush();
+    }
 }
+
 
 function hideAuthMessages() {
     const err = document.getElementById('login-error');

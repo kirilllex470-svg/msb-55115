@@ -1573,11 +1573,12 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     });
 }
 function sendChatBackgroundPushOnly(sender, target, text) {
-    const tLow = String(target).trim().toLowerCase();
-    const sLow = String(sender).trim().toLowerCase();
+    const tLow = String(target || '').trim().toLowerCase();
+    const sLow = String(sender || '').trim().toLowerCase();
     if (!tLow || tLow === sLow) return;
 
-    const notifTag = 'msb-chat-' + tLow + '-' + sLow + '-' + Date.now();
+    const notifId = Date.now() + Math.floor(Math.random() * 1000);
+    const notifTag = 'msb-chat-' + notifId;
 
     const rawSenderStr = String(sender || 'МСБ-55115').trim();
     const parsedCallsign = rawSenderStr.replace(/^👥\s*/, '').trim();
@@ -1587,37 +1588,56 @@ function sendChatBackgroundPushOnly(sender, target, text) {
         : rawSenderStr;
 
     const cleanSenderKeyForWeb = parsedCallsign.toLowerCase();
-    const payload = JSON.stringify({
+    const cleanBody = String(text || 'Новое сообщение');
+
+    // 1. Отправка WebPush (для браузера и PWA)
+    const webPayload = JSON.stringify({
         title: senderHeader,
-        body: String(text || ''),
-        icon: '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now(),
+        body: cleanBody,
+        icon: '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + notifId,
         tag: notifTag,
         url: '/'
     });
 
-    pushSubscriptions.forEach(function(item) {
-        if (!item || !item.sub) return;
+    for (let i = pushSubscriptions.length - 1; i >= 0; i--) {
+        const item = pushSubscriptions[i];
+        if (!item || !item.sub) continue;
+        const uLow = String(item.user || '').trim().toLowerCase();
         const cLow = String(item.callsign || '').trim().toLowerCase();
-        if (cLow === tLow) {
-            webpush.sendNotification(item.sub, payload, { TTL: 86400, urgency: 'high' }).catch(function() {});
+        if (cLow && cLow === sLow) continue;
+        if (cLow === tLow || (!cLow && uLow === tLow)) {
+            webpush.sendNotification(item.sub, webPayload, { TTL: 86400, urgency: 'high' }).catch(function(err) {
+                if (err && (err.statusCode === 410 || err.statusCode === 404)) {
+                    const idx = pushSubscriptions.indexOf(item);
+                    if (idx !== -1) {
+                        pushSubscriptions.splice(idx, 1);
+                        writeJSON(SUBS_FILE, pushSubscriptions);
+                    }
+                }
+            });
         }
-    });
+    }
 
+    // 2. Отправка Firebase FCM (для Android APK)
     if (fcmAdmin && fcmTokens.length > 0) {
         fcmTokens.forEach(function(item) {
             if (!item || !item.token) return;
+            const uLow = String(item.user || '').trim().toLowerCase();
             const cLow = String(item.callsign || '').trim().toLowerCase();
-            if (cLow === tLow) {
+            if (cLow && cLow === sLow) return;
+
+            if (cLow === tLow || (!cLow && uLow === tLow)) {
                 const avatarUrl = item.origin
-                    ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now())
+                    ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + notifId)
                     : '';
                 const targetSound = (usersDB[cLow] && usersDB[cLow].soundId) ? usersDB[cLow].soundId : 'nice1';
+
                 fcmAdmin.messaging().send({
                     token: item.token,
                     data: {
                         tag: notifTag,
                         title: senderHeader,
-                        body: String(text || ''),
+                        body: cleanBody,
                         target: String(target),
                         sender: parsedCallsign,
                         soundId: targetSound,
@@ -1625,12 +1645,25 @@ function sendChatBackgroundPushOnly(sender, target, text) {
                         accentColor: '#22c55e',
                         bgColor: '#00000000'
                     },
-                    android: { priority: 'high' }
-                }).catch(function() {});
+                    android: {
+                        priority: 'high',
+                        ttl: 86400000
+                    }
+                }).catch(function(err) {
+                    console.error('❌ FCM Chat Error:', err.code, err.message);
+                    if (err && (err.code === 'messaging/registration-token-not-registered' || err.code === 'messaging/invalid-registration-token')) {
+                        const badIdx = fcmTokens.indexOf(item);
+                        if (badIdx !== -1) {
+                            fcmTokens.splice(badIdx, 1);
+                            writeJSON(FCM_FILE, fcmTokens);
+                        }
+                    }
+                });
             }
         });
     }
 }
+
 
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
