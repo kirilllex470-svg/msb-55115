@@ -720,7 +720,6 @@ function openWorkNewWindow() {
 function closeWorkNewWindow() {
     var workModal = document.getElementById('msb-work-window-modal');
     if (workModal) workModal.style.display = 'none';
-    syncNativeChatComposerState();
 }
 
 
@@ -1058,11 +1057,11 @@ window.openMessengerWindow = openMessengerWindow;
 function closeMessengerWindow() {
     var modal = document.getElementById('messenger-modal');
     if (modal) modal.style.display = 'none';
-    syncNativeChatComposerState();
     document.querySelectorAll('#messages video, #messages audio').forEach(function(media) {
         try { media.pause(); } catch (e) {}
     });
 }
+
 
 window.closeMessengerWindow = closeMessengerWindow;
 function renderAvatarElement(el, name, avatarDataUrl) {
@@ -1545,7 +1544,6 @@ function selectChat(itemObj) {
     });
     updateTotalUnreadBadge();
     renderFriends();
-    syncNativeChatComposerState();
 
     renderPendingBubbles();
     requestAnimationFrame(function() {
@@ -1554,14 +1552,12 @@ function selectChat(itemObj) {
     });
 }
 
-
-
 function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
     if (sb) sb.classList.remove('hidden');
     updateTopBackButtonVisibility();
-    syncNativeChatComposerState();
 }
+
 
 
 
@@ -2499,10 +2495,12 @@ function buildTelegramComposerLayout() {
         plusBtn.className = 'tg-inside-btn tg-plus-btn';
         plusBtn.textContent = '➕';
         plusBtn.title = 'Инструменты';
-        plusBtn.onclick = function(e) {
+              plusBtn.onpointerdown = function(e) {
+            e.preventDefault();
             e.stopPropagation();
             toggleMsbRadialToolbar(true);
         };
+
 
            inputRow.insertBefore(capsule, textInput);
         capsule.appendChild(smileBtn);
