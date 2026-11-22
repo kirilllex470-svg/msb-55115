@@ -1502,9 +1502,11 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req
     if (clientMsgId) {
         const dup = roomsDB[room].find(function(m) { return m.clientMsgId === clientMsgId; });
         if (dup) {
-            return sendJsonCompressed(req, res, 200, { ok: true, msg: dup });
+            if (res) return sendJsonCompressed(req, res, 200, { ok: true, msg: dup });
+            return;
         }
     }
+
 
     let finalContent = fields.text || '';
     if ((type === 'audio' || type === 'video' || type === 'file') && fileBuffer && fileBuffer.length > 0) {
