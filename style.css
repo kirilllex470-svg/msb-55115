@@ -1794,11 +1794,7 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
     transform: translateZ(0);
 }
 
-/* Пауза фоновой анимации бегущей строки, когда мессенджер закрыт */
-#messenger-modal[style*="display: none"] .msg-ticker-move,
-#messenger-modal:not([style*="display: flex"]) .msg-ticker-move {
-    animation-play-state: paused !important;
-}
+
 
 /* Плавное парение онлайн-аватарок через аппаратный GPU */
 @keyframes avatarOnlineFloat {
@@ -1832,10 +1828,6 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
     transform: translateZ(0);
 }
 
-/* Ставим на паузу анимацию бегущей строки, когда окно мессенджера закрыто */
-#messenger-modal:not([style*="display: flex"]) .msg-ticker-move {
-    animation-play-state: paused !important;
-}
 
 /* Убираем задержку 300мс на нажатия кнопок и контактов в Android WebView */
 button, .friend-item, .msb-plus-item, .tg-emoji-item, .notif-item {
