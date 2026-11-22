@@ -1116,10 +1116,8 @@ document.addEventListener('DOMContentLoaded', function() {
         inp.setAttribute('spellcheck', 'false');
     });
 
-    // Подстраиваем высоту окна мессенджера строго под реальную область НАД клавиатурой телефона
-    // Подстраиваем высоту окна мессенджера строго под реальную область НАД клавиатурой телефона
     function bindVisualViewportForAndroidKeyboard() {
-        if (!window.visualViewport || window.MsbNative) return;
+        if (!window.visualViewport) return;
         var updateVp = function() {
             var modal = document.getElementById('messenger-modal');
             if (!modal || modal.style.display !== 'flex') return;
@@ -1133,28 +1131,9 @@ document.addEventListener('DOMContentLoaded', function() {
         window.visualViewport.addEventListener('resize', updateVp);
         window.visualViewport.addEventListener('scroll', updateVp);
     }
-
-function syncNativeChatComposerState() {
-    var modal = document.getElementById('messenger-modal');
-    var sb = document.getElementById('app-sidebar');
-    var workModal = document.getElementById('msb-work-window-modal');
-    var isChatActive = Boolean(modal && modal.style.display === 'flex') &&
-        Boolean(currentRoomId) &&
-        (window.innerWidth > 768 || (sb && sb.classList.contains('hidden'))) &&
-        !(workModal && workModal.style.display === 'flex');
-
-    window.__msbNatActive = isChatActive;
-    var webCap = document.getElementById('tg-capsule-wrap');
-    if (webCap) {
-        webCap.style.display = (isChatActive && window.MsbNative) ? 'none' : 'flex';
-    }
-    if (window.MsbNative && typeof window.MsbNative.setChatBarVisible === 'function') {
-        window.MsbNative.setChatBarVisible(isChatActive);
-    }
-}
-window.syncNativeChatComposerState = syncNativeChatComposerState;
-
     bindVisualViewportForAndroidKeyboard();
+
+
 
     if (tInput && tInput.tagName === 'INPUT') {
         var ta = document.createElement('textarea');
@@ -2489,7 +2468,8 @@ function buildTelegramComposerLayout() {
         smileBtn.className = 'tg-inside-btn tg-smile-btn';
         smileBtn.textContent = '😊';
         smileBtn.title = 'Смайлики';
-        smileBtn.onclick = function(e) {
+        smileBtn.onpointerdown = function(e) {
+            e.preventDefault();
             e.stopPropagation();
             toggleTgEmojiDrawer();
         };
@@ -2500,10 +2480,12 @@ function buildTelegramComposerLayout() {
         plusBtn.className = 'tg-inside-btn tg-plus-btn';
         plusBtn.textContent = '➕';
         plusBtn.title = 'Инструменты';
-        plusBtn.onclick = function(e) {
+        plusBtn.onpointerdown = function(e) {
+            e.preventDefault();
             e.stopPropagation();
             toggleMsbRadialToolbar(true);
         };
+
 
            inputRow.insertBefore(capsule, textInput);
         capsule.appendChild(smileBtn);
