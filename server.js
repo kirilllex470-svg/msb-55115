@@ -1534,8 +1534,11 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req
 
     broadcastWS({ type: 'chat_new_msg', room: room, msg: newMsgObj });
     notifyJournalFromMessenger(room, sender, finalContent, type, timeStr);
-    return sendJsonCompressed(req, res, 200, { ok: true, msg: newMsgObj });
+    if (res) {
+        return sendJsonCompressed(req, res, 200, { ok: true, msg: newMsgObj });
+    }
 }
+
 
 function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     let cleanText = rawContent || '';
@@ -1566,9 +1569,71 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
         const uObj = usersDB[cleanKey];
         const realTarget = uObj ? uObj.username : String(t).trim();
         const alertSender = isGroupRoom ? ('👥 ' + groupTitle) : sender;
-        broadcastAlert(alertSender, '#00a884', timeStr, realTarget, cleanText);
+        sendChatBackgroundPushOnly(alertSender, realTarget, cleanText);
     });
 }
+function sendChatBackgroundPushOnly(sender, target, text) {
+    const tLow = String(target).trim().toLowerCase();
+    const sLow = String(sender).trim().toLowerCase();
+    if (!tLow || tLow === sLow) return;
+
+    // Если получатель сейчас онлайн и смотрит приложение — пуш в шторку не нужен, сообщение уже в чате по WS
+    if (hasActiveVisibleWsForUser(tLow)) return;
+
+    const notifTag = 'msb-chat-' + tLow + '-' + sLow;
+    const rawSenderStr = String(sender || 'МСБ-55115').trim();
+    const parsedCallsign = rawSenderStr.replace(/^👥\s*/, '').trim();
+    const senderObj = usersDB[parsedCallsign.toLowerCase()];
+    const senderHeader = (senderObj && senderObj.unit && senderObj.unit.toLowerCase() !== parsedCallsign.toLowerCase())
+        ? (senderObj.unit + ' • ' + parsedCallsign)
+        : rawSenderStr;
+
+    const cleanSenderKeyForWeb = parsedCallsign.toLowerCase();
+    const payload = JSON.stringify({
+        title: senderHeader,
+        body: String(text || ''),
+        icon: '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now(),
+        tag: notifTag,
+        url: '/'
+    });
+
+    pushSubscriptions.forEach(function(item) {
+        if (!item || !item.sub) return;
+        const cLow = String(item.callsign || '').trim().toLowerCase();
+        if (cLow === tLow) {
+            webpush.sendNotification(item.sub, payload, { TTL: 86400, urgency: 'high' }).catch(function() {});
+        }
+    });
+
+    if (fcmAdmin && fcmTokens.length > 0) {
+        fcmTokens.forEach(function(item) {
+            if (!item || !item.token) return;
+            const cLow = String(item.callsign || '').trim().toLowerCase();
+            if (cLow === tLow) {
+                const avatarUrl = item.origin
+                    ? (item.origin + '/api/avatar-img/' + encodeURIComponent(cleanSenderKeyForWeb) + '.jpg?v=' + Date.now())
+                    : '';
+                const targetSound = (usersDB[cLow] && usersDB[cLow].soundId) ? usersDB[cLow].soundId : 'nice1';
+                fcmAdmin.messaging().send({
+                    token: item.token,
+                    data: {
+                        tag: notifTag,
+                        title: senderHeader,
+                        body: String(text || ''),
+                        target: String(target),
+                        sender: parsedCallsign,
+                        soundId: targetSound,
+                        image: avatarUrl,
+                        accentColor: '#22c55e',
+                        bgColor: '#00000000'
+                    },
+                    android: { priority: 'high' }
+                }).catch(function() {});
+            }
+        });
+    }
+}
+
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
 function broadcastWS(obj) {
@@ -1844,6 +1909,20 @@ wss.on('connection', function(ws) {
                 if (msg.typing === false) delete typingDB[msg.room][uClean];
                 else typingDB[msg.room][uClean] = Date.now();
                 broadcastWS({ type: 'chat_typing', room: msg.room, user: uClean, typing: msg.typing !== false });
+                return;
+            }
+			            if (msg.type === 'chat_send_ws' && msg.sender && msg.room) {
+                saveMultipartChatMsg({
+                    sender: msg.sender,
+                    room: msg.room,
+                    type: msg.msgType || 'text',
+                    text: msg.text || '',
+                    clientMsgId: msg.clientMsgId || null,
+                    quoteId: msg.quoteId || null,
+                    quoteText: msg.quoteText || null,
+                    quoteSender: msg.quoteSender || null,
+                    forwardedFrom: msg.forwardedFrom || null
+                }, null, '', '', null, null);
                 return;
             }
             if (msg.type === 'save_sub' && msg.sub) {

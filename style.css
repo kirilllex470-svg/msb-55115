@@ -1821,4 +1821,24 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
 .tg-radial-wave-tray.open {
     margin-bottom: 54px;
 }
+/* === УСТРАНЕНИЕ ЛАГОВ ПРИ ПЕРЕКЛЮЧЕНИИ ОКОН В APK === */
+#messenger-modal,
+#msb-work-window-modal,
+.sidebar,
+.chat-area {
+    contain: layout style;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+/* Ставим на паузу анимацию бегущей строки, когда окно мессенджера закрыто */
+#messenger-modal:not([style*="display: flex"]) .msg-ticker-move {
+    animation-play-state: paused !important;
+}
+
+/* Убираем задержку 300мс на нажатия кнопок и контактов в Android WebView */
+button, .friend-item, .msb-plus-item, .tg-emoji-item, .notif-item {
+    touch-action: manipulation;
+}
 

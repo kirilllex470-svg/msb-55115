@@ -1061,10 +1061,11 @@ function handleWsIncomingEvent(event) {
 }
 setInterval(function() {
     if (ws && ws.readyState === WebSocket.OPEN) {
-        if (Date.now() - lastPongTime > 16000) {
+        if (Date.now() - lastPongTime > 40000) {
             connectWS(true);
             return;
         }
+
         try {
             ws.send(JSON.stringify({
                 type: 'ping',
@@ -2283,29 +2284,29 @@ function ensureWeakBootOverlay() {
 
 function evaluateNetworkWeakness() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return true;
-    if (Date.now() - lastPongTime > 18000) return true;
-    return false;
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return false;
+    return (Date.now() - lastPongTime > 40000);
 }
 
 function updateWeakNetworkUI() {
-    ensureWeakBootOverlay();
     var weakNow = evaluateNetworkWeakness();
     msbIsWeakNetwork = weakNow;
     window.msbIsWeakNetwork = weakNow;
 
-    var hasLocalSession = Boolean(localStorage.getItem('journal_user'));
-    if (hasLocalSession && !msbInitialSyncDone) {
+    // Если пользователь уже входил ранее — приложение работает мгновенно из кэша без перекрытия экраном
+    if (localStorage.getItem('journal_user')) {
         msbInitialSyncDone = true;
     }
 
     var bootOv = document.getElementById('msb-weak-boot-overlay');
     if (bootOv) {
-        if (!msbInitialSyncDone && weakNow) bootOv.style.display = 'flex';
-        else if (msbInitialSyncDone) bootOv.style.display = 'none';
+        bootOv.style.display = (!msbInitialSyncDone && weakNow) ? 'flex' : 'none';
     }
-    if (typeof window.syncMessengerWeakBanner === 'function') window.syncMessengerWeakBanner(weakNow);
+    if (typeof window.syncMessengerWeakBanner === 'function') {
+        window.syncMessengerWeakBanner(weakNow);
+    }
 }
+
 
 
 function triggerImmediateEdgePull() {

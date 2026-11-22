@@ -824,22 +824,18 @@ function renderPendingBubbles() {
 
 function flushOutboxQueue() {
     renderPendingBubbles();
-    if (msbIsFlushing || msbOutboxQueue.length === 0) return;
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    if (msbOutboxQueue.length === 0) return;
 
-    var item = msbOutboxQueue.at(0);
-    if (!item) return;
+    // 1. Все текстовые сообщения проталкиваем СРАЗУ пакетом (не ждём по одному!)
+    var textItems = msbOutboxQueue.filter(function(it) {
+        return it && !it.blob && (!it.type || it.type === 'text' || it.type === 'gif');
+    });
 
-    msbIsFlushing = true;
-    var controller = new AbortController();
-    var isPlainText = (!item.blob && (!item.type || item.type === 'text' || item.type === 'gif'));
-    var timeoutMs = isPlainText ? 12000 : 85000;
-    var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+    textItems.forEach(function(item) {
+        if (item._inFlight && (Date.now() - item._inFlight < 3500)) return;
+        item._inFlight = Date.now();
 
-    var fetchOpts = { method: 'POST', signal: controller.signal };
-    if (isPlainText) {
-        fetchOpts.headers = { 'Content-Type': 'application/json' };
-        fetchOpts.body = JSON.stringify({
+        var payloadObj = {
             clientMsgId: item.lid,
             sender: item.sender,
             room: item.room,
@@ -849,8 +845,89 @@ function flushOutboxQueue() {
             quoteText: item.quoteText || null,
             quoteSender: item.quoteSender || null,
             forwardedFrom: item.forwardedFrom || null
+        };
+
+        // Канал А: Мгновенный сверхлёгкий кадр через WebSocket (проходит при минимальном сигнале)
+        if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
+            try {
+                ws.send(JSON.stringify(Object.assign({ type: 'chat_send_ws', msgType: payloadObj.type }, payloadObj)));
+            } catch (e) {}
+        }
+
+        // Канал Б: Резервный HTTP POST с keepalive (сервер отсеет дубль по clientMsgId)
+        var controller = new AbortController();
+        var timer = setTimeout(function() { controller.abort(); }, 4500);
+        fetch('/api/send', {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadObj),
+            signal: controller.signal
+        })
+        .then(function(res) {
+            clearTimeout(timer);
+            if (!res.ok) throw new Error('HTTP');
+            return res.json().catch(function() { return { ok: true }; });
+        })
+        .then(function(respData) {
+            msbOutboxQueue = msbOutboxQueue.filter(function(x) { return x && x.lid !== item.lid; });
+            saveTextOutboxToStorage();
+            var tempEl = document.querySelector('.msb-pending-row[data-lid="' + item.lid + '"]');
+            if (tempEl) tempEl.remove();
+            if (respData && respData.msg && typeof window.handleIncomingChatWS === 'function') {
+                window.handleIncomingChatWS({ type: 'chat_new_msg', room: item.room, msg: respData.msg });
+            }
+            clearNetworkErrorBanner();
+        })
+        .catch(function() {
+            clearTimeout(timer);
+            item._inFlight = 0;
         });
-    } else {
+    });
+
+    // 2. Тяжёлые медиафайлы (аудио/видео/файлы) идут своей отдельной очередью, не тормозя текст
+    if (msbIsFlushing) return;
+    var mediaItem = msbOutboxQueue.find(function(it) { return it && it.blob; });
+    if (!mediaItem) return;
+
+    msbIsFlushing = true;
+    var mCtrl = new AbortController();
+    var mTimer = setTimeout(function() { mCtrl.abort(); }, 45000);
+    var fd = new FormData();
+    fd.append('clientMsgId', mediaItem.lid);
+    fd.append('sender', mediaItem.sender);
+    fd.append('room', mediaItem.room);
+    fd.append('type', mediaItem.type || 'file');
+    fd.append('media', mediaItem.blob, mediaItem.fileName || ('media_' + Date.now()));
+    if (mediaItem.quoteId) {
+        fd.append('quoteId', mediaItem.quoteId);
+        fd.append('quoteText', mediaItem.quoteText || '');
+        fd.append('quoteSender', mediaItem.quoteSender || '');
+    }
+    if (mediaItem.forwardedFrom) fd.append('forwardedFrom', mediaItem.forwardedFrom);
+
+    fetch('/api/send', { method: 'POST', body: fd, signal: mCtrl.signal })
+    .then(function(res) {
+        clearTimeout(mTimer);
+        if (!res.ok) throw new Error('Send error');
+        return res.json().catch(function() { return { ok: true }; });
+    })
+    .then(function(respData) {
+        msbOutboxQueue = msbOutboxQueue.filter(function(x) { return x && x.lid !== mediaItem.lid; });
+        var tempEl = document.querySelector('.msb-pending-row[data-lid="' + mediaItem.lid + '"]');
+        if (tempEl) tempEl.remove();
+        if (respData && respData.msg && typeof window.handleIncomingChatWS === 'function') {
+            window.handleIncomingChatWS({ type: 'chat_new_msg', room: mediaItem.room, msg: respData.msg });
+        }
+        msbIsFlushing = false;
+        if (msbOutboxQueue.some(function(x) { return x && x.blob; })) setTimeout(flushOutboxQueue, 100);
+    })
+    .catch(function() {
+        clearTimeout(mTimer);
+        msbIsFlushing = false;
+    });
+}
+
         var fd = new FormData();
         fd.append('clientMsgId', item.lid);
         fd.append('sender', item.sender);
@@ -1498,10 +1575,13 @@ function selectChat(itemObj) {
     updateTotalUnreadBadge();
     renderFriends();
 
-    fetchMessages();
-    markChatAsRead(currentRoomId);
-    setTimeout(renderPendingBubbles, 30);
+    renderPendingBubbles();
+    requestAnimationFrame(function() {
+        fetchMessages();
+        markChatAsRead(currentRoomId);
+    });
 }
+
 
 function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
@@ -2206,8 +2286,7 @@ function updateTotalUnreadBadge() {
 }
 
 window.addEventListener('online', function() { clearNetworkErrorBanner(); flushOutboxQueue(); if (currentRoomId) { fetchMessages(); markChatAsRead(currentRoomId); } });
-setInterval(function() { if (msbOutboxQueue.length > 0) flushOutboxQueue(); }, 3500);
-
+setInterval(function() { if (msbOutboxQueue.length > 0) flushOutboxQueue(); }, 1200);
 window.selectChat = selectChat; window.closeChatMobile = closeChatMobile; window.sendMessage = sendMessage;
 window.toggleVoiceRecord = toggleVoiceRecord; window.toggleVideoRecord = toggleVideoRecord; window.uploadAnyFile = uploadAnyFile;
 window.uploadMyAvatar = uploadMyAvatar; window.deleteFriend = deleteFriend; window.openCreateGroupModal = openCreateGroupModal;
