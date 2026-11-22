@@ -685,16 +685,17 @@ jobs:
               private EditText nativeEdit;
               private TextView nativeSendBtn;
               private int lastKbHeight = -1;
+              private int lastRootHeight = 0;
 
               private int dp(int v) {
                   return Math.round(v * getResources().getDisplayMetrics().density);
               }
               @Override
-            
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
                   getWindow().getDecorView().setBackgroundColor(Color.parseColor("#0f172a"));
+
 
 
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -724,10 +725,11 @@ jobs:
                   if (getBridge() != null && getBridge().getWebView() != null) {
                       WebView wv = getBridge().getWebView();
                       wv.setBackgroundColor(Color.parseColor("#0f172a"));
-                      wv.clearCache(true);
+                      wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                       WebSettings ws = wv.getSettings();
                       ws.setJavaScriptEnabled(true);
                       ws.setDomStorageEnabled(true);
+                      ws.setCacheMode(WebSettings.LOAD_DEFAULT);
                       ws.setMediaPlaybackRequiresUserGesture(false);
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
                       wv.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
@@ -828,51 +830,28 @@ jobs:
                   ));
                   applyNativeBarTheme();
 
+                  nativeChatWrap.setElevation(dp(8));
                   root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+                      if (nativeChatWrap.getVisibility() != View.VISIBLE) return;
                       Rect r = new Rect();
                       root.getWindowVisibleDisplayFrame(r);
                       int screenHeight = root.getRootView().getHeight();
                       int diff = screenHeight - r.bottom;
                       int kbHeight = (diff > screenHeight * 0.15) ? diff : 0;
 
-                      if (kbHeight != lastKbHeight) {
+                      if (kbHeight != lastKbHeight || root.getHeight() != lastRootHeight) {
                           lastKbHeight = kbHeight;
+                          lastRootHeight = root.getHeight();
                           boolean isResizeActive = (root.getHeight() <= r.bottom + dp(20));
                           nativeChatWrap.setTranslationY(isResizeActive ? 0 : -kbHeight);
 
-                          int padDp = Math.round(((isResizeActive ? 0 : kbHeight) + dp(64)) / getResources().getDisplayMetrics().density);
+                          int padDp = Math.round(((isResizeActive ? 0 : kbHeight) + dp(68)) / getResources().getDisplayMetrics().density);
                           boolean isKbOpen = kbHeight > dp(80);
-                          evalJs("(function(){var m=document.getElementById('messages');if(m&&window.__msbNatActive){m.style.paddingBottom='" + padDp + "px';if(" + isKbOpen + ")m.scrollTop=m.scrollHeight;}})();");
+                          evalJs("(function(){var m=document.getElementById('messages');if(m){m.style.paddingBottom='" + padDp + "px';if(" + isKbOpen + ")m.scrollTop=m.scrollHeight;}})();");
                       }
                   });
-
-
-
-
-                  root.postDelayed(new Runnable() {
-                      @Override
-                      public void run() {
-                          String autoHookJs =
-                              "(function(){" +
-                              "var m=document.getElementById('messenger-modal');" +
-                              "var sb=document.getElementById('app-sidebar');" +
-                              "var w=document.getElementById('msb-work-window-modal');" +
-                              "var open=Boolean(m&&m.style.display==='flex')&&Boolean(typeof currentRoomId!=='undefined'&&currentRoomId)&&(window.innerWidth>768||(sb&&sb.classList.contains('hidden')))&&!(w&&w.style.display==='flex');" +
-                              "window.__msbNatActive=open;" +
-                              "var cap=document.getElementById('tg-capsule-wrap');" +
-                              "if(cap)cap.style.display=open?'none':'flex';" +
-                              "if(!window.__msbEmojiHooked&&typeof window.insertTgEmoji==='function'){" +
-                              "window.__msbEmojiHooked=true;" +
-                              "var orig=window.insertTgEmoji;" +
-                              "window.insertTgEmoji=function(em){if(window.__msbNatActive&&window.MsbNative){if(typeof saveRecentEmoji==='function')saveRecentEmoji(em);window.MsbNative.appendChatEmoji(em);}else{orig(em);}};" +
-                              "}" +
-                              "if(window.MsbNative)window.MsbNative.setChatBarVisible(open);" +
-                              "})();";
-                          evalJs(autoHookJs);
-                          root.postDelayed(this, 300);
-                      }
-                  }, 800);
               }
+
               private void applyNativeBarTheme() {
                   if (nativeCapsule == null) return;
                   int acc = MsbKeepAliveService.resolveThemeAccentColor(this);
