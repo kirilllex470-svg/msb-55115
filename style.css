@@ -1837,3 +1837,20 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
 button, .friend-item, .msb-plus-item, .tg-emoji-item, .notif-item {
     touch-action: manipulation;
 }
+/* Яркая кнопка смайлика без затемнения */
+#tg-smile-btn,
+.tg-smile-btn {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    filter: brightness(1.18) saturate(1.25) !important;
+}
+
+/* Поднимаем волновую строку функций (+) и панель смайликов на 1 этаж ВЫШЕ над нативной строкой APK */
+body:has(#tg-capsule-wrap[style*="display: none"]) .tg-radial-wave-tray.open,
+body:has(#tg-capsule-wrap[style*="display: none"]) .tg-emoji-drawer {
+    margin-bottom: 56px !important;
+}
+
+body:has(#tg-capsule-wrap[style*="display: none"]) .msb-plus-dropdown.open {
+    bottom: 118px !important;
+}

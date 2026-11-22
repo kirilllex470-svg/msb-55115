@@ -205,8 +205,9 @@ function isUserOnlineNow(name) {
     const key = String(name).trim().toLowerCase();
     if (hasActiveVisibleWsForUser(key)) return true;
     const t = lastSeenDB[key] || 0;
-    return (Date.now() - t) < 7000;
+    return (Date.now() - t) < 25000;
 }
+
 
 
 function getUserLastSeenStr(name) {
@@ -1177,9 +1178,32 @@ const server = http.createServer(function(req, res) {
         });
     }
 
+      if (urlPath === '/api/fast-txt' && req.method === 'GET') {
+        const u = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        const s = u.searchParams.get('s');
+        const r = u.searchParams.get('r');
+        const t = u.searchParams.get('t');
+        const cid = u.searchParams.get('c');
+        if (!s || !r || !t) {
+            res.writeHead(400);
+            return res.end('0');
+        }
+        return saveMultipartChatMsg({
+            sender: s,
+            room: r,
+            type: 'text',
+            text: t,
+            clientMsgId: cid || null,
+            quoteId: u.searchParams.get('qid') || null,
+            quoteText: u.searchParams.get('qt') || null,
+            quoteSender: u.searchParams.get('qs') || null
+        }, null, '', '', req, res);
+    }
+
     if (urlPath === '/api/send' && req.method === 'POST') {
         return handleMultipartSend(req, res);
     }
+
 
     if (urlPath.startsWith('/uploads/')) {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
@@ -1506,6 +1530,7 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req
             return;
         }
     }
+
 
 
     let finalContent = fields.text || '';
@@ -1944,7 +1969,7 @@ wss.on('connection', function(ws) {
                 broadcastWS({ type: 'chat_typing', room: msg.room, user: uClean, typing: msg.typing !== false });
                 return;
             }
-			            if (msg.type === 'chat_send_ws' && msg.sender && msg.room) {
+            if (msg.type === 'chat_send_ws' && msg.sender && msg.room) {
                 saveMultipartChatMsg({
                     sender: msg.sender,
                     room: msg.room,
@@ -1956,8 +1981,12 @@ wss.on('connection', function(ws) {
                     quoteSender: msg.quoteSender || null,
                     forwardedFrom: msg.forwardedFrom || null
                 }, null, '', '', null, null);
+                try {
+                    ws.send(JSON.stringify({ type: 'chat_ack', clientMsgId: msg.clientMsgId, room: msg.room }));
+                } catch (e) {}
                 return;
             }
+
             if (msg.type === 'save_sub' && msg.sub) {
                 if (msg.callsign) markUserOnline(msg.callsign);
                 const idx = pushSubscriptions.findIndex(function(s) { return s.sub && s.sub.endpoint === msg.sub.endpoint; });
@@ -2045,6 +2074,9 @@ setInterval(function() {
         ws.isAlive = false;
         try { ws.ping(); } catch (e) {}
     });
+}, 35000);
+
+setInterval(function() {
     Object.keys(onlinePresenceCache).forEach(function(key) {
         const nowOnline = isUserOnlineNow(key);
         if (onlinePresenceCache[key] && !nowOnline) {
@@ -2052,7 +2084,7 @@ setInterval(function() {
             broadcastWS({ type: 'presence_update', user: key, online: false, lastSeen: getUserLastSeenStr(key) });
         }
     });
-}, 4000);
+}, 6000);
 
 
 const PORT = process.env.PORT || 3000;

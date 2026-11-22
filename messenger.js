@@ -842,7 +842,7 @@ function flushOutboxQueue() {
     });
 
     textItems.forEach(function(item) {
-        if (item._inFlight && (Date.now() - item._inFlight < 3500)) return;
+        if (item._inFlight && (Date.now() - item._inFlight < 15000)) return;
         item._inFlight = Date.now();
 
         var payloadObj = {
@@ -857,47 +857,66 @@ function flushOutboxQueue() {
             forwardedFrom: item.forwardedFrom || null
         };
 
-        var sentViaWs = false;
         if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
             try {
                 ws.send(JSON.stringify(Object.assign({ type: 'chat_send_ws', msgType: payloadObj.type }, payloadObj)));
-                sentViaWs = true;
             } catch (e) {}
+        } else if (typeof connectWS === 'function') {
+            connectWS(false);
         }
 
-        setTimeout(function() {
-            var stillQueued = msbOutboxQueue.some(function(x) { return x && x.lid === item.lid; });
-            if (!stillQueued) return;
+        var isShortText = (payloadObj.type === 'text') &&
+            !payloadObj.forwardedFrom &&
+            (payloadObj.text.length > 0 && payloadObj.text.length <= 500);
 
-            var controller = new AbortController();
-            var timer = setTimeout(function() { controller.abort(); }, 4500);
-            fetch('/api/send', {
+        var controller = new AbortController();
+        var timer = setTimeout(function() { controller.abort(); }, 18000);
+
+        var reqPromise;
+        if (isShortText) {
+            var qs = '/api/fast-txt?c=' + encodeURIComponent(item.lid) +
+                '&s=' + encodeURIComponent(item.sender) +
+                '&r=' + encodeURIComponent(item.room) +
+                '&t=' + encodeURIComponent(item.text) +
+                (item.quoteId ? ('&qid=' + encodeURIComponent(item.quoteId) +
+                                 '&qt=' + encodeURIComponent(item.quoteText || '') +
+                                 '&qs=' + encodeURIComponent(item.quoteSender || '')) : '');
+            reqPromise = fetch(qs, {
+                method: 'GET',
+                cache: 'no-store',
+                keepalive: true,
+                signal: controller.signal
+            });
+        } else {
+            reqPromise = fetch('/api/send', {
                 method: 'POST',
                 keepalive: true,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payloadObj),
                 signal: controller.signal
-            })
-            .then(function(res) {
-                clearTimeout(timer);
-                if (!res.ok) throw new Error('HTTP');
-                return res.json().catch(function() { return { ok: true }; });
-            })
-            .then(function(respData) {
-                msbOutboxQueue = msbOutboxQueue.filter(function(x) { return x && x.lid !== item.lid; });
-                saveTextOutboxToStorage();
-                var tempEl = document.querySelector('.msb-pending-row[data-lid="' + item.lid + '"]');
-                if (tempEl) tempEl.remove();
-                if (respData && respData.msg && typeof window.handleIncomingChatWS === 'function') {
-                    window.handleIncomingChatWS({ type: 'chat_new_msg', room: item.room, msg: respData.msg });
-                }
-                clearNetworkErrorBanner();
-            })
-            .catch(function() {
-                clearTimeout(timer);
-                item._inFlight = 0;
             });
-        }, sentViaWs ? 900 : 0);
+        }
+
+        reqPromise
+        .then(function(res) {
+            clearTimeout(timer);
+            if (!res.ok) throw new Error('HTTP');
+            return res.json().catch(function() { return { ok: true }; });
+        })
+        .then(function(respData) {
+            msbOutboxQueue = msbOutboxQueue.filter(function(x) { return x && x.lid !== item.lid; });
+            saveTextOutboxToStorage();
+            var tempEl = document.querySelector('.msb-pending-row[data-lid="' + item.lid + '"]');
+            if (tempEl) tempEl.remove();
+            if (respData && respData.msg && typeof window.handleIncomingChatWS === 'function') {
+                window.handleIncomingChatWS({ type: 'chat_new_msg', room: item.room, msg: respData.msg });
+            }
+            clearNetworkErrorBanner();
+        })
+        .catch(function() {
+            clearTimeout(timer);
+            item._inFlight = 0;
+        });
     });
 
     if (msbIsFlushing) return;
@@ -906,7 +925,7 @@ function flushOutboxQueue() {
 
     msbIsFlushing = true;
     var mCtrl = new AbortController();
-    var mTimer = setTimeout(function() { mCtrl.abort(); }, 45000);
+    var mTimer = setTimeout(function() { mCtrl.abort(); }, 60000);
     var fd = new FormData();
     fd.append('clientMsgId', mediaItem.lid);
     fd.append('sender', mediaItem.sender);
@@ -2480,12 +2499,10 @@ function buildTelegramComposerLayout() {
         plusBtn.className = 'tg-inside-btn tg-plus-btn';
         plusBtn.textContent = '➕';
         plusBtn.title = 'Инструменты';
-        plusBtn.onpointerdown = function(e) {
-            e.preventDefault();
+        plusBtn.onclick = function(e) {
             e.stopPropagation();
             toggleMsbRadialToolbar(true);
         };
-
 
            inputRow.insertBefore(capsule, textInput);
         capsule.appendChild(smileBtn);
