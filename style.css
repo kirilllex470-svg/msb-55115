@@ -1553,7 +1553,8 @@ body.theme-cosmic .tg-inside-send-btn {
     background: transparent !important;
     border: none !important;
     font-size: 24px !important;
-    height: 38px;
+    height: 42px;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1561,12 +1562,15 @@ body.theme-cosmic .tg-inside-send-btn {
     border-radius: 10px;
     padding: 0 !important;
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    position: relative;
 }
 
 .tg-emoji-item:active {
-    background: rgba(255, 255, 255, 0.16) !important;
-    transform: scale(1.2);
+    background: rgba(255, 255, 255, 0.2) !important;
 }
+
 /* === БЛОК ПРОФИЛЯ С АВАТАРКОЙ ВВЕРХУ ПОД ЦВЕТ ВЫБРАННОЙ ТЕМЫ === */
 .msb-profile-pill {
     border-radius: 16px !important;
@@ -1747,9 +1751,15 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
 .msb-live-emoji.anim-fire { animation: msbLiveFire 1.1s ease-in-out infinite; }
 .msb-live-emoji.anim-shake { animation: msbLiveShake 1.4s ease-in-out infinite; }
 
-.tg-emoji-item.live-preview {
-    animation: msbLiveBounce 2s ease-in-out infinite;
+@keyframes msbEmojiPanelPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
 }
+
+.tg-emoji-item.live-preview {
+    animation: msbEmojiPanelPulse 1.8s ease-in-out infinite;
+}
+
 
 /* === ГИБКОЕ СЖАТИЕ ЛЕНТЫ ЧАТА НАД КЛАВИАТУРОЙ ANDROID === */
 #messenger-modal {
