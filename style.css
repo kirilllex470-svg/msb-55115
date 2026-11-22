@@ -1812,11 +1812,6 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
 #msb-pin-lock-modal { z-index: 260000 !important; }
 #server-update-modal { z-index: 300000 !important; }
 
-/* Отступ снизу для панели смайликов и волновой панели, чтобы нативная строка их не перекрывала */
-.tg-emoji-drawer,
-.tg-radial-wave-tray.open {
-    margin-bottom: 54px;
-}
 /* === УСТРАНЕНИЕ ЛАГОВ ПРИ ПЕРЕКЛЮЧЕНИИ ОКОН В APK === */
 #messenger-modal,
 #msb-work-window-modal,
@@ -1828,9 +1823,7 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
     transform: translateZ(0);
 }
 
-
 /* Убираем задержку 300мс на нажатия кнопок и контактов в Android WebView */
 button, .friend-item, .msb-plus-item, .tg-emoji-item, .notif-item {
     touch-action: manipulation;
 }
-
