@@ -1784,3 +1784,41 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
     z-index: 30 !important;
 }
 
+/* === ОПТИМИЗАЦИЯ GPU И УСТРАНЕНИЕ НАЛОЖЕНИЯ ОКОН В APK === */
+#messenger-modal,
+#msb-work-window-modal,
+.sidebar,
+.chat-area {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+/* Пауза фоновой анимации бегущей строки, когда мессенджер закрыт */
+#messenger-modal[style*="display: none"] .msg-ticker-move,
+#messenger-modal:not([style*="display: flex"]) .msg-ticker-move {
+    animation-play-state: paused !important;
+}
+
+/* Плавное парение онлайн-аватарок через аппаратный GPU */
+@keyframes avatarOnlineFloat {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(0, -3px, 0) scale(1.04); }
+}
+
+/* Строгий порядок слоев (z-index) против наложения окон */
+#messenger-modal { z-index: 140000 !important; }
+#msb-work-window-modal { z-index: 145000 !important; }
+#msb-user-profile-modal { z-index: 220000 !important; }
+#msb-msg-action-sheet { z-index: 225000 !important; }
+#msb-dev-tab-modal { z-index: 230000 !important; }
+#msb-pin-setup-modal { z-index: 240000 !important; }
+#msb-pin-lock-modal { z-index: 260000 !important; }
+#server-update-modal { z-index: 300000 !important; }
+
+/* Отступ снизу для панели смайликов и волновой панели, чтобы нативная строка их не перекрывала */
+.tg-emoji-drawer,
+.tg-radial-wave-tray.open {
+    margin-bottom: 54px;
+}
+

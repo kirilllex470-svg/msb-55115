@@ -2293,6 +2293,12 @@ function updateWeakNetworkUI() {
     var weakNow = evaluateNetworkWeakness();
     msbIsWeakNetwork = weakNow;
     window.msbIsWeakNetwork = weakNow;
+
+    var hasLocalSession = Boolean(localStorage.getItem('journal_user'));
+    if (hasLocalSession && !msbInitialSyncDone) {
+        msbInitialSyncDone = true;
+    }
+
     var bootOv = document.getElementById('msb-weak-boot-overlay');
     if (bootOv) {
         if (!msbInitialSyncDone && weakNow) bootOv.style.display = 'flex';
@@ -2300,6 +2306,7 @@ function updateWeakNetworkUI() {
     }
     if (typeof window.syncMessengerWeakBanner === 'function') window.syncMessengerWeakBanner(weakNow);
 }
+
 
 function triggerImmediateEdgePull() {
     var now = Date.now();

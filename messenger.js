@@ -708,7 +708,9 @@ function openWorkNewWindow() {
 function closeWorkNewWindow() {
     var workModal = document.getElementById('msb-work-window-modal');
     if (workModal) workModal.style.display = 'none';
+    syncNativeChatComposerState();
 }
+
 
 window.openWorkNewWindow = openWorkNewWindow;
 window.closeWorkNewWindow = closeWorkNewWindow;
@@ -987,10 +989,12 @@ window.openMessengerWindow = openMessengerWindow;
 function closeMessengerWindow() {
     var modal = document.getElementById('messenger-modal');
     if (modal) modal.style.display = 'none';
+    syncNativeChatComposerState();
     document.querySelectorAll('#messages video, #messages audio').forEach(function(media) {
         try { media.pause(); } catch (e) {}
     });
 }
+
 window.closeMessengerWindow = closeMessengerWindow;
 function renderAvatarElement(el, name, avatarDataUrl) {
     if (!el) return;
@@ -1063,8 +1067,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Подстраиваем высоту окна мессенджера строго под реальную область НАД клавиатурой телефона
+    // Подстраиваем высоту окна мессенджера строго под реальную область НАД клавиатурой телефона
     function bindVisualViewportForAndroidKeyboard() {
-        if (!window.visualViewport) return;
+        if (!window.visualViewport || window.MsbNative) return;
         var updateVp = function() {
             var modal = document.getElementById('messenger-modal');
             if (!modal || modal.style.display !== 'flex') return;
@@ -1078,6 +1083,27 @@ document.addEventListener('DOMContentLoaded', function() {
         window.visualViewport.addEventListener('resize', updateVp);
         window.visualViewport.addEventListener('scroll', updateVp);
     }
+
+function syncNativeChatComposerState() {
+    var modal = document.getElementById('messenger-modal');
+    var sb = document.getElementById('app-sidebar');
+    var workModal = document.getElementById('msb-work-window-modal');
+    var isChatActive = Boolean(modal && modal.style.display === 'flex') &&
+        Boolean(currentRoomId) &&
+        (window.innerWidth > 768 || (sb && sb.classList.contains('hidden'))) &&
+        !(workModal && workModal.style.display === 'flex');
+
+    window.__msbNatActive = isChatActive;
+    var webCap = document.getElementById('tg-capsule-wrap');
+    if (webCap) {
+        webCap.style.display = (isChatActive && window.MsbNative) ? 'none' : 'flex';
+    }
+    if (window.MsbNative && typeof window.MsbNative.setChatBarVisible === 'function') {
+        window.MsbNative.setChatBarVisible(isChatActive);
+    }
+}
+window.syncNativeChatComposerState = syncNativeChatComposerState;
+
     bindVisualViewportForAndroidKeyboard();
 
     if (tInput && tInput.tagName === 'INPUT') {
@@ -1481,7 +1507,9 @@ function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
     if (sb) sb.classList.remove('hidden');
     updateTopBackButtonVisibility();
+    syncNativeChatComposerState();
 }
+
 
 
 (function initChatLeftSwipeToFriends() {
@@ -2462,9 +2490,13 @@ function scrollToEmojiCat(catId) {
 }
 
 function insertTgEmoji(emojiChar) {
+    saveRecentEmoji(emojiChar);
+    if (window.__msbNatActive && window.MsbNative && typeof window.MsbNative.appendChatEmoji === 'function') {
+        window.MsbNative.appendChatEmoji(emojiChar);
+        return;
+    }
     var inp = document.getElementById('text-input');
     if (!inp || inp.disabled) return;
-    saveRecentEmoji(emojiChar);
     var start = (typeof inp.selectionStart === 'number') ? inp.selectionStart : inp.value.length;
     var end = (typeof inp.selectionEnd === 'number') ? inp.selectionEnd : inp.value.length;
     inp.value = inp.value.slice(0, start) + emojiChar + inp.value.slice(end);
@@ -2472,6 +2504,7 @@ function insertTgEmoji(emojiChar) {
     inp.setSelectionRange(nextPos, nextPos);
     inp.dispatchEvent(new Event('input'));
 }
+
 
 function backspaceTgEmoji() {
     var inp = document.getElementById('text-input');
