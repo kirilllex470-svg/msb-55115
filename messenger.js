@@ -928,52 +928,10 @@ function flushOutboxQueue() {
     });
 }
 
-        var fd = new FormData();
-        fd.append('clientMsgId', item.lid);
-        fd.append('sender', item.sender);
-        fd.append('room', item.room);
-        fd.append('type', item.type || 'file');
-        if (item.blob) fd.append('media', item.blob, item.fileName || ('media_' + Date.now()));
-        if (item.quoteId) {
-            fd.append('quoteId', item.quoteId);
-            fd.append('quoteText', item.quoteText || '');
-            fd.append('quoteSender', item.quoteSender || '');
-        }
-        if (item.forwardedFrom) fd.append('forwardedFrom', item.forwardedFrom);
-        fetchOpts.body = fd;
-    }
-
-    fetch('/api/send', fetchOpts)
-    .then(function(res) {
-        clearTimeout(timer);
-        if (!res.ok) throw new Error('Send error');
-        return res.json().catch(function() { return { ok: true }; });
-    })
-    .then(function(respData) {
-        msbOutboxQueue.shift();
-        saveTextOutboxToStorage();
-        var tempEl = document.querySelector('.msb-pending-row[data-lid="' + item.lid + '"]');
-        if (tempEl) tempEl.remove();
-
-        if (respData && respData.msg && typeof window.handleIncomingChatWS === 'function') {
-            window.handleIncomingChatWS({ type: 'chat_new_msg', room: item.room, msg: respData.msg });
-        } else {
-            fetchMessages();
-        }
-        clearNetworkErrorBanner();
-        msbIsFlushing = false;
-        if (msbOutboxQueue.length > 0) setTimeout(flushOutboxQueue, 60);
-    })
-    .catch(function() {
-        clearTimeout(timer);
-        msbIsFlushing = false;
-        renderPendingBubbles();
-    });
-}
-
 function flushRetryQueue() {
     flushOutboxQueue();
 }
+
 function syncMessengerAuth() {
     ensureCleanMessengerTopbar();
     chatUser = getActiveChatIdentity();
@@ -1574,6 +1532,7 @@ function selectChat(itemObj) {
     });
     updateTotalUnreadBadge();
     renderFriends();
+    syncNativeChatComposerState();
 
     renderPendingBubbles();
     requestAnimationFrame(function() {
@@ -1581,6 +1540,7 @@ function selectChat(itemObj) {
         markChatAsRead(currentRoomId);
     });
 }
+
 
 
 function closeChatMobile() {
