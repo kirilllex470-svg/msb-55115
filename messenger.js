@@ -551,9 +551,26 @@ window.handleIncomingChatWS = function(packet) {
                 }
             }
         }
+
+        // Если сообщение чужое и мы свернули приложение ИЛИ открыт другой чат — даём сигнал и пуш!
+        var isFromOther = String(msg.sender || '').trim().toLowerCase() !== chatUser.toLowerCase();
+        var isWatchingThisChat = isModalOpen && (currentRoomId === packet.room) && (document.visibilityState === 'visible');
+        if (isFromOther && !isWatchingThisChat) {
+            if (typeof playSoundById === 'function' && !window.MsbNative) {
+                playSoundById('nice1', true);
+            }
+            if (typeof sendLocalNotification === 'function') {
+                var previewTxt = msg.type === 'audio' ? '🎙️ Голосовое сообщение'
+                    : (msg.type === 'video' ? '🎥 Видео-кружок'
+                    : (msg.type === 'file' ? '📎 Файл' : (msg.text || 'Новое сообщение')));
+                sendLocalNotification(chatUser, previewTxt, msg.sender, 'chat_' + msg.id);
+            }
+        }
+
         loadFriendsAndRequests(true);
     }
 };
+
 function ensureCleanMessengerTopbar() {
     var modal = document.getElementById('messenger-modal');
     if (!modal) return;

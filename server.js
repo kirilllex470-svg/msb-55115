@@ -1577,10 +1577,8 @@ function sendChatBackgroundPushOnly(sender, target, text) {
     const sLow = String(sender).trim().toLowerCase();
     if (!tLow || tLow === sLow) return;
 
-    // Если получатель сейчас онлайн и смотрит приложение — пуш в шторку не нужен, сообщение уже в чате по WS
-    if (hasActiveVisibleWsForUser(tLow)) return;
+    const notifTag = 'msb-chat-' + tLow + '-' + sLow + '-' + Date.now();
 
-    const notifTag = 'msb-chat-' + tLow + '-' + sLow;
     const rawSenderStr = String(sender || 'МСБ-55115').trim();
     const parsedCallsign = rawSenderStr.replace(/^👥\s*/, '').trim();
     const senderObj = usersDB[parsedCallsign.toLowerCase()];
