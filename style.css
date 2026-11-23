@@ -1865,7 +1865,7 @@ button, .friend-item, .msb-plus-item, .tg-emoji-item, .notif-item {
     opacity: 1 !important;
     text-shadow: 0 0 6px rgba(250, 204, 21, 0.4) !important;
 }
-/* === ВИДЕО-КРУЖОК БЕЗ КВАДРАТА КАК В TELEGRAM + БОЛЬШОЙ РЕЖИМ ПРИ ПРОСМОТРЕ === */
+/* === ВИДЕО-КРУЖОК БЕЗ КВАДРАТА + ЦЕНТРАЛЬНЫЙ ПРОСМОТР И ЗАПИСЬ С КОЛЬЦОМ ПРОГРЕССА === */
 .my-msg .bubble.video-bubble-clean,
 .other-msg .bubble.video-bubble-clean,
 body.theme-military .my-msg .bubble.video-bubble-clean,
@@ -1882,7 +1882,6 @@ body.theme-cosmic .other-msg .bubble.video-bubble-clean {
     overflow: visible !important;
 }
 
-/* Аккуратный полупрозрачный шильдик времени рядом с кружком (как в ТГ) */
 .bubble.video-bubble-clean .msg-time {
     display: inline-block;
     float: right;
@@ -1905,7 +1904,6 @@ body.theme-cosmic .other-msg .bubble.video-bubble-clean {
     z-index: 5;
 }
 
-/* Обычный кружок в переписке */
 .video-round-wrap {
     width: 200px;
     height: 200px;
@@ -1923,7 +1921,6 @@ body.theme-cosmic .other-msg .bubble.video-bubble-clean {
     background: #000;
     display: block;
     cursor: pointer;
-    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body.theme-military .video-round { border-color: #22c55e !important; }
@@ -1938,7 +1935,6 @@ body.theme-cosmic .video-round   { border-color: #a855f7 !important; }
     }
 }
 
-/* Полностью прозрачный слой БЕЗ затемнения экрана */
 #msb-video-round-backdrop {
     display: none;
     position: fixed;
@@ -1947,42 +1943,132 @@ body.theme-cosmic .video-round   { border-color: #a855f7 !important; }
     z-index: 270000;
 }
 
-/* Большой круглый кружок СТРОГО В ЦЕНТРЕ ЭКРАНА при просмотре и при записи камеры */
-#msb-floating-round-player,
-#video-preview {
+#msb-round-stage {
+    display: none;
     position: fixed !important;
     top: 50% !important;
     left: 50% !important;
-    right: auto !important;
-    bottom: auto !important;
     width: min(82vw, 340px) !important;
     height: min(82vw, 340px) !important;
+    transform: translate(-50%, -50%) !important;
+    border-radius: 50% !important;
+    z-index: 270005 !important;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55) !important;
+}
+
+#msb-floating-round-player,
+#msb-round-stage #video-preview {
+    position: absolute !important;
+    inset: 6px !important;
+    width: calc(100% - 12px) !important;
+    height: calc(100% - 12px) !important;
     max-width: none !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     border-radius: 50% !important;
     object-fit: cover !important;
-    transform: translate(-50%, -50%) !important;
     background: #000 !important;
-    border: 4px solid #22c55e !important;
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55) !important;
-    z-index: 270005 !important;
+    border: none !important;
     cursor: pointer;
+    z-index: 2;
 }
 
-/* Отзеркаливание фронтальной камеры при записи, чтобы было удобно смотреть на себя */
-#video-preview {
-    transform: translate(-50%, -50%) scaleX(-1) !important;
+#msb-round-stage #video-preview {
+    transform: scaleX(-1) !important;
+    pointer-events: none;
+}
+#msb-round-stage #video-preview.rear-cam {
+    transform: none !important;
+}
+
+.msb-round-ring-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    pointer-events: none;
+    z-index: 4;
+}
+
+.msb-round-ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.22);
+    stroke-width: 3.5;
+}
+
+.msb-round-ring-prog {
+    fill: none;
+    stroke: #22c55e;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 358.14;
+    stroke-dashoffset: 358.14;
+    transition: stroke-dashoffset 0.08s linear;
+}
+
+body.theme-rocket .msb-round-ring-prog { stroke: #f97316; }
+body.theme-cosmic .msb-round-ring-prog { stroke: #a855f7; }
+
+.msb-round-time-pill {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(9, 13, 22, 0.76);
+    color: #ffffff;
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 4px 11px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 6;
     pointer-events: none;
 }
 
-body.theme-rocket #msb-floating-round-player,
-body.theme-rocket #video-preview {
-    border-color: #f97316 !important;
+.msb-rec-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+    animation: pulseLive 1s infinite;
 }
 
-body.theme-cosmic #msb-floating-round-player,
-body.theme-cosmic #video-preview {
-    border-color: #a855f7 !important;
+.msb-round-cam-flip,
+.msb-round-stop-send {
+    display: none;
+    position: absolute;
+    bottom: -14px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    background: rgba(15, 23, 42, 0.92);
+    color: #ffffff;
+    font-size: 20px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 8;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
 }
+
+.msb-round-cam-flip { left: 14px; }
+.msb-round-stop-send {
+    right: 14px;
+    background: linear-gradient(135deg, #16a34a, #0f5132);
+    border-color: #4ade80;
+}
+body.theme-rocket .msb-round-stop-send { background: linear-gradient(135deg, #ea580c, #7c2d12); border-color: #fb923c; }
+body.theme-cosmic .msb-round-stop-send { background: linear-gradient(135deg, #7c3aed, #312e81); border-color: #c084fc; }
+
+#msb-round-stage.mode-rec .msb-round-cam-flip,
+#msb-round-stage.mode-rec .msb-round-stop-send {
+    display: flex;
+}
+

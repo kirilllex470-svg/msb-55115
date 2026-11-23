@@ -1898,64 +1898,219 @@ function toggleVoiceRecord() {
     }
 }
 
+var roundCamFacing = 'user';
+var roundRecCanvas = null;
+var roundRecRaf = null;
+var roundRecStartTs = 0;
+var roundAudioStream = null;
+var MAX_ROUND_SEC = 60;
+
+function ensureRoundVideoStage() {
+    var stage = document.getElementById('msb-round-stage');
+    if (stage) return stage;
+
+    stage = document.createElement('div');
+    stage.id = 'msb-round-stage';
+    stage.innerHTML = [
+        '<svg class="msb-round-ring-svg" viewBox="0 0 120 120">',
+        '  <circle class="msb-round-ring-bg" cx="60" cy="60" r="57"></circle>',
+        '  <circle id="msb-round-ring-prog" class="msb-round-ring-prog" cx="60" cy="60" r="57"></circle>',
+        '</svg>',
+        '<div id="msb-round-time-pill" class="msb-round-time-pill">0:00</div>',
+        '<button type="button" id="msb-round-cam-flip" class="msb-round-cam-flip" title="Переключить камеру">🔄</button>',
+        '<button type="button" id="msb-round-stop-send" class="msb-round-stop-send" title="Остановить и отправить">➤</button>'
+    ].join('');
+    document.body.appendChild(stage);
+
+    document.getElementById('msb-round-cam-flip').onclick = function(e) {
+        e.stopPropagation();
+        switchRoundCameraLive();
+    };
+    document.getElementById('msb-round-stop-send').onclick = function(e) {
+        e.stopPropagation();
+        if (videoRecorder && videoRecorder.state === 'recording') {
+            toggleVideoRecord();
+        }
+    };
+    return stage;
+}
+
+function setRoundRingProgress(fraction, timeSec, isRecording) {
+    var prog = document.getElementById('msb-round-ring-prog');
+    var pill = document.getElementById('msb-round-time-pill');
+    var circumference = 358.14;
+    var clamped = Math.max(0, Math.min(1, fraction || 0));
+    if (prog) {
+        prog.style.strokeDashoffset = String(circumference * (1 - clamped));
+    }
+    if (pill) {
+        var total = Math.max(0, Math.floor(timeSec || 0));
+        var mm = Math.floor(total / 60);
+        var ss = String(total % 60).padStart(2, '0');
+        pill.innerHTML = (isRecording ? '<span class="msb-rec-dot"></span>' : '') + mm + ':' + ss;
+    }
+}
+
+function switchRoundCameraLive() {
+    if (!videoRecorder || videoRecorder.state !== 'recording') return;
+    var nextFacing = (roundCamFacing === 'user') ? 'environment' : 'user';
+    var preview = document.getElementById('video-preview');
+
+    navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 360, max: 480 }, height: { ideal: 360, max: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: { ideal: nextFacing } },
+        audio: false
+    }).then(function(newCamStream) {
+        if (videoStreamRef) {
+            videoStreamRef.getVideoTracks().forEach(function(t) { t.stop(); });
+        }
+        roundCamFacing = nextFacing;
+        videoStreamRef = newCamStream;
+        if (preview) {
+            preview.srcObject = newCamStream;
+            preview.classList.toggle('rear-cam', roundCamFacing === 'environment');
+            preview.play().catch(function() {});
+        }
+    }).catch(function() {});
+}
+
+function cleanupRoundRecordingUI() {
+    if (roundRecRaf) {
+        cancelAnimationFrame(roundRecRaf);
+        roundRecRaf = null;
+    }
+    var preview = document.getElementById('video-preview');
+    if (preview) {
+        preview.style.display = 'none';
+        preview.srcObject = null;
+    }
+    var stage = document.getElementById('msb-round-stage');
+    if (stage) {
+        stage.style.display = 'none';
+        stage.classList.remove('mode-rec');
+    }
+    if (videoStreamRef) {
+        videoStreamRef.getTracks().forEach(function(t) { t.stop(); });
+        videoStreamRef = null;
+    }
+    if (roundAudioStream) {
+        roundAudioStream.getTracks().forEach(function(t) { t.stop(); });
+        roundAudioStream = null;
+    }
+}
+
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
     if (!currentRoomId) return alert("Сначала выберите чат слева!");
     var btn = document.getElementById('video-btn');
     var preview = document.getElementById('video-preview');
+
     if (videoRecorder && videoRecorder.state === "recording") {
         videoRecorder.stop();
-        btn.classList.remove('recording');
-        btn.textContent = "🎥";
-        if (preview) {
-            preview.style.display = 'none';
-            if (preview.srcObject) {
-                preview.srcObject.getTracks().forEach(function(t) { t.stop(); });
-                preview.srcObject = null;
-            }
+        if (btn) {
+            btn.classList.remove('recording');
+            btn.textContent = "🎥";
         }
-    } else {
-        navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 },
-            video: { width: { ideal: 360, max: 480 }, height: { ideal: 360, max: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: "user" }
-        }).then(function(stream) {
-            videoChunks = new Array();
-            videoStreamRef = stream;
-            if (preview) {
-                if (preview.parentElement !== document.body) document.body.appendChild(preview);
-                preview.srcObject = stream;
-                preview.style.display = 'block';
-            }
+        cleanupRoundRecordingUI();
+        return;
+    }
 
-            var mime = '';
-            if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) mime = 'video/mp4;codecs=avc1,mp4a.40.2';
-            else if (MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
-            else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mime = 'video/webm;codecs=vp8,opus';
-            else if (MediaRecorder.isTypeSupported('video/webm')) mime = 'video/webm';
-            var recOptions = { videoBitsPerSecond: 115000, audioBitsPerSecond: 18000 };
-            if (mime) recOptions.mimeType = mime;
-            videoRecorder = new MediaRecorder(stream, recOptions);
-            videoRecorder.ondataavailable = function(e) {
-                if (e.data && e.data.size > 0) videoChunks.push(e.data);
-            };
-            videoRecorder.onstop = function() {
-                var blob = new Blob(videoChunks, { type: videoRecorder.mimeType || 'video/mp4' });
-                var fileExt = (videoRecorder.mimeType && videoRecorder.mimeType.indexOf('mp4') !== -1) ? 'mp4' : 'webm';
-                var qId = quotedMessageId || null, qTxt = quotedMessageText || null, qSnd = quotedMessageSender || null;
-                cancelReply();
-                enqueueChatPayload({
-                    sender: chatUser, room: currentRoomId, type: 'video',
-                    blob: blob, fileName: 'video.' + fileExt,
-                    quoteId: qId, quoteText: qTxt, quoteSender: qSnd
-                });
-                if (videoStreamRef) videoStreamRef.getTracks().forEach(function(t) { t.stop(); });
-            };
-            videoRecorder.start(400);
+    closeBigVideoRoundOverlay();
+    roundCamFacing = 'user';
+
+    navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 },
+        video: { width: { ideal: 360, max: 480 }, height: { ideal: 360, max: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: "user" }
+    }).then(function(stream) {
+        videoChunks = new Array();
+        videoStreamRef = new MediaStream(stream.getVideoTracks());
+        roundAudioStream = new MediaStream(stream.getAudioTracks());
+
+        var stage = ensureRoundVideoStage();
+        stage.classList.add('mode-rec');
+        stage.style.display = 'block';
+        setRoundRingProgress(0, 0, true);
+
+        if (preview) {
+            if (preview.parentElement !== stage) stage.insertBefore(preview, stage.firstChild);
+            preview.classList.remove('rear-cam');
+            preview.muted = true;
+            preview.setAttribute('playsinline', '');
+            preview.srcObject = videoStreamRef;
+            preview.style.display = 'block';
+            preview.play().catch(function() {});
+        }
+
+        if (!roundRecCanvas) {
+            roundRecCanvas = document.createElement('canvas');
+            roundRecCanvas.width = 360;
+            roundRecCanvas.height = 360;
+        }
+        var ctx = roundRecCanvas.getContext('2d');
+        roundRecStartTs = Date.now();
+
+        function drawFrameLoop() {
+            if (preview && preview.readyState >= 2) {
+                var vw = preview.videoWidth || 360;
+                var vh = preview.videoHeight || 360;
+                var minS = Math.min(vw, vh);
+                var sx = (vw - minS) / 2;
+                var sy = (vh - minS) / 2;
+                ctx.save();
+                if (roundCamFacing === 'user') {
+                    ctx.translate(360, 0);
+                    ctx.scale(-1, 1);
+                }
+                ctx.drawImage(preview, sx, sy, minS, minS, 0, 0, 360, 360);
+                ctx.restore();
+            }
+            var elapsed = (Date.now() - roundRecStartTs) / 1000;
+            setRoundRingProgress(elapsed / MAX_ROUND_SEC, elapsed, true);
+            if (elapsed >= MAX_ROUND_SEC && videoRecorder && videoRecorder.state === 'recording') {
+                toggleVideoRecord();
+                return;
+            }
+            roundRecRaf = requestAnimationFrame(drawFrameLoop);
+        }
+        roundRecRaf = requestAnimationFrame(drawFrameLoop);
+
+        var combinedStream = new MediaStream();
+        var canvasStream = roundRecCanvas.captureStream(24);
+        canvasStream.getVideoTracks().forEach(function(t) { combinedStream.addTrack(t); });
+        roundAudioStream.getAudioTracks().forEach(function(t) { combinedStream.addTrack(t); });
+
+        var mime = '';
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) mime = 'video/mp4;codecs=avc1,mp4a.40.2';
+        else if (MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
+        else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mime = 'video/webm;codecs=vp8,opus';
+        else if (MediaRecorder.isTypeSupported('video/webm')) mime = 'video/webm';
+
+        var recOptions = { videoBitsPerSecond: 380000, audioBitsPerSecond: 24000 };
+        if (mime) recOptions.mimeType = mime;
+
+        videoRecorder = new MediaRecorder(combinedStream, recOptions);
+        videoRecorder.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) videoChunks.push(e.data);
+        };
+        videoRecorder.onstop = function() {
+            var blob = new Blob(videoChunks, { type: videoRecorder.mimeType || 'video/mp4' });
+            var fileExt = (videoRecorder.mimeType && videoRecorder.mimeType.indexOf('mp4') !== -1) ? 'mp4' : 'webm';
+            var qId = quotedMessageId || null, qTxt = quotedMessageText || null, qSnd = quotedMessageSender || null;
+            cancelReply();
+            cleanupRoundRecordingUI();
+            enqueueChatPayload({
+                sender: chatUser, room: currentRoomId, type: 'video',
+                blob: blob, fileName: 'video.' + fileExt,
+                quoteId: qId, quoteText: qTxt, quoteSender: qSnd
+            });
+        };
+        videoRecorder.start(400);
+        if (btn) {
             btn.classList.add('recording');
             btn.textContent = "🛑";
-        }).catch(function() { alert("Нет доступа к камере!"); });
-    }
+        }
+    }).catch(function() { alert("Нет доступа к камере или микрофону!"); });
 }
+
 
 function uploadAnyFile(inputElement) {
     chatUser = getActiveChatIdentity();
@@ -2468,16 +2623,28 @@ function startEditingMessage(msgId, oldText) {
 
 
 var activeSmallRoundVideo = null;
+var roundPlayRaf = null;
 
 function closeBigVideoRoundOverlay() {
+    if (roundPlayRaf) {
+        cancelAnimationFrame(roundPlayRaf);
+        roundPlayRaf = null;
+    }
     var ov = document.getElementById('msb-video-round-backdrop');
     if (ov) ov.style.display = 'none';
+
     var floatVid = document.getElementById('msb-floating-round-player');
     if (floatVid) {
         try { floatVid.pause(); } catch (e) {}
         floatVid.removeAttribute('src');
         floatVid.style.display = 'none';
     }
+
+    var stage = document.getElementById('msb-round-stage');
+    if (stage && !stage.classList.contains('mode-rec')) {
+        stage.style.display = 'none';
+    }
+
     if (activeSmallRoundVideo) {
         activeSmallRoundVideo.style.visibility = 'visible';
         activeSmallRoundVideo = null;
@@ -2486,8 +2653,8 @@ function closeBigVideoRoundOverlay() {
 
 function playVideoWithSound(v) {
     if (!v) return;
+    if (videoRecorder && videoRecorder.state === 'recording') return;
 
-    // Если повторно нажали — закрываем большой кружок
     if (activeSmallRoundVideo === v) {
         closeBigVideoRoundOverlay();
         return;
@@ -2495,7 +2662,6 @@ function playVideoWithSound(v) {
 
     closeBigVideoRoundOverlay();
 
-    // Прозрачный слой без затемнения (чтобы тап мимо кружка сворачивал его обратно)
     var ov = document.getElementById('msb-video-round-backdrop');
     if (!ov) {
         ov = document.createElement('div');
@@ -2504,14 +2670,18 @@ function playVideoWithSound(v) {
         document.body.appendChild(ov);
     }
 
-    // Отдельный большой круглый плеер прямо поверх экрана (не режется контейнером чата!)
+    var stage = ensureRoundVideoStage();
+    stage.classList.remove('mode-rec');
+    stage.style.display = 'block';
+    setRoundRingProgress(0, 0, false);
+
     var floatVid = document.getElementById('msb-floating-round-player');
     if (!floatVid) {
         floatVid = document.createElement('video');
         floatVid.id = 'msb-floating-round-player';
         floatVid.setAttribute('playsinline', '');
         floatVid.onclick = function() { closeBigVideoRoundOverlay(); };
-        document.body.appendChild(floatVid);
+        stage.insertBefore(floatVid, stage.firstChild);
     }
 
     document.querySelectorAll('#messages video.video-round').forEach(function(other) {
@@ -2522,7 +2692,10 @@ function playVideoWithSound(v) {
     activeSmallRoundVideo = v;
     v.style.visibility = 'hidden';
 
-    var cleanSrc = String(v.getAttribute('src') || v.src || '').split('#')[0];
+    var rawSrc = String(v.getAttribute('src') || v.src || '');
+    var hashPos = rawSrc.indexOf('#');
+    var cleanSrc = (hashPos !== -1) ? rawSrc.substring(0, hashPos) : rawSrc;
+
     ov.style.display = 'block';
     floatVid.src = cleanSrc;
     floatVid.style.display = 'block';
@@ -2531,10 +2704,23 @@ function playVideoWithSound(v) {
     floatVid.currentTime = 0;
     floatVid.play().catch(function() {});
 
+    function syncPlayProgress() {
+        if (!floatVid || floatVid.paused || floatVid.ended) return;
+        var dur = (floatVid.duration && isFinite(floatVid.duration)) ? floatVid.duration : 1;
+        var rem = Math.max(0, dur - floatVid.currentTime);
+        setRoundRingProgress(floatVid.currentTime / dur, rem, false);
+        roundPlayRaf = requestAnimationFrame(syncPlayProgress);
+    }
+    floatVid.onplay = function() {
+        if (roundPlayRaf) cancelAnimationFrame(roundPlayRaf);
+        roundPlayRaf = requestAnimationFrame(syncPlayProgress);
+    };
     floatVid.onended = function() {
+        setRoundRingProgress(1, 0, false);
         closeBigVideoRoundOverlay();
     };
 }
+
 
 
 function sendFriendRequest() {
