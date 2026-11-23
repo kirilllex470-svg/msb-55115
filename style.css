@@ -1794,65 +1794,72 @@ body.theme-cosmic .msb-unified-back-btn .back-arrow-icon {
     z-index: 30 !important;
 }
 
-/* === ОПТИМИЗАЦИЯ GPU И УСТРАНЕНИЕ НАЛОЖЕНИЯ ОКОН В APK === */
-#messenger-modal,
-#msb-work-window-modal,
-.sidebar,
-.chat-area {
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transform: translateZ(0);
-}
-
-
-
-/* Плавное парение онлайн-аватарок через аппаратный GPU */
+/* === ЧИСТАЯ ИЕРАРХИЯ СЛОЕВ БЕЗ ПОЛОМКИ FIXED-ОКОН В WEBVIEW === */
 @keyframes avatarOnlineFloat {
     0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
     50% { transform: translate3d(0, -3px, 0) scale(1.04); }
 }
 
-/* Строгий порядок слоев (z-index) против наложения окон */
-#messenger-modal { z-index: 140000 !important; }
-#msb-work-window-modal { z-index: 145000 !important; }
+#login-overlay { z-index: 100 !important; }
+#messenger-modal {
+    z-index: 140000 !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    transform: none !important;
+}
+#msb-work-window-modal {
+    z-index: 145000 !important;
+    transform: none !important;
+}
+#register-modal { z-index: 160000 !important; }
+#forward-modal, #group-modal { z-index: 195000 !important; }
+#splash-screen { z-index: 200000 !important; }
+#alert-modal { z-index: 210000 !important; }
 #msb-user-profile-modal { z-index: 220000 !important; }
 #msb-msg-action-sheet { z-index: 225000 !important; }
 #msb-dev-tab-modal { z-index: 230000 !important; }
 #msb-pin-setup-modal { z-index: 240000 !important; }
+#admin-users-modal,
+#sound-modal,
+#msg-photo-viewer-modal,
+#photo-lightbox,
+#archive-page,
+#stream-page,
+#call-dev-modal { z-index: 245000 !important; }
+#msb-weak-boot-overlay { z-index: 250000 !important; }
 #msb-pin-lock-modal { z-index: 260000 !important; }
 #server-update-modal { z-index: 300000 !important; }
 
-/* === УСТРАНЕНИЕ ЛАГОВ ПРИ ПЕРЕКЛЮЧЕНИИ ОКОН В APK === */
-#messenger-modal,
-#msb-work-window-modal,
-.sidebar,
-.chat-area {
-    contain: layout style;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transform: translateZ(0);
+/* Изоляция перерисовки ленты и бегущей строки для 60+ FPS в APK */
+#messages, .friends-list {
+    contain: content;
+    overflow-anchor: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
-/* Убираем задержку 300мс на нажатия кнопок и контактов в Android WebView */
+.msg-ticker-wrap {
+    contain: strict;
+    height: 28px;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar {
+    will-change: transform;
+}
+.chat-area {
+    transform: none !important;
+}
+
 button, .friend-item, .msb-plus-item, .tg-emoji-item, .notif-item {
     touch-action: manipulation;
 }
-/* Максимально яркий и чёткий смайлик в строке ввода */
-#tg-smile-btn,
-.tg-smile-btn {
+
+#tg-smile-btn, .tg-smile-btn {
     color: #ffffff !important;
     opacity: 1 !important;
-    filter: brightness(1.35) contrast(1.15) saturate(1.4) !important;
-    text-shadow: 0 0 8px rgba(250, 204, 21, 0.45) !important;
-}
-
-
-/* Поднимаем волновую строку функций (+) и панель смайликов на 1 этаж ВЫШЕ над нативной строкой APK */
-body:has(#tg-capsule-wrap[style*="display: none"]) .tg-radial-wave-tray.open,
-body:has(#tg-capsule-wrap[style*="display: none"]) .tg-emoji-drawer {
-    margin-bottom: 56px !important;
-}
-
-body:has(#tg-capsule-wrap[style*="display: none"]) .msb-plus-dropdown.open {
-    bottom: 118px !important;
+    text-shadow: 0 0 6px rgba(250, 204, 21, 0.4) !important;
 }

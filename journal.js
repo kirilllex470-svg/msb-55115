@@ -2650,7 +2650,7 @@ function backToPinKeypad() {
     document.getElementById('msb-pin-entry-view').style.display = 'block';
 }
 
-setInterval(function() {
+(function syncNativeIdentityOnce() {
     if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
         var u = currentUser || localStorage.getItem('journal_user') || '';
         var c = currentCallsign || localStorage.getItem('journal_callsign') || '';
@@ -2658,9 +2658,10 @@ setInterval(function() {
             window.MsbNative.setIdentity(u, c, location.origin);
         }
     }
-}, 5000);
+})();
 
 initApp();
+
 
 async function initNativeFcmPush() {
     try {

@@ -676,7 +676,13 @@ function openUserProfileModal() {
 
 function openWorkNewWindow() {
     closeUserProfileModal();
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+    }
+    toggleTgEmojiDrawer(false);
+    toggleMsbRadialToolbar(false);
     var workModal = document.getElementById('msb-work-window-modal');
+
     if (!workModal) {
         workModal = document.createElement('div');
         workModal.id = 'msb-work-window-modal';
@@ -1135,20 +1141,26 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function bindVisualViewportForAndroidKeyboard() {
+        if (window.MsbNative || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+            return;
+        }
         if (!window.visualViewport) return;
+        var vpRaf = null;
         var updateVp = function() {
-            var modal = document.getElementById('messenger-modal');
-            if (!modal || modal.style.display !== 'flex') return;
-            var vh = window.visualViewport.height;
-            var offsetTop = window.visualViewport.offsetTop || 0;
-            modal.style.height = vh + 'px';
-            modal.style.top = offsetTop + 'px';
-            var mBox = getMessagesDiv();
-            if (mBox) mBox.scrollTop = mBox.scrollHeight;
+            if (vpRaf) cancelAnimationFrame(vpRaf);
+            vpRaf = requestAnimationFrame(function() {
+                var modal = document.getElementById('messenger-modal');
+                if (!modal || modal.style.display !== 'flex') return;
+                modal.style.height = window.visualViewport.height + 'px';
+                modal.style.top = (window.visualViewport.offsetTop || 0) + 'px';
+                var mBox = getMessagesDiv();
+                if (mBox) mBox.scrollTop = mBox.scrollHeight;
+            });
         };
         window.visualViewport.addEventListener('resize', updateVp);
         window.visualViewport.addEventListener('scroll', updateVp);
     }
+
     bindVisualViewportForAndroidKeyboard();
 
 
@@ -1946,7 +1958,10 @@ function fetchMessages() {
         isFetchingMessages = false;
         if (requestedRoom !== currentRoomId) return;
         var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
-        try { localStorage.setItem('msb_cache_room_' + requestedRoom, JSON.stringify(data)); } catch (e) {}
+        setTimeout(function() {
+            try { localStorage.setItem('msb_cache_room_' + requestedRoom, JSON.stringify(data.slice(-80))); } catch (e) {}
+        }, 50);
+
         var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
         if (resp && typeof resp.partnerLastSeen === 'string' && resp.partnerLastSeen) partnerLastSeenCache = resp.partnerLastSeen;
         var typingUsers = (resp && Array.isArray(resp.typingUsers)) ? resp.typingUsers : new Array();
