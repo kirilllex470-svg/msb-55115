@@ -63,7 +63,40 @@ jobs:
           npx cap add android
       - name: Подключение google-services.json в Gradle
         run: |
+          python3 -c '
+          import glob
+          for p in glob.glob("node_modules/@capacitor/android/**/CapacitorWebView.java", recursive=True):
+              s = open(p, encoding="utf-8").read()
+              if "TYPE_TEXT_VARIATION_SHORT_MESSAGE" not in s:
+                  patch = """
+              @Override
+              public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo outAttrs) {
+                  android.view.inputmethod.InputConnection ic = super.onCreateInputConnection(outAttrs);
+                  if (outAttrs != null) {
+                      int cls = outAttrs.inputType & android.text.InputType.TYPE_MASK_CLASS;
+                      int var = outAttrs.inputType & android.text.InputType.TYPE_MASK_VARIATION;
+                      boolean isPass = (var == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                          || (var == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)
+                          || (var == android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+                      if (cls == android.text.InputType.TYPE_CLASS_TEXT && !isPass) {
+                          outAttrs.inputType = android.text.InputType.TYPE_CLASS_TEXT
+                              | android.text.InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE
+                              | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                              | android.text.InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
+                              | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE;
+                          outAttrs.imeOptions &= ~android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI;
+                      }
+                  }
+                  return ic;
+              }
+          """
+                  idx = s.rfind("}")
+                  s = s[:idx] + patch + "\n}\n"
+                  open(p, "w", encoding="utf-8").write(s)
+                  print("Patched:", p)
+          '
           cp google-services.json android/app/google-services.json
+
           if ! grep -q "com.google.gms:google-services" android/build.gradle; then
             sed -i 's/dependencies {/dependencies {\n        classpath "com.google.gms:google-services:4.4.2"/' android/build.gradle
           fi
@@ -665,6 +698,8 @@ jobs:
           import android.view.ViewTreeObserver;
           import android.view.WindowManager;
           import android.view.inputmethod.EditorInfo;
+          import android.view.inputmethod.InputConnection;
+          import android.view.inputmethod.InputConnectionWrapper;
           import android.view.inputmethod.InputMethodManager;
           import android.webkit.JavascriptInterface;
           import android.webkit.WebSettings;
@@ -692,7 +727,17 @@ jobs:
           import org.json.JSONObject;
 
           public class MainActivity extends BridgeActivity {
+              @Override
+              public void onStart() {
+                  super.onStart();
+                  if (getBridge() != null && getBridge().getWebView() != null) {
+                      final WebView origWv = getBridge().getWebView();
+                      origWv.setOnCreateContextMenuListener((menu, v, menuInfo) -> {});
+                  }
+              }
+
               private int dp(int v) {
+
 
                   return Math.round(v * getResources().getDisplayMetrics().density);
               }
@@ -731,6 +776,33 @@ jobs:
                       WebView wv = getBridge().getWebView();
                       wv.setBackgroundColor(Color.parseColor("#0f172a"));
                       wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
+                      // 1. Плавный подъем строки ввода ровно над клавиатурой
+                      WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                      View rootView = getWindow().getDecorView();
+                      ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
+                          Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+                          Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+                          int bottomPad = Math.max(sysBars.bottom, ime.bottom);
+                          v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
+                          if (ime.bottom > 0) {
+                              wv.post(() -> wv.evaluateJavascript(
+                                  "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
+                              ));
+                          }
+                          return WindowInsetsCompat.CONSUMED;
+                      });
+
+                      // 2. Принудительное включение верхней панели клавиатуры (буфер обмена, смайлики, настройки)
+                      wv.getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> {
+                          wv.postDelayed(() -> {
+                              InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                              if (imm != null) imm.restartInput(wv);
+                          }, 40);
+                      });
+
+                      WebSettings ws = wv.getSettings();
+
 
                       WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
                       View rootView = getWindow().getDecorView();
