@@ -2745,6 +2745,19 @@ function checkApkRemoteUpdate(forcePrompt) {
 
 
 async function downloadMsbApkDirect() {
+	window.onNativeApkProgress = function(statusText, isDone) {
+    var dlBtn = document.getElementById('msb-profile-dl-apk-btn');
+    if (!dlBtn) return;
+    dlBtn.textContent = statusText;
+    dlBtn.disabled = !isDone;
+    if (isDone) {
+        setTimeout(function() {
+            dlBtn.disabled = false;
+            dlBtn.textContent = '📥 Скачать и установить APK';
+        }, 4000);
+    }
+};
+
     var dlBtn = document.getElementById('msb-profile-dl-apk-btn');
     var origText = '📥 Скачать и установить APK';
     try {
@@ -2766,31 +2779,15 @@ async function downloadMsbApkDirect() {
         var apkUrl = location.origin + '/api/app/download.apk?t=' + Date.now();
         var fileName = 'MSB55115.apk';
 
-        // 1. Если открыто внутри Android APK: запускаем шторку загрузки + автооткрытие установщика
-        if (window.MsbNative) {
+        // 1. Внутри Android APK: скачиваем напрямую в кэш приложения и сразу открываем установщик
+        if (window.MsbNative && typeof window.MsbNative.installApkUpdate === 'function') {
             if (meta.versionCode) {
                 localStorage.setItem('msb_installed_apk_ver', String(meta.versionCode));
             }
-            if (typeof window.MsbNative.downloadFile === 'function') {
-                try { window.MsbNative.downloadFile(apkUrl, fileName); } catch (e) {}
-            }
-            if (typeof window.MsbNative.installApkUpdate === 'function') {
-                var sec = 0;
-                var timer = setInterval(function() {
-                    sec++;
-                    if (dlBtn) dlBtn.textContent = '📥 Скачиваем пакет (' + sec + ' сек)... Ждите окно установки!';
-                    if (sec >= 12) {
-                        clearInterval(timer);
-                        if (dlBtn) {
-                            dlBtn.disabled = false;
-                            dlBtn.textContent = origText;
-                        }
-                    }
-                }, 1000);
-                window.MsbNative.installApkUpdate(apkUrl);
-                return;
-            }
+            window.MsbNative.installApkUpdate(apkUrl);
+            return;
         }
+
 
         // 2. Если открыто в браузере: скачиваем с точным показом процентов 0% -> 100% на кнопке!
         var res = await fetch(apkUrl);
