@@ -1231,17 +1231,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function bindVisualViewportForAndroidKeyboard() {
         if (!window.visualViewport) return;
-
         var vpRaf = null;
+        var lastVpH = window.visualViewport.height;
+
         var updateVp = function() {
             if (vpRaf) cancelAnimationFrame(vpRaf);
             vpRaf = requestAnimationFrame(function() {
                 var modal = document.getElementById('messenger-modal');
                 if (!modal || modal.style.display !== 'flex') return;
-                modal.style.height = window.visualViewport.height + 'px';
-                modal.style.top = (window.visualViewport.offsetTop || 0) + 'px';
-                var mBox = getMessagesDiv();
-                if (mBox) mBox.scrollTop = mBox.scrollHeight;
+
+                var nativeInset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-inset') || '0', 10);
+                if (nativeInset > 0) {
+                    modal.style.height = '';
+                    modal.style.maxHeight = '';
+                    modal.style.top = '0px';
+                } else {
+                    var vh = window.visualViewport.height;
+                    modal.style.height = vh + 'px';
+                    modal.style.maxHeight = vh + 'px';
+                    modal.style.top = Math.max(0, window.visualViewport.offsetTop || 0) + 'px';
+                }
+
+                if (window.visualViewport.height < lastVpH - 80) {
+                    var mBox = getMessagesDiv();
+                    if (mBox) mBox.scrollTop = mBox.scrollHeight;
+                }
+                lastVpH = window.visualViewport.height;
             });
         };
         window.visualViewport.addEventListener('resize', updateVp);
@@ -1249,8 +1264,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     bindVisualViewportForAndroidKeyboard();
-
-
 
     if (tInput && tInput.tagName === 'INPUT') {
         var ta = document.createElement('textarea');
@@ -1264,31 +1277,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (tInput) {
         tInput.setAttribute('rows', '1');
-        tInput.setAttribute('autocomplete', 'off');
-        tInput.setAttribute('autocorrect', 'off');
-        tInput.setAttribute('autocapitalize', 'off');
-        tInput.setAttribute('spellcheck', 'false');
-        tInput.setAttribute('data-gramm', 'false');
+        tInput.setAttribute('lang', 'ru');
+        tInput.setAttribute('inputmode', 'text');
+        tInput.setAttribute('enterkeyhint', 'enter');
+        tInput.setAttribute('autocapitalize', 'sentences');
+        tInput.setAttribute('autocorrect', 'on');
+        tInput.setAttribute('spellcheck', 'true');
+        tInput.removeAttribute('autocomplete');
+
+        var isImeComposing = false;
+        tInput.addEventListener('compositionstart', function() { isImeComposing = true; });
+        tInput.addEventListener('compositionend', function() {
+            isImeComposing = false;
+            syncTextareaHeight();
+        });
+
+        function syncTextareaHeight() {
+            if (tInput.value.length === 0) {
+                if (tInput.style.height !== '36px') tInput.style.height = '36px';
+                return;
+            }
+            var sh = tInput.scrollHeight;
+            var targetPx = Math.min(110, Math.max(36, sh));
+            if (Math.abs(tInput.clientHeight - targetPx) > 4) {
+                tInput.style.height = targetPx + 'px';
+            }
+        }
 
         tInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            var isMobileScreen = window.innerWidth <= 768 || ('ontouchstart' in window);
+            if (e.key === 'Enter' && !e.shiftKey && !isMobileScreen && !isImeComposing) {
                 e.preventDefault();
                 sendMessage();
             }
         });
 
         tInput.addEventListener('input', function() {
-            // Пересчитываем высоту ТОЛЬКО через css-переменную без сброса style.height = '36px',
-            // иначе Android-клавиатура теряет курсор при удалении букв!
-            var lines = Math.min(4, Math.max(1, Math.ceil(tInput.scrollHeight / 22)));
-            var targetPx = (tInput.value.length === 0) ? 36 : Math.min(110, Math.max(36, lines * 22 + 10));
-            if (tInput.style.height !== targetPx + 'px') {
-                tInput.style.height = targetPx + 'px';
-            }
-
+            if (!isImeComposing) syncTextareaHeight();
             if (!currentRoomId) return;
-
-
 
             var hasVal = tInput.value.trim().length > 0;
             if (hasVal) {
@@ -1303,6 +1329,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
 
     if (fInput) {
         fInput.addEventListener('keypress', function(e) {
