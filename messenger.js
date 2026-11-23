@@ -661,6 +661,11 @@ function openUserProfileModal() {
             'onclick="document.getElementById(\'msb-admin-apk-input\').click()">',
             '📤 Загрузить APK файл для всех',
             '</button>',
+            '<button type="button" id="msb-admin-clear-chats-btn" class="msb-themed-btn" ',
+            'style="display:none; margin-bottom:10px; background:linear-gradient(135deg,#991b1b,#450a0a)!important; border-color:#ef4444!important;" ',
+            'onclick="adminClearAllChatsEverywhere()">',
+            '🗑️ Очистить ВСЕ чаты у всех',
+            '</button>',
             '<input type="file" id="msb-admin-apk-input" accept=".apk,application/vnd.android.package-archive" ',
             'style="display:none;" onchange="adminUploadApkForAll(this)">',
             '<div id="msb-admin-apk-status" style="display:none; font-size:12px; color:#facc15; font-weight:bold; margin-bottom:8px;"></div>',
@@ -680,6 +685,9 @@ function openUserProfileModal() {
                 (String(chatUser).toLowerCase() === 'муравей');
     var admBtn = document.getElementById('msb-admin-upload-apk-btn');
     if (admBtn) admBtn.style.display = isAdm ? 'block' : 'none';
+    var clrBtn = document.getElementById('msb-admin-clear-chats-btn');
+    if (clrBtn) clrBtn.style.display = isAdm ? 'block' : 'none';
+
 
     document.getElementById('profile-modal-name').textContent = chatUser;
     var avBox = document.getElementById('profile-modal-avatar');
@@ -690,6 +698,20 @@ function openUserProfileModal() {
 
 function openWorkNewWindow() {
     closeUserProfileModal();
+	function adminClearAllChatsEverywhere() {
+    if (!confirm('⚠️ ВНИМАНИЕ! Удалить ВСЕ сообщения во всех личных чатах и комнатах у ВСЕХ пользователей безвозвратно?')) return;
+    if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: 'clear_all_chats' })); } catch (e) {}
+    }
+    fetch('/api/admin/clear-all-chats', { method: 'POST' })
+        .then(function() {
+            closeUserProfileModal();
+            alert('✅ Все сообщения и кэши чатов полностью очищены у всех пользователей!');
+        })
+        .catch(function() { alert('❌ Ошибка связи с сервером'); });
+}
+window.adminClearAllChatsEverywhere = adminClearAllChatsEverywhere;
+
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
     }

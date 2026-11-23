@@ -1037,6 +1037,23 @@ function handleWsIncomingEvent(event) {
         stopAlertVisuals(); renderNotificationsWindow(); renderMapsGrid();
         return;
     }
+    if (msg.type === 'all_chats_cleared') {
+        try {
+            Object.keys(localStorage).forEach(function(k) {
+                if (k.startsWith('msb_cache_room_') || k === 'msb_edge_q') {
+                    localStorage.removeItem(k);
+                }
+            });
+        } catch (e) {}
+        if (typeof msbOutboxQueue !== 'undefined') msbOutboxQueue = new Array();
+        if (typeof renderedMsgIds !== 'undefined') renderedMsgIds.clear();
+        if (typeof lastMessagesCount !== 'undefined') lastMessagesCount = 0;
+        var mDiv = document.getElementById('messages');
+        if (mDiv) mDiv.innerHTML = '<div class="chat-placeholder">Все сообщения очищены администратором.</div>';
+        if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests(true);
+        return;
+    }
+
     if (msg.type === 'admin_alert') {
         if (msg.notif) {
             const exists = allNotifications.some(function(n) { return n.id === msg.notif.id; });

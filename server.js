@@ -1418,7 +1418,16 @@ const server = http.createServer(function(req, res) {
     // ⬆️ КОНЕЦ ВСТАВКИ ⬆️
 
     fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
-        if (err) {
+            if (req.method === 'POST' && urlPath === '/api/admin/clear-all-chats') {
+        roomsDB = {};
+        db.lastRead = {};
+        writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+        writeJSON(READS_FILE, db.lastRead, true);
+        broadcastWS({ type: 'all_chats_cleared' });
+        return sendJsonCompressed(req, res, 200, { ok: true }, 'no-store');
+    }
+
+		if (err) {
             res.writeHead(500);
             res.end('Error loading index.html');
         } else {
@@ -2072,6 +2081,14 @@ wss.on('connection', function(ws) {
                 writeJSON(DB_FILE, tableHistory); writeJSON(NOTIFS_FILE, notificationsHistory); writeJSON(MAPS_FILE, mapsHistory);
                 broadcastWS({ type: 'history_cleared' });
             }
+            if (msg.type === 'clear_all_chats') {
+                roomsDB = {};
+                db.lastRead = {};
+                writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+                writeJSON(READS_FILE, db.lastRead, true);
+                broadcastWS({ type: 'all_chats_cleared' });
+            }
+
             if (msg.type === 'admin_alert') {
                 broadcastAlert(msg.sender || 'АДМИН', msg.color || '#ef4444', getServerDateTime(), msg.target, msg.text);
             }
