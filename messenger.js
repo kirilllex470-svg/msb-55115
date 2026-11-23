@@ -2088,8 +2088,10 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
         saveTextOutboxToStorage();
     }
     var row = document.createElement('div');
+    row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
     row.setAttribute('data-msg-id', msg.id);
     row.setAttribute('data-raw-text', String(msg.text || ''));
+
 
     if (msg.clientMsgId) row.setAttribute('data-client-id', msg.clientMsgId);
     row.innerHTML = '<div class="swipe-indicator left-indicator">💬</div><div class="swipe-container"><div class="bubble"></div></div><div class="swipe-indicator right-indicator">↪️</div>';
@@ -2232,7 +2234,61 @@ function attachLongPressActions(rowEl, msg, isMy) {
         if (!holdFired) triggerHold();
     });
 }
+
+function openMessageActionSheet(msgId, text, msgType, isMy) {
+    var sheet = document.getElementById('msb-msg-action-sheet');
+    if (!sheet) {
+        sheet = document.createElement('div');
+        sheet.id = 'msb-msg-action-sheet';
+        sheet.className = 'custom-modal-overlay';
+        sheet.style.zIndex = '225000';
+        sheet.onclick = function(e) {
+            if (e.target === sheet) sheet.style.display = 'none';
+        };
+        document.body.appendChild(sheet);
+    }
+    var canEdit = isMy && (!msgType || msgType === 'text');
+    var editBtnHtml = canEdit
+        ? '<button type="button" id="act-edit-msg-btn" ' +
+          'class="msb-themed-btn" style="margin-bottom:8px;">' +
+          '✏️ Исправить сообщение</button>'
+        : '';
+
+    sheet.innerHTML = [
+        '<div class="login-box msb-themed-card" style="max-width:340px;">',
+        '<div class="msb-themed-title" style="font-size:14px;">',
+        '📋 Текст сразу скопирован в буфер!',
+        '</div>',
+        editBtnHtml,
+        '<button type="button" id="act-copy-msg-btn" ',
+        'class="msb-themed-btn-alt" style="margin-bottom:8px;">',
+        '📋 Скопировать ещё раз',
+        '</button>',
+        '<button type="button" class="viewer-btn" id="act-close-msg-btn">',
+        'Отмена',
+        '</button>',
+        '</div>'
+    ].join('');
+
+    sheet.style.display = 'flex';
+
+    document.getElementById('act-close-msg-btn').onclick = function() {
+        sheet.style.display = 'none';
+    };
+    document.getElementById('act-copy-msg-btn').onclick = function() {
+        copyTextUniversal(text);
+        sheet.style.display = 'none';
+    };
+    if (canEdit) {
+        document.getElementById('act-edit-msg-btn').onclick = function() {
+            sheet.style.display = 'none';
+            startEditingMessage(msgId, text);
+        };
+    }
+}
+
 function startEditingMessage(msgId, oldText) {
+
     quotedMessageId = null;
     quotedMessageText = null;
     quotedMessageSender = null;
