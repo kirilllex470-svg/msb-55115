@@ -698,21 +698,8 @@ function openUserProfileModal() {
 
 function openWorkNewWindow() {
     closeUserProfileModal();
-	function adminClearAllChatsEverywhere() {
-    if (!confirm('⚠️ ВНИМАНИЕ! Удалить ВСЕ сообщения во всех личных чатах и комнатах у ВСЕХ пользователей безвозвратно?')) return;
-    if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
-        try { ws.send(JSON.stringify({ type: 'clear_all_chats' })); } catch (e) {}
-    }
-    fetch('/api/admin/clear-all-chats', { method: 'POST' })
-        .then(function() {
-            closeUserProfileModal();
-            alert('✅ Все сообщения и кэши чатов полностью очищены у всех пользователей!');
-        })
-        .catch(function() { alert('❌ Ошибка связи с сервером'); });
-}
-window.adminClearAllChatsEverywhere = adminClearAllChatsEverywhere;
-
     if (document.activeElement && typeof document.activeElement.blur === 'function') {
+
         document.activeElement.blur();
     }
     toggleTgEmojiDrawer(false);
@@ -776,6 +763,32 @@ function closeUserProfileModal() {
 }
 window.openUserProfileModal = openUserProfileModal;
 window.closeUserProfileModal = closeUserProfileModal;
+function adminClearAllChatsEverywhere() {
+    if (!confirm('⚠️ ВНИМАНИЕ! Удалить ВСЕ сообщения во всех личных чатах и комнатах у ВСЕХ пользователей безвозвратно?')) return;
+    if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: 'clear_all_chats' })); } catch (e) {}
+    }
+    fetch('/api/admin/clear-all-chats', { method: 'POST' })
+        .then(function() {
+            try {
+                Object.keys(localStorage).forEach(function(k) {
+                    if (k.startsWith('msb_cache_room_') || k === 'msb_edge_q') {
+                        localStorage.removeItem(k);
+                    }
+                });
+            } catch (e) {}
+            if (typeof msbOutboxQueue !== 'undefined') msbOutboxQueue = new Array();
+            if (typeof renderedMsgIds !== 'undefined') renderedMsgIds.clear();
+            if (typeof lastMessagesCount !== 'undefined') lastMessagesCount = 0;
+            var mDiv = document.getElementById('messages');
+            if (mDiv) mDiv.innerHTML = '<div class="chat-placeholder">Все сообщения очищены администратором.</div>';
+            if (typeof loadFriendsAndRequests === 'function') loadFriendsAndRequests(true);
+            closeUserProfileModal();
+            alert('✅ Все сообщения и кэши чатов полностью очищены у всех пользователей!');
+        })
+        .catch(function() { alert('❌ Ошибка связи с сервером'); });
+}
+window.adminClearAllChatsEverywhere = adminClearAllChatsEverywhere;
 
 
 function updateTopBackButtonVisibility() {

@@ -1417,8 +1417,7 @@ const server = http.createServer(function(req, res) {
     }
     // ⬆️ КОНЕЦ ВСТАВКИ ⬆️
 
-    fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
-            if (req.method === 'POST' && urlPath === '/api/admin/clear-all-chats') {
+    if (req.method === 'POST' && urlPath === '/api/admin/clear-all-chats') {
         roomsDB = {};
         db.lastRead = {};
         writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
@@ -1427,7 +1426,9 @@ const server = http.createServer(function(req, res) {
         return sendJsonCompressed(req, res, 200, { ok: true }, 'no-store');
     }
 
-		if (err) {
+    fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
+        if (err) {
+
             res.writeHead(500);
             res.end('Error loading index.html');
         } else {
