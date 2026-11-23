@@ -147,7 +147,19 @@ jobs:
               "            android:enabled=\"true\" android:exported=\"false\" />",
               "    </application>"
           ])
-          s = s.replace("</application>", svc, 1)
+                    queries_xml = "\n".join([
+              "    <queries>",
+              "        <intent>",
+              "            <action android:name=\"android.intent.action.VIEW\" />",
+              "            <data android:mimeType=\"application/vnd.android.package-archive\" />",
+              "        </intent>",
+              "        <intent>",
+              "            <action android:name=\"android.intent.action.INSTALL_PACKAGE\" />",
+              "        </intent>",
+              "    </queries>",
+              "</manifest>"
+          ])
+          s = s.replace("</application>", svc, 1).replace("</manifest>", queries_xml, 1)
           open(p, "w", encoding="utf-8").write(s)
 
           os.makedirs("android/app/src/main/res/xml", exist_ok=True)
@@ -731,10 +743,8 @@ jobs:
                           enqueueSystemDownload(url, fn);
                       });
                   }
-
               }
-
-              private void applyNativeBarTheme() {
+            private void applyNativeBarTheme() {
               }
 
               private void hideNativeKeyboard() {
@@ -924,10 +934,16 @@ jobs:
                               fos.flush();
                               fos.close();
                               is.close();
-                              if (outFile.length() < 500000) {
-                                  evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ Файл повреждён', true);");
+                              java.io.RandomAccessFile raf = new java.io.RandomAccessFile(outFile, "r");
+                              int b1 = raf.read();
+                              int b2 = raf.read();
+                              raf.close();
+                              if (outFile.length() < 1000000 || b1 != 0x50 || b2 != 0x4B) {
+                                  outFile.delete();
+                                  evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ На сервере нет целого APK-файла', true);");
                                   return;
                               }
+
                               evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('⚙️ Запуск установки...', true);");
                               final Uri apkUri = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".msbprovider", outFile);
                               runOnUiThread(() -> {
@@ -988,7 +1004,7 @@ jobs:
               -dname "CN=MSB55115, OU=Unit, O=MSB, L=RU, S=RU, C=RU"
           fi
           npx cap sync android
-          VER_CODE=$((1000 + ${{ github.run_number }}))
+          VER_CODE=$(date +%s)
           sed -i "s/versionCode [0-9]*/versionCode $VER_CODE/g" android/app/build.gradle
           sed -i "s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/g" android/app/build.gradle
           cd android
@@ -1018,7 +1034,7 @@ jobs:
         run: |
           if [ -n "$SERVER_URL" ]; then
             APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-            VER_CODE=$((1000 + ${{ github.run_number }}))
+            VER_CODE=$(date +%s)
             curl -f -X POST "$SERVER_URL/api/app/upload-apk" \
               -H "x-update-secret: ${UPDATE_SECRET:-msb55115_ota_key}" \
               -H "x-version-code: $VER_CODE" \
