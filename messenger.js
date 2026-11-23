@@ -775,11 +775,37 @@ function enqueueChatPayload(payload) {
     if (!payload.lid) {
         payload.lid = 'c_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
     }
+    if (!payload.blob && (!payload.type || payload.type === 'text' || payload.type === 'gif') && payload.room) {
+        try {
+            var nowD = new Date();
+            var tStr = String(nowD.getDate()).padStart(2, '0') + '.' +
+                       String(nowD.getMonth() + 1).padStart(2, '0') + '.' +
+                       nowD.getFullYear() + ' ' +
+                       String(nowD.getHours()).padStart(2, '0') + ':' +
+                       String(nowD.getMinutes()).padStart(2, '0');
+            var rawCache = localStorage.getItem('msb_cache_room_' + payload.room);
+            var arrCache = rawCache ? JSON.parse(rawCache) : [];
+            arrCache.push({
+                id: payload.lid,
+                clientMsgId: payload.lid,
+                sender: payload.sender,
+                text: payload.text || '',
+                type: payload.type || 'text',
+                time: tStr,
+                timestamp: Date.now(),
+                quoteId: payload.quoteId || null,
+                quoteText: payload.quoteText || null,
+                quoteSender: payload.quoteSender || null
+            });
+            localStorage.setItem('msb_cache_room_' + payload.room, JSON.stringify(arrCache.slice(-80)));
+        } catch (e) {}
+    }
     msbOutboxQueue.push(payload);
     saveTextOutboxToStorage();
     renderPendingBubbles();
     flushOutboxQueue();
 }
+
 function renderPendingBubbles() {
     var mDiv = getMessagesDiv();
     if (!mDiv || !currentRoomId) return;
@@ -913,13 +939,24 @@ function flushOutboxQueue() {
         .then(function(respData) {
             msbOutboxQueue = msbOutboxQueue.filter(function(x) { return x && x.lid !== item.lid; });
             saveTextOutboxToStorage();
+            try {
+                var rC = localStorage.getItem('msb_cache_room_' + item.room);
+                if (rC) {
+                    var aC = JSON.parse(rC).filter(function(m) { return m.id !== item.lid; });
+                    localStorage.setItem('msb_cache_room_' + item.room, JSON.stringify(aC));
+                }
+            } catch (e) {}
             var tempEl = document.querySelector('.msb-pending-row[data-lid="' + item.lid + '"]');
             if (tempEl) tempEl.remove();
+            var oldLocalRow = document.querySelector('.message-row[data-msg-id="' + item.lid + '"]');
+            if (oldLocalRow) oldLocalRow.remove();
+            renderedMsgIds.delete(item.lid);
             if (respData && respData.msg && typeof window.handleIncomingChatWS === 'function') {
                 window.handleIncomingChatWS({ type: 'chat_new_msg', room: item.room, msg: respData.msg });
             }
             clearNetworkErrorBanner();
         })
+
         .catch(function() {
             clearTimeout(timer);
             item._inFlight = 0;

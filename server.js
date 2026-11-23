@@ -1513,9 +1513,10 @@ function handleMultipartSend(req, res) {
     });
 }
 function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req, res) {
-    const sender = fields.sender;
-    const room = fields.room;
+    const sender = String(fields.sender || '').trim();
+    const room = String(fields.room || '').trim().toLowerCase();
     const type = fields.type || 'text';
+
     const clientMsgId = fields.clientMsgId ? String(fields.clientMsgId).trim() : null;
     if (!sender || !room) {
         res.writeHead(400);
@@ -1557,9 +1558,10 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req
         quoteText: fields.quoteText || null,
         quoteSender: fields.quoteSender || null
     };
-    roomsDB[room].push(newMsgObj);
+      roomsDB[room].push(newMsgObj);
     if (roomsDB[room].length > 150) roomsDB[room].shift();
-    writeJSON(CHAT_ROOMS_FILE, roomsDB);
+    writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+
 
     broadcastWS({ type: 'chat_new_msg', room: room, msg: newMsgObj });
     notifyJournalFromMessenger(room, sender, finalContent, type, timeStr);
