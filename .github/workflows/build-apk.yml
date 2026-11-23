@@ -794,10 +794,8 @@ jobs:
                       wv.setBackgroundColor(Color.parseColor("#0f172a"));
                       wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
-                      // 1. Плавный подъем строки ввода ровно над клавиатурой
                       WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-                      View rootView = getWindow().getDecorView();
-                      ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
+                      ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, windowInsets) -> {
                           Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
                           Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
                           int bottomPad = Math.max(sysBars.bottom, ime.bottom);
@@ -810,7 +808,6 @@ jobs:
                           return WindowInsetsCompat.CONSUMED;
                       });
 
-                      // 2. Принудительное включение верхней панели клавиатуры (буфер обмена, смайлики, настройки)
                       wv.getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> {
                           wv.postDelayed(() -> {
                               InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -819,25 +816,6 @@ jobs:
                       });
 
                       WebSettings ws = wv.getSettings();
-
-
-                      WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-                      View rootView = getWindow().getDecorView();
-                      ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
-                          Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                          Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
-                          int bottomPad = Math.max(sysBars.bottom, ime.bottom);
-                          v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
-                          if (ime.bottom > 0) {
-                              wv.post(() -> wv.evaluateJavascript(
-                                  "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
-                              ));
-                          }
-                          return WindowInsetsCompat.CONSUMED;
-                      });
-
-                      WebSettings ws = wv.getSettings();
-
                       ws.setJavaScriptEnabled(true);
                       ws.setDomStorageEnabled(true);
                       ws.setCacheMode(WebSettings.LOAD_DEFAULT);
@@ -849,8 +827,10 @@ jobs:
                       });
                   }
               }
-            private void applyNativeBarTheme() {
+
+              private void applyNativeBarTheme() {
               }
+
 
               private void hideNativeKeyboard() {
                   View v = getCurrentFocus();
