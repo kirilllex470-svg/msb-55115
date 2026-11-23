@@ -1222,11 +1222,11 @@ document.addEventListener('DOMContentLoaded', function() {
     [fInput, document.getElementById('login-callsign'), document.getElementById('reg-callsign'), document.getElementById('mini-notif-input')].forEach(function(inp) {
         if (!inp) return;
         inp.setAttribute('lang', 'ru');
-        inp.setAttribute('inputmode', 'text');
         inp.setAttribute('autocapitalize', 'sentences');
-        inp.setAttribute('autocomplete', 'off');
-        inp.setAttribute('autocorrect', 'off');
-        inp.setAttribute('spellcheck', 'false');
+        inp.setAttribute('autocorrect', 'on');
+        inp.setAttribute('spellcheck', 'true');
+        inp.removeAttribute('autocomplete');
+        inp.removeAttribute('inputmode');
     });
 
     function bindVisualViewportForAndroidKeyboard() {
@@ -1240,12 +1240,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 var modal = document.getElementById('messenger-modal');
                 if (!modal || modal.style.display !== 'flex') return;
 
-                var nativeInset = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--kb-inset') || '0', 10);
-                if (nativeInset > 0) {
-                    modal.style.height = '';
-                    modal.style.maxHeight = '';
-                    modal.style.top = '0px';
-                } else {
+                // В APK сдвиг делает сам Android через WindowInsets, а в браузере — visualViewport
+                var isNativeApk = Boolean(window.MsbNative || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
+                if (!isNativeApk) {
                     var vh = window.visualViewport.height;
                     modal.style.height = vh + 'px';
                     modal.style.maxHeight = vh + 'px';
@@ -1276,14 +1273,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (tInput) {
+        // Чистые атрибуты обычного текстового поля, чтобы над буквами ВСЕГДА была панель:
+        // буфер обмена, смайлики, микрофон и шестерёнка настроек
         tInput.setAttribute('rows', '1');
         tInput.setAttribute('lang', 'ru');
-        tInput.setAttribute('inputmode', 'text');
-        tInput.setAttribute('enterkeyhint', 'enter');
         tInput.setAttribute('autocapitalize', 'sentences');
         tInput.setAttribute('autocorrect', 'on');
         tInput.setAttribute('spellcheck', 'true');
         tInput.removeAttribute('autocomplete');
+        tInput.removeAttribute('inputmode');
+        tInput.removeAttribute('data-gramm');
 
         var isImeComposing = false;
         tInput.addEventListener('compositionstart', function() { isImeComposing = true; });
@@ -1329,6 +1328,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
 
 
     if (fInput) {
