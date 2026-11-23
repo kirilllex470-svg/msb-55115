@@ -334,7 +334,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v14';",
+    "const SHELL_CACHE = 'msb55115-shell-v15';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1056,26 +1056,28 @@ const server = http.createServer(function(req, res) {
 
     if (urlPath === '/api/messages/delete' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
-            if (!err && data && data.room && data.messageId && Array.isArray(roomsDB[data.room])) {
-                roomsDB[data.room] = roomsDB[data.room].filter(function(m) { return m.id !== data.messageId; });
-                writeJSON(CHAT_ROOMS_FILE, roomsDB);
-                broadcastWS({ type: 'chat_msg_deleted', room: data.room, messageId: data.messageId });
+            const roomKey = data && data.room ? String(data.room).trim().toLowerCase() : '';
+            if (!err && roomKey && data.messageId && Array.isArray(roomsDB[roomKey])) {
+                roomsDB[roomKey] = roomsDB[roomKey].filter(function(m) { return m.id !== data.messageId; });
+                writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+                broadcastWS({ type: 'chat_msg_deleted', room: roomKey, messageId: data.messageId });
             }
             res.writeHead(200);
             res.end('OK');
         });
     }
 
-      if (urlPath === '/api/messages/edit' && req.method === 'POST') {
+    if (urlPath === '/api/messages/edit' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
-            if (!err && data && data.room && data.messageId && typeof data.text === 'string' && Array.isArray(roomsDB[data.room])) {
+            const roomKey = data && data.room ? String(data.room).trim().toLowerCase() : '';
+            if (!err && roomKey && data.messageId && typeof data.text === 'string' && Array.isArray(roomsDB[roomKey])) {
                 const cleanTxt = data.text.trim();
-                const msg = roomsDB[data.room].find(function(m) { return String(m.id) === String(data.messageId); });
+                const msg = roomsDB[roomKey].find(function(m) { return String(m.id) === String(data.messageId); });
                 if (msg && cleanTxt && (!msg.type || msg.type === 'text')) {
                     msg.text = cleanTxt;
                     msg.edited = true;
-                    writeJSON(CHAT_ROOMS_FILE, roomsDB);
-                    broadcastWS({ type: 'chat_msg_edited', room: data.room, messageId: msg.id, text: msg.text });
+                    writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+                    broadcastWS({ type: 'chat_msg_edited', room: roomKey, messageId: msg.id, text: msg.text });
                 }
             }
             return sendJsonCompressed(req, res, 200, { ok: true });
@@ -1099,7 +1101,7 @@ const server = http.createServer(function(req, res) {
     }
     if (urlPath === '/api/messages' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
-        const room = myUrl.searchParams.get('room');
+        const room = String(myUrl.searchParams.get('room') || '').trim().toLowerCase();
         const reqUser = (myUrl.searchParams.get('user') || '').trim().toLowerCase();
         const sinceTs = Number(myUrl.searchParams.get('since') || 0);
         const rawList = (room && Array.isArray(roomsDB[room])) ? roomsDB[room] : new Array();
@@ -1417,7 +1419,8 @@ const server = http.createServer(function(req, res) {
 
 
 function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup, omitAvatars) {
-    const roomMessages = Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array();
+    const cleanRoomId = String(roomId || '').trim().toLowerCase();
+    const roomMessages = Array.isArray(roomsDB[cleanRoomId]) ? roomsDB[cleanRoomId] : (Array.isArray(roomsDB[roomId]) ? roomsDB[roomId] : new Array());
     let lastMsgText = "Нет сообщений";
     let lastMsgTime = "";
     let unreadCount = 0;
@@ -1975,19 +1978,21 @@ wss.on('connection', function(ws) {
                 broadcastWS({ type: 'chat_typing', room: msg.room, user: uClean, typing: msg.typing !== false });
                 return;
             }
-                        if (msg.type === 'chat_edit_ws' && msg.room && msg.messageId && typeof msg.text === 'string') {
+            if (msg.type === 'chat_edit_ws' && msg.room && msg.messageId && typeof msg.text === 'string') {
+                const roomKey = String(msg.room).trim().toLowerCase();
                 const cleanTxt = msg.text.trim();
-                if (cleanTxt && Array.isArray(roomsDB[msg.room])) {
-                    const targetMsg = roomsDB[msg.room].find(function(m) { return String(m.id) === String(msg.messageId); });
+                if (cleanTxt && Array.isArray(roomsDB[roomKey])) {
+                    const targetMsg = roomsDB[roomKey].find(function(m) { return String(m.id) === String(msg.messageId); });
                     if (targetMsg && (!targetMsg.type || targetMsg.type === 'text')) {
                         targetMsg.text = cleanTxt;
                         targetMsg.edited = true;
-                        writeJSON(CHAT_ROOMS_FILE, roomsDB);
-                        broadcastWS({ type: 'chat_msg_edited', room: msg.room, messageId: targetMsg.id, text: targetMsg.text });
+                        writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+                        broadcastWS({ type: 'chat_msg_edited', room: roomKey, messageId: targetMsg.id, text: targetMsg.text });
                     }
                 }
                 return;
             }
+
             if (msg.type === 'chat_send_ws' && msg.sender && msg.room) {
 
                 saveMultipartChatMsg({

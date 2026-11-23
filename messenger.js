@@ -2063,9 +2063,24 @@ function fetchMessages() {
         isFetchingMessages = false;
         if (requestedRoom !== currentRoomId) return;
         var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
-        setTimeout(function() {
-            try { localStorage.setItem('msb_cache_room_' + requestedRoom, JSON.stringify(data.slice(-80))); } catch (e) {}
-        }, 50);
+        if (data.length > 0 || !msbOutboxQueue.some(function(p) { return p && p.room === requestedRoom; })) {
+            setTimeout(function() {
+                try {
+                    var pendingLocal = msbOutboxQueue
+                        .filter(function(p) { return p && p.room === requestedRoom && !p.blob; })
+                        .map(function(p) {
+                            return {
+                                id: p.lid, clientMsgId: p.lid, sender: p.sender,
+                                text: p.text || '', type: p.type || 'text',
+                                time: '', timestamp: Date.now()
+                            };
+                        });
+                    var merged = data.slice(-80).concat(pendingLocal);
+                    localStorage.setItem('msb_cache_room_' + requestedRoom, JSON.stringify(merged));
+                } catch (e) {}
+            }, 50);
+        }
+
 
         var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
         if (resp && typeof resp.partnerLastSeen === 'string' && resp.partnerLastSeen) partnerLastSeenCache = resp.partnerLastSeen;
