@@ -1166,8 +1166,9 @@ const server = http.createServer(function(req, res) {
             partnerOnline: partnerOnline,
             partnerLastSeen: partnerLastSeen,
             typingUsers: activeTypers
-        });
+        }, 'no-store');
     }
+
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.user && data.room) {

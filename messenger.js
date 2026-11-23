@@ -1574,13 +1574,14 @@ function selectChat(itemObj) {
 
     if (itemObj.isGroup) {
         currentPartner = itemObj.name;
-        currentRoomId = itemObj.id;
+        currentRoomId = String(itemObj.id || '').trim().toLowerCase();
         isCurrentGroup = true;
     } else {
         currentPartner = itemObj.name;
         isCurrentGroup = false;
         currentRoomId = makeDirectRoomId(chatUser, currentPartner);
     }
+
     document.getElementById('partner-display-name').textContent = currentPartner;
     var avUrl = itemObj.avatar || (!itemObj.isGroup ? getCachedUserAvatar(currentPartner, itemObj.avatarHash || '') : '');
     renderAvatarElement(document.getElementById('partner-avatar'), currentPartner, avUrl);
@@ -2063,23 +2064,22 @@ function fetchMessages() {
         isFetchingMessages = false;
         if (requestedRoom !== currentRoomId) return;
         var data = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.messages) ? resp.messages : new Array());
-        if (data.length > 0 || !msbOutboxQueue.some(function(p) { return p && p.room === requestedRoom; })) {
+        if (data.length > 0) {
             setTimeout(function() {
                 try {
-                    var pendingLocal = msbOutboxQueue
-                        .filter(function(p) { return p && p.room === requestedRoom && !p.blob; })
-                        .map(function(p) {
-                            return {
-                                id: p.lid, clientMsgId: p.lid, sender: p.sender,
-                                text: p.text || '', type: p.type || 'text',
-                                time: '', timestamp: Date.now()
-                            };
-                        });
-                    var merged = data.slice(-80).concat(pendingLocal);
-                    localStorage.setItem('msb_cache_room_' + requestedRoom, JSON.stringify(merged));
+                    var oldRaw = localStorage.getItem('msb_cache_room_' + requestedRoom);
+                    var oldArr = oldRaw ? JSON.parse(oldRaw) : [];
+                    var byId = {};
+                    oldArr.forEach(function(m) { if (m && m.id) byId[m.id] = m; });
+                    data.forEach(function(m) { if (m && m.id) byId[m.id] = m; });
+                    var combined = Object.values(byId).sort(function(a, b) {
+                        return Number(a.timestamp || 0) - Number(b.timestamp || 0);
+                    }).slice(-100);
+                    localStorage.setItem('msb_cache_room_' + requestedRoom, JSON.stringify(combined));
                 } catch (e) {}
             }, 50);
         }
+
 
 
         var partnerOnline = (resp && typeof resp.partnerOnline === 'boolean') ? resp.partnerOnline : false;
@@ -2092,8 +2092,7 @@ function fetchMessages() {
 function applyMessagesToDOM(mDiv, data, isModalOpen) {
     if (data.length === 0) {
         var hasLocalPending = msbOutboxQueue.some(function(p) { return p && p.room === currentRoomId; });
-        if (lastMessagesCount !== 0 && !hasLocalPending) {
-            renderedMsgIds.clear();
+        if (lastMessagesCount !== 0 && !hasLocalPending && renderedMsgIds.size === 0) {
             lastMessagesCount = 0;
             mDiv.innerHTML = '<div class="chat-placeholder">История сообщений пуста.</div>';
         }
@@ -2102,15 +2101,8 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
     }
     var placeholder = mDiv.querySelector('.chat-placeholder');
     if (placeholder) placeholder.remove();
-    var serverIds = new Set(data.map(function(m) { return m.id; }));
-    renderedMsgIds.forEach(function(id) {
-        if (!serverIds.has(id)) {
-            var el = mDiv.querySelector('.message-row[data-msg-id="' + id + '"]');
-            if (el) el.remove();
-            renderedMsgIds.delete(id);
-        }
-    });
     var addedNew = false, hasUnreadIncoming = false;
+
     var frag = document.createDocumentFragment();
     data.forEach(function(msg) {
         var isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
@@ -2142,7 +2134,7 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
         renderSingleRow(frag, msg, isMy, checkIcon);
     });
     if (addedNew) mDiv.appendChild(frag);
-    lastMessagesCount = data.length;
+    lastMessagesCount = Math.max(lastMessagesCount, data.length);
     renderPendingBubbles();
     if (addedNew) setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 30);
     if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) markChatAsRead(currentRoomId);
