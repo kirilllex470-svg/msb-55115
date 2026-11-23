@@ -62,12 +62,20 @@ try {
 let fcmTokens = readJSON(FCM_FILE, []);
 if (!Array.isArray(fcmTokens)) fcmTokens = [];
 
+function atomicWriteFileSync(filePath, contentStr) {
+    const tmpFile = filePath + '.tmp_' + process.pid;
+    try {
+        fs.writeFileSync(tmpFile, contentStr, 'utf-8');
+        fs.renameSync(tmpFile, filePath);
+    } catch (e) {
+        try { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); } catch (e2) {}
+    }
+}
+
 const writeTimers = {};
 function writeJSON(filePath, data, immediate) {
     if (immediate) {
-        try {
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-        } catch (e) {}
+        atomicWriteFileSync(filePath, JSON.stringify(data, null, 2));
         return;
     }
     if (writeTimers[filePath]) {
@@ -75,9 +83,10 @@ function writeJSON(filePath, data, immediate) {
     }
     writeTimers[filePath] = setTimeout(function() {
         delete writeTimers[filePath];
-        fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8', function() {});
-    }, 250);
+        atomicWriteFileSync(filePath, JSON.stringify(data, null, 2));
+    }, 150);
 }
+
 
 function sendJsonCompressed(req, res, statusCode, payloadObj, cacheHeader) {
     const jsonStr = JSON.stringify(payloadObj);

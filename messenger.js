@@ -2099,6 +2099,7 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
         renderPendingBubbles();
         return;
     }
+
     var placeholder = mDiv.querySelector('.chat-placeholder');
     if (placeholder) placeholder.remove();
     var addedNew = false, hasUnreadIncoming = false;
