@@ -2385,17 +2385,46 @@ function executeForward(targetObj) {
 }
 
 function inlineDeleteMessage(msgId) {
-    if (!confirm("Удалить это сообщение?")) return;
-    fetch('/api/messages/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room: currentRoomId, messageId: msgId })
-    }).then(function() {
-        var existingRow = document.querySelector('.message-row[data-msg-id="' + msgId + '"]');
-        if (existingRow) existingRow.remove();
-        renderedMsgIds.delete(msgId);
-    });
+    var row = document.querySelector('.message-row[data-msg-id="' + msgId + '"]');
+    if (!row) return;
+    if (row.getAttribute('data-ant-eating') === '1') return;
+
+    row.setAttribute('data-ant-eating', '1');
+    var roomToDel = currentRoomId;
+    var bubble = row.querySelector('.bubble');
+    var isMy = row.classList.contains('my-msg');
+
+    if (bubble) {
+        bubble.classList.add('ant-being-eaten');
+
+        // Lớp phủ gặm nhấm làm biến mất dần bong bóng từ một phía sang phía kia
+        var biteMask = document.createElement('div');
+        biteMask.className = 'ant-bite-mask ' + (isMy ? 'from-right' : 'from-left');
+        bubble.appendChild(biteMask);
+
+        // Chú kiến 🐜 chạy zig-zag, gặm tin nhắn và rải vụn trong 10 giây
+        var ant = document.createElement('div');
+        ant.className = 'ant-eater-sprite ' + (isMy ? 'walk-left' : 'walk-right');
+        ant.innerHTML = '<span class="ant-body">🐜</span><span class="ant-crumbs">✦ ‧ ✦</span>';
+        bubble.appendChild(ant);
+    }
+
+    // Sau đúng 10 giây chú kiến ăn xong -> thu gọn dòng và xóa trên сервер
+    setTimeout(function() {
+        row.classList.add('ant-row-collapse');
+        setTimeout(function() {
+            if (row && row.parentNode) row.remove();
+            renderedMsgIds.delete(msgId);
+        }, 350);
+
+        fetch('/api/messages/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ room: roomToDel, messageId: msgId })
+        }).catch(function() {});
+    }, 10000);
 }
+
 
 function fetchMessages() {
     chatUser = getActiveChatIdentity();

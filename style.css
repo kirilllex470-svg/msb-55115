@@ -2194,3 +2194,104 @@ body.theme-cosmic .msb-round-ctrl-btn.send-round-btn {
     border-color: #e9d5ff;
     box-shadow: 0 8px 22px rgba(168, 85, 247, 0.55), inset 0 1px 2px rgba(255, 255, 255, 0.4);
 }
+/* === АНИМАЦИЯ УДАЛЕНИЯ СООБЩЕНИЯ: МУРАВЕЙ СЪЕДАЕТ ЗА 10 СЕКУНД === */
+@keyframes antChewWiggle {
+    0%, 100% { transform: translateY(-50%) rotate(0deg) scale(1.1); }
+    25% { transform: translateY(calc(-50% - 6px)) rotate(-14deg) scale(1.25); }
+    50% { transform: translateY(-50%) rotate(8deg) scale(1.05); }
+    75% { transform: translateY(calc(-50% + 6px)) rotate(14deg) scale(1.25); }
+}
+
+@keyframes antWalkRightToLeft {
+    0%   { right: -10px; opacity: 1; }
+    92%  { right: calc(100% - 14px); opacity: 1; }
+    100% { right: calc(100% + 12px); opacity: 0; }
+}
+
+@keyframes antWalkLeftToRight {
+    0%   { left: -10px; opacity: 1; }
+    92%  { left: calc(100% - 14px); opacity: 1; }
+    100% { left: calc(100% + 12px); opacity: 0; }
+}
+
+@keyframes antEatFromRight {
+    0%   { clip-path: inset(0 0% 0 0); opacity: 1; }
+    92%  { clip-path: inset(0 100% 0 0); opacity: 0.7; }
+    100% { clip-path: inset(0 100% 0 0); opacity: 0; }
+}
+
+@keyframes antEatFromLeft {
+    0%   { clip-path: inset(0 0 0 0%); opacity: 1; }
+    92%  { clip-path: inset(0 0 0 100%); opacity: 0.7; }
+    100% { clip-path: inset(0 0 0 100%); opacity: 0; }
+}
+
+@keyframes antCrumbsFly {
+    0%, 100% { opacity: 0.2; transform: scale(0.7) translateY(0); }
+    50%      { opacity: 1; transform: scale(1.2) translateY(-5px); }
+}
+
+.bubble.ant-being-eaten {
+    position: relative !important;
+    overflow: visible !important;
+    pointer-events: none;
+}
+
+.bubble.ant-being-eaten .msg-del-inline-btn {
+    display: none !important;
+}
+
+.my-msg .bubble.ant-being-eaten {
+    animation: antEatFromRight 10s linear forwards !important;
+}
+
+.other-msg .bubble.ant-being-eaten {
+    animation: antEatFromLeft 10s linear forwards !important;
+}
+
+.ant-eater-sprite {
+    position: absolute;
+    top: 50%;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 26px;
+    line-height: 1;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.75));
+    pointer-events: none;
+}
+
+.ant-eater-sprite .ant-body {
+    display: inline-block;
+    animation: antChewWiggle 0.35s ease-in-out infinite;
+}
+
+.ant-eater-sprite .ant-crumbs {
+    font-size: 11px;
+    color: #facc15;
+    font-weight: 900;
+    animation: antCrumbsFly 0.4s ease-in-out infinite;
+}
+
+.ant-eater-sprite.walk-left {
+    animation: antWalkRightToLeft 10s linear forwards;
+}
+
+.ant-eater-sprite.walk-right {
+    animation: antWalkLeftToRight 10s linear forwards;
+}
+
+.ant-eater-sprite.walk-right .ant-body {
+    transform: scaleX(-1);
+}
+
+.message-row.ant-row-collapse {
+    opacity: 0;
+    transform: scaleY(0.1);
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
+    transition: all 0.32s ease;
+}
