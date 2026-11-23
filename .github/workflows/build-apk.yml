@@ -147,7 +147,7 @@ jobs:
               "            android:enabled=\"true\" android:exported=\"false\" />",
               "    </application>"
           ])
-                    queries_xml = "\n".join([
+          queries_xml = "\n".join([
               "    <queries>",
               "        <intent>",
               "            <action android:name=\"android.intent.action.VIEW\" />",
