@@ -1917,7 +1917,7 @@ function toggleVideoRecord() {
     } else {
         navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 },
-            video: { width: { ideal: 160, max: 200 }, height: { ideal: 160, max: 200 }, frameRate: { ideal: 14, max: 16 }, facingMode: "user" }
+            video: { width: { ideal: 360, max: 480 }, height: { ideal: 360, max: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: "user" }
         }).then(function(stream) {
             videoChunks = new Array();
             videoStreamRef = stream;
@@ -2248,8 +2248,10 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
     if (msg.type === 'audio') {
         contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="none" style="display:block; max-width:100%;"></audio>';
     } else if (msg.type === 'video') {
-        contentHTML = '<video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" style="display:block;" onclick="playVideoWithSound(this)"></video>';
+        bubble.classList.add('video-bubble-clean');
+        contentHTML = '<div class="video-round-wrap"><video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" onclick="playVideoWithSound(this)"></video></div>';
     } else if (msg.type === 'gif') {
+
         contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF\')">';
     } else if (msg.type === 'file') {
         try {
@@ -2460,13 +2462,50 @@ function startEditingMessage(msgId, oldText) {
 
 
 
-function playVideoWithSound(v) {
-    document.querySelectorAll('#messages video.video-round').forEach(function(other) {
-        if (other !== v) { other.muted = true; other.pause(); }
+function closeBigVideoRoundOverlay() {
+    var ov = document.getElementById('msb-video-round-backdrop');
+    if (ov) ov.style.display = 'none';
+    document.querySelectorAll('#messages video.video-round.is-playing-big').forEach(function(vid) {
+        vid.classList.remove('is-playing-big');
+        vid.muted = true;
+        vid.loop = true;
+        vid.pause();
     });
-    if (!v.paused && !v.muted) { v.muted = true; v.pause(); }
-    else { v.muted = false; v.loop = false; v.currentTime = 0; v.play().catch(function() {}); v.onended = function() { v.muted = true; v.pause(); v.currentTime = 0; }; }
 }
+
+function playVideoWithSound(v) {
+    if (!v) return;
+    var ov = document.getElementById('msb-video-round-backdrop');
+    if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'msb-video-round-backdrop';
+        ov.onclick = function() { closeBigVideoRoundOverlay(); };
+        document.body.appendChild(ov);
+    }
+
+    // Если нажали на уже открытый большой кружок — уменьшаем обратно в чат
+    if (v.classList.contains('is-playing-big')) {
+        closeBigVideoRoundOverlay();
+        return;
+    }
+
+    // Останавливаем все остальные кружки
+    closeBigVideoRoundOverlay();
+
+    // Делаем кружок большим по центру экрана со звуком (как в Telegram)
+    ov.style.display = 'block';
+    v.classList.add('is-playing-big');
+    v.muted = false;
+    v.loop = false;
+    v.currentTime = 0;
+    v.play().catch(function() {});
+
+    v.onended = function() {
+        closeBigVideoRoundOverlay();
+        v.currentTime = 0.001;
+    };
+}
+
 
 function sendFriendRequest() {
     chatUser = getActiveChatIdentity();
