@@ -934,13 +934,15 @@ const server = http.createServer(function(req, res) {
         });
         Object.keys(groupsDB).forEach(function(groupId) {
             const group = groupsDB[groupId];
+            const normGid = String(groupId).trim().toLowerCase();
             if (group && Array.isArray(group.members) && group.members.some(function(m) {
                 return String(m).trim().toLowerCase() === myLowerName;
             })) {
-                listData.push(buildChatPreviewItem(group.name, groupId, myLowerName, myReads[groupId] || 0, true, omitAvatars));
+                listData.push(buildChatPreviewItem(group.name, roomsDB[normGid] ? normGid : groupId, myLowerName, myReads[groupId] || 0, true, omitAvatars));
             }
         });
-        return sendJsonCompressed(req, res, 200, listData);
+        return sendJsonCompressed(req, res, 200, listData, 'no-store');
+
     }
 
     if (urlPath === '/api/friends/request/send' && req.method === 'POST') {

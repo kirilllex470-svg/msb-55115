@@ -765,7 +765,10 @@ function handleUnifiedMessengerBack() {
         resetChatArea();
     }
     updateTopBackButtonVisibility();
+    lastFriendsRenderSig = '';
+    loadFriendsAndRequests(true);
 }
+
 
 window.updateTopBackButtonVisibility = updateTopBackButtonVisibility;
 window.handleUnifiedMessengerBack = handleUnifiedMessengerBack;
@@ -1396,6 +1399,20 @@ function renderFriends() {
         item.onclick = function() { selectChat(friend); };
         var lastTextVal = friend.lastMessage || friend.lastMsg || '';
         var lastTimeVal = friend.time || friend.lastTime || '';
+        if (!lastTextVal || lastTextVal === 'Нет сообщений') {
+            try {
+                var locRaw = localStorage.getItem('msb_cache_room_' + activeId);
+                var locArr = locRaw ? JSON.parse(locRaw) : [];
+                if (locArr.length > 0) {
+                    var lm = locArr[locArr.length - 1];
+                    lastTextVal = lm.type === 'audio' ? '🎙️ Голосовое' :
+                                  lm.type === 'video' ? '🎥 Кружок' :
+                                  lm.type === 'file' ? '📎 Файл' : (lm.text || '');
+                    lastTimeVal = lm.time || lastTimeVal;
+                }
+            } catch (e) {}
+        }
+
         var hasUnread = (friend.unread > 0 && !isActive);
         var badgeHTML = hasUnread ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
         var timeHTML = lastTimeVal ? ('<div class="friend-time-label">' + escapeEdgeHtml(lastTimeVal) + '</div>') : '';
@@ -1607,6 +1624,8 @@ function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
     if (sb) sb.classList.remove('hidden');
     updateTopBackButtonVisibility();
+    lastFriendsRenderSig = '';
+    loadFriendsAndRequests(true);
 }
 
 
