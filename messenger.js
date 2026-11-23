@@ -1924,12 +1924,13 @@ function ensureRoundVideoStage() {
         '  <span id="msb-round-time-text">0:00</span>',
         '</div>',
         '<div class="msb-round-controls-bar">',
-        '  <button type="button" id="msb-round-discard" class="msb-round-ctrl-btn trash-round-btn" title="Удалить">🗑️</button>',
-        '  <button type="button" id="msb-round-cam-flip" class="msb-round-ctrl-btn" title="Камера">🔄</button>',
-        '  <button type="button" id="msb-round-pause-play" class="msb-round-ctrl-btn" title="Пауза">⏸</button>',
-        '  <button type="button" id="msb-round-stop-send" class="msb-round-ctrl-btn send-round-btn" title="Отправить">⏹</button>',
+        '  <button type="button" id="msb-round-discard" class="msb-round-ctrl-btn trash-round-btn" title="Удалить"><span class="rc-ico">🗑️</span></button>',
+        '  <button type="button" id="msb-round-cam-flip" class="msb-round-ctrl-btn flip-round-btn" title="Камера"><span class="rc-ico">🔄</span></button>',
+        '  <button type="button" id="msb-round-pause-play" class="msb-round-ctrl-btn pause-round-btn" title="Пауза"><span class="rc-ico">⏸</span></button>',
+        '  <button type="button" id="msb-round-stop-send" class="msb-round-ctrl-btn send-round-btn" title="Отправить"><span class="rc-ico">➤</span></button>',
         '</div>'
     ].join('');
+
     document.body.appendChild(st);
 
     document.getElementById('msb-round-discard').onclick = function(e) {

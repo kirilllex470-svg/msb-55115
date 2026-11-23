@@ -2066,17 +2066,43 @@ body.theme-cosmic .msb-round-ring-prog { stroke: #a855f7; }
     box-shadow: 0 0 8px #ffffff;
 }
 
+@keyframes rcBtnWavePop {
+    0% { opacity: 0; transform: translateY(14px) scale(0.5); }
+    70% { opacity: 1; transform: translateY(-4px) scale(1.08); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes rcFloatBob {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-4px); }
+}
+
+@keyframes rcSendArrowFly {
+    0%, 100% { transform: translateX(0px) scale(1); }
+    50% { transform: translateX(3px) scale(1.14); }
+}
+
+@keyframes rcSpinSlow {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 .msb-round-controls-bar {
     display: none;
     position: absolute;
-    bottom: -60px;
+    bottom: -66px;
     left: 50%;
     transform: translateX(-50%);
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 14px;
     width: max-content;
     max-width: 94vw;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(9, 13, 22, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
     z-index: 10;
 }
 
@@ -2085,31 +2111,86 @@ body.theme-cosmic .msb-round-ring-prog { stroke: #a855f7; }
 }
 
 .msb-round-ctrl-btn {
-    width: 46px;
-    height: 46px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     border: 1.5px solid rgba(255, 255, 255, 0.35);
-    background: rgba(15, 23, 42, 0.94);
+    background: linear-gradient(145deg, #1e293b, #0f172a);
     color: #ffffff;
-    font-size: 19px;
+    font-size: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.65);
-    transition: transform 0.15s ease;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.65), inset 0 1px 2px rgba(255, 255, 255, 0.25);
+    transition: transform 0.16s ease, filter 0.16s ease;
+    animation: rcBtnWavePop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+               rcFloatBob 2.6s ease-in-out infinite;
 }
+
+.msb-round-ctrl-btn:nth-child(1) { animation-delay: 0.02s, 0.0s; }
+.msb-round-ctrl-btn:nth-child(2) { animation-delay: 0.08s, 0.3s; }
+.msb-round-ctrl-btn:nth-child(3) { animation-delay: 0.14s, 0.6s; }
+.msb-round-ctrl-btn:nth-child(4) { animation-delay: 0.20s, 0.9s; }
 
 .msb-round-ctrl-btn:active {
-    transform: scale(0.9);
+    transform: scale(0.88) !important;
+    filter: brightness(1.25);
 }
 
+.msb-round-ctrl-btn .rc-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* 1. Кнопка корзины (удалить) */
 .msb-round-ctrl-btn.trash-round-btn {
-    background: rgba(51, 65, 85, 0.95);
-    border-color: #94a3b8;
+    background: linear-gradient(145deg, #475569, #1e293b);
+    border-color: #cbd5e1;
+}
+.msb-round-ctrl-btn.trash-round-btn:hover .rc-ico {
+    transform: rotate(-14deg) scale(1.15);
 }
 
+/* 2. Кнопка смены камеры */
+.msb-round-ctrl-btn.flip-round-btn {
+    background: linear-gradient(145deg, #0284c7, #1e3a8a);
+    border-color: #7dd3fc;
+    box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+.msb-round-ctrl-btn.flip-round-btn:active .rc-ico {
+    animation: rcSpinSlow 0.45s ease;
+}
+
+/* 3. Кнопка паузы / воспроизведения */
+.msb-round-ctrl-btn.pause-round-btn {
+    background: linear-gradient(145deg, #d97706, #78350f);
+    border-color: #fcd34d;
+    box-shadow: 0 6px 18px rgba(217, 119, 6, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+/* 4. Кнопка отправки со стрелкой ➤ (меняет цвет под выбранную тему!) */
 .msb-round-ctrl-btn.send-round-btn {
-    background: linear-gradient(135deg, #dc2626, #991b1b);
-    border-color: #fca5a5;
+    background: linear-gradient(135deg, #22c55e, #15803d);
+    border-color: #86efac;
+    font-size: 21px;
+    padding-left: 3px;
+    box-shadow: 0 8px 22px rgba(34, 197, 94, 0.55), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+.msb-round-ctrl-btn.send-round-btn .rc-ico {
+    animation: rcSendArrowFly 1.3s ease-in-out infinite;
+}
+
+body.theme-rocket .msb-round-ctrl-btn.send-round-btn {
+    background: linear-gradient(135deg, #f97316, #c2410c);
+    border-color: #fed7aa;
+    box-shadow: 0 8px 22px rgba(249, 115, 22, 0.55), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+body.theme-cosmic .msb-round-ctrl-btn.send-round-btn {
+    background: linear-gradient(135deg, #a855f7, #6d28d9);
+    border-color: #e9d5ff;
+    box-shadow: 0 8px 22px rgba(168, 85, 247, 0.55), inset 0 1px 2px rgba(255, 255, 255, 0.4);
 }
