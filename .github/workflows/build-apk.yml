@@ -727,12 +727,28 @@ jobs:
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
                       else startService(svc);
                   } catch (Exception ignored) {}
-
                   if (getBridge() != null && getBridge().getWebView() != null) {
                       WebView wv = getBridge().getWebView();
                       wv.setBackgroundColor(Color.parseColor("#0f172a"));
                       wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
+                      WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                      View rootView = getWindow().getDecorView();
+                      ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, windowInsets) -> {
+                          Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+                          Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+                          int bottomPad = Math.max(sysBars.bottom, ime.bottom);
+                          v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
+                          if (ime.bottom > 0) {
+                              wv.post(() -> wv.evaluateJavascript(
+                                  "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
+                              ));
+                          }
+                          return WindowInsetsCompat.CONSUMED;
+                      });
+
                       WebSettings ws = wv.getSettings();
+
                       ws.setJavaScriptEnabled(true);
                       ws.setDomStorageEnabled(true);
                       ws.setCacheMode(WebSettings.LOAD_DEFAULT);
