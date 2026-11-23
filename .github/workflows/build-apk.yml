@@ -680,14 +680,8 @@ jobs:
           import org.json.JSONObject;
 
           public class MainActivity extends BridgeActivity {
-              private LinearLayout nativeChatWrap;
-              private LinearLayout nativeCapsule;
-              private EditText nativeEdit;
-              private TextView nativeSendBtn;
-              private int lastKbHeight = -1;
-              private int lastRootHeight = 0;
-
               private int dp(int v) {
+
                   return Math.round(v * getResources().getDisplayMetrics().density);
               }
               @Override
@@ -738,143 +732,21 @@ jobs:
                       });
                   }
 
-                  setupNativeMaxComposer();
-              }
-
-              private void setupNativeMaxComposer() {
-                  final FrameLayout root = findViewById(android.R.id.content);
-                  if (root == null) return;
-
-                  nativeChatWrap = new LinearLayout(this);
-                  nativeChatWrap.setOrientation(LinearLayout.VERTICAL);
-                  nativeChatWrap.setBackgroundColor(Color.parseColor("#111827"));
-                  nativeChatWrap.setPadding(dp(8), dp(6), dp(8), dp(6));
-                  nativeChatWrap.setVisibility(View.GONE);
-
-                  nativeCapsule = new LinearLayout(this);
-                  nativeCapsule.setOrientation(LinearLayout.HORIZONTAL);
-                  nativeCapsule.setGravity(Gravity.BOTTOM);
-                  nativeCapsule.setPadding(dp(6), dp(4), dp(5), dp(4));
-
-                  TextView smileBtn = new TextView(this);
-                  smileBtn.setText("😊");
-                  smileBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
-                  smileBtn.setGravity(Gravity.CENTER);
-                  smileBtn.setLayoutParams(new LinearLayout.LayoutParams(dp(36), dp(36)));
-                  smileBtn.setOnClickListener(v -> {
-                      hideNativeKeyboard();
-                      evalJs("if(window.toggleTgEmojiDrawer)window.toggleTgEmojiDrawer();");
-                  });
-
-                  nativeEdit = new EditText(this);
-                  nativeEdit.setHint("Написать сообщение...");
-                  nativeEdit.setHintTextColor(Color.parseColor("#94a3b8"));
-                  nativeEdit.setTextColor(Color.WHITE);
-                  nativeEdit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-                  nativeEdit.setBackgroundColor(Color.TRANSPARENT);
-                  nativeEdit.setMinLines(1);
-                  nativeEdit.setMaxLines(5);
-                  nativeEdit.setInputType(
-                      InputType.TYPE_CLASS_TEXT |
-                      InputType.TYPE_TEXT_FLAG_CAP_SENTENCES |
-                      InputType.TYPE_TEXT_FLAG_MULTI_LINE |
-                      InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
-                  );
-                  nativeEdit.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
-                  nativeEdit.setPadding(dp(6), dp(6), dp(6), dp(6));
-                  nativeEdit.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-                  nativeEdit.addTextChangedListener(new TextWatcher() {
-                      @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-                      @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
-                          evalJs("if(typeof notifyServerTyping==='function')notifyServerTyping(" + (s.length() > 0) + ");");
-                      }
-                      @Override public void afterTextChanged(Editable s) {}
-                  });
-
-                  TextView plusBtn = new TextView(this);
-                  plusBtn.setText("➕");
-                  plusBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
-                  plusBtn.setTextColor(Color.parseColor("#4ade80"));
-                  plusBtn.setGravity(Gravity.CENTER);
-                  plusBtn.setLayoutParams(new LinearLayout.LayoutParams(dp(36), dp(36)));
-                  plusBtn.setOnClickListener(v -> {
-                      hideNativeKeyboard();
-                      evalJs("if(window.toggleMsbRadialToolbar)window.toggleMsbRadialToolbar();");
-                  });
-
-                  nativeSendBtn = new TextView(this);
-                  nativeSendBtn.setText("➤");
-                  nativeSendBtn.setTextColor(Color.WHITE);
-                  nativeSendBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-                  nativeSendBtn.setGravity(Gravity.CENTER);
-                  LinearLayout.LayoutParams sendLp = new LinearLayout.LayoutParams(dp(38), dp(38));
-                  sendLp.leftMargin = dp(4);
-                  nativeSendBtn.setLayoutParams(sendLp);
-                  nativeSendBtn.setOnClickListener(v -> {
-                      String txt = nativeEdit.getText().toString().trim();
-                      if (txt.isEmpty()) return;
-                      nativeEdit.setText("");
-                      String qTxt = JSONObject.quote(txt);
-                      evalJs("(function(){var i=document.getElementById('text-input');if(i){i.value=" + qTxt + ";if(typeof sendMessage==='function')sendMessage();}})();");
-                  });
-
-                  nativeCapsule.addView(smileBtn);
-                  nativeCapsule.addView(nativeEdit);
-                  nativeCapsule.addView(plusBtn);
-                  nativeCapsule.addView(nativeSendBtn);
-                  nativeChatWrap.addView(nativeCapsule);
-                  root.addView(nativeChatWrap, new FrameLayout.LayoutParams(
-                      ViewGroup.LayoutParams.MATCH_PARENT,
-                      ViewGroup.LayoutParams.WRAP_CONTENT,
-                      Gravity.BOTTOM
-                  ));
-                  applyNativeBarTheme();
-
-                  nativeChatWrap.setElevation(dp(8));
-                  root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
-                      if (nativeChatWrap.getVisibility() != View.VISIBLE) return;
-                      Rect r = new Rect();
-                      root.getWindowVisibleDisplayFrame(r);
-                      int screenHeight = root.getRootView().getHeight();
-                      int diff = screenHeight - r.bottom;
-                      int kbHeight = (diff > screenHeight * 0.15) ? diff : 0;
-
-                      if (kbHeight != lastKbHeight || root.getHeight() != lastRootHeight) {
-                          lastKbHeight = kbHeight;
-                          lastRootHeight = root.getHeight();
-                          boolean isResizeActive = (root.getHeight() <= r.bottom + dp(20));
-                          nativeChatWrap.setTranslationY(isResizeActive ? 0 : -kbHeight);
-
-                          int padDp = Math.round(((isResizeActive ? 0 : kbHeight) + dp(68)) / getResources().getDisplayMetrics().density);
-                          boolean isKbOpen = kbHeight > dp(80);
-                          evalJs("(function(){var m=document.getElementById('messages');if(m){m.style.paddingBottom='" + padDp + "px';if(" + isKbOpen + ")m.scrollTop=m.scrollHeight;}})();");
-                      }
-                  });
               }
 
               private void applyNativeBarTheme() {
-                  if (nativeCapsule == null) return;
-                  int acc = MsbKeepAliveService.resolveThemeAccentColor(this);
-                  GradientDrawable bg = new GradientDrawable();
-                  bg.setColor(Color.parseColor("#0f172a"));
-                  bg.setCornerRadius(dp(23));
-                  bg.setStroke(dp(2), acc);
-                  nativeCapsule.setBackground(bg);
-                  if (nativeSendBtn != null) {
-                      GradientDrawable sBg = new GradientDrawable();
-                      sBg.setShape(GradientDrawable.OVAL);
-                      sBg.setColor(acc);
-                      nativeSendBtn.setBackground(sBg);
-                  }
               }
 
               private void hideNativeKeyboard() {
-                  if (nativeEdit == null) return;
-                  InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                  if (imm != null) imm.hideSoftInputFromWindow(nativeEdit.getWindowToken(), 0);
+                  View v = getCurrentFocus();
+                  if (v != null) {
+                      InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                      if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                  }
               }
 
               private void evalJs(final String script) {
+
                   runOnUiThread(() -> {
                       if (getBridge() != null && getBridge().getWebView() != null) {
                           getBridge().getWebView().evaluateJavascript(script, null);
@@ -909,54 +781,25 @@ jobs:
               }
 
               public class MsbNativeBridge {
-                  private boolean lastBarVis = false;
-
                   @JavascriptInterface
                   public void downloadFile(final String url, final String fileName) {
                       enqueueSystemDownload(url, fileName);
                   }
 
-
                   @JavascriptInterface
                   public void setChatBarVisible(final boolean v) {
-                      if (v == lastBarVis) return;
-                      lastBarVis = v;
-                      runOnUiThread(() -> {
-                          if (nativeChatWrap != null) {
-                              applyNativeBarTheme();
-                              nativeChatWrap.setVisibility(v ? View.VISIBLE : View.GONE);
-                              if (!v) hideNativeKeyboard();
-                          }
-                      });
+                      if (!v) runOnUiThread(() -> hideNativeKeyboard());
                   }
 
                   @JavascriptInterface
-                  public void setChatBarText(final String t, final boolean f) {
-                      runOnUiThread(() -> {
-                          if (nativeEdit != null) {
-                              nativeEdit.setText(t != null ? t : "");
-                              nativeEdit.setSelection(nativeEdit.getText().length());
-                              if (f) {
-                                  nativeEdit.requestFocus();
-                                  InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                                  if (imm != null) imm.showSoftInput(nativeEdit, InputMethodManager.SHOW_IMPLICIT);
-                              }
-                          }
-                      });
-                  }
+                  public void setChatBarText(final String t, final boolean f) {}
 
                   @JavascriptInterface
-                  public void appendChatEmoji(final String em) {
-                      runOnUiThread(() -> {
-                          if (nativeEdit != null && em != null) {
-                              int st = Math.max(nativeEdit.getSelectionStart(), 0);
-                              int en = Math.max(nativeEdit.getSelectionEnd(), 0);
-                              nativeEdit.getText().replace(Math.min(st, en), Math.max(st, en), em);
-                          }
-                      });
-                  }
+                  public void appendChatEmoji(final String em) {}
+
                   @JavascriptInterface
                   public void setIdentity(String u, String c, String o) {
+
                       try {
                           getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
                               .putString("user", u != null ? u : "")
@@ -1133,6 +976,7 @@ jobs:
           "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
 
       - name: Отправка нового APK на сервер и удаление старого
+      
         env:
           SERVER_URL: ${{ secrets.SERVER_URL }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
