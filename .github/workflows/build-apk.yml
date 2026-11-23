@@ -64,11 +64,28 @@ jobs:
       - name: Подключение google-services.json в Gradle
         run: |
           python3 -c '
-          import glob
+          import glob, re
           for p in glob.glob("node_modules/@capacitor/android/**/CapacitorWebView.java", recursive=True):
               s = open(p, encoding="utf-8").read()
-              if "TYPE_TEXT_VARIATION_SHORT_MESSAGE" not in s:
-                  patch = """
+              # 1. Аккуратно удаляем встроенный onCreateInputConnection из Capacitor 8 (если он есть)
+              m = re.search(r"(@Override\s+)?public\s+InputConnection\s+onCreateInputConnection\s*\([^)]*\)\s*\{", s)
+              if m:
+                  start = m.start()
+                  brace_pos = s.find("{", m.end() - 1)
+                  depth = 0
+                  end = brace_pos
+                  for i in range(brace_pos, len(s)):
+                      if s[i] == "{":
+                          depth += 1
+                      elif s[i] == "}":
+                          depth -= 1
+                          if depth == 0:
+                              end = i + 1
+                              break
+                  s = s[:start] + s[end:]
+
+              # 2. Вставляем наш единственный метод с верхней панелью клавиатуры (буфер, смайлы, настройки)
+              patch = """
               @Override
               public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo outAttrs) {
                   android.view.inputmethod.InputConnection ic = super.onCreateInputConnection(outAttrs);
@@ -90,10 +107,10 @@ jobs:
                   return ic;
               }
           """
-                  idx = s.rfind("}")
-                  s = s[:idx] + patch + "\n}\n"
-                  open(p, "w", encoding="utf-8").write(s)
-                  print("Patched:", p)
+              idx = s.rfind("}")
+              s = s[:idx] + patch + "\n}\n"
+              open(p, "w", encoding="utf-8").write(s)
+              print("Successfully replaced onCreateInputConnection in:", p)
           '
           cp google-services.json android/app/google-services.json
 
