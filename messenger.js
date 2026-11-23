@@ -1230,10 +1230,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function bindVisualViewportForAndroidKeyboard() {
-        if (window.MsbNative || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
-            return;
-        }
         if (!window.visualViewport) return;
+
         var vpRaf = null;
         var updateVp = function() {
             if (vpRaf) cancelAnimationFrame(vpRaf);
