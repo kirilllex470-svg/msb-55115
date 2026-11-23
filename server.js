@@ -1169,6 +1169,7 @@ const server = http.createServer(function(req, res) {
             return Object.assign({}, msg, { read: isRead });
         });
         return sendJsonCompressed(req, res, 200, {
+        return sendJsonCompressed(req, res, 200, {
             messages: enriched,
             totalCount: rawList.length,
             isDelta: sinceTs > 0,
@@ -1176,6 +1177,7 @@ const server = http.createServer(function(req, res) {
             partnerLastSeen: partnerLastSeen,
             typingUsers: activeTypers
         }, 'no-store');
+
     }
 
     if (urlPath === '/api/messages/read' && req.method === 'POST') {
@@ -1979,7 +1981,19 @@ wss.on('connection', function(ws) {
             }
 
 
+                        if (msg.type === 'get_room_history' && msg.room) {
+                const rKey = String(msg.room).trim().toLowerCase();
+                const list = Array.isArray(roomsDB[rKey]) ? roomsDB[rKey] : [];
+                ws.send(JSON.stringify({
+                    type: 'room_history',
+                    room: rKey,
+                    messages: list
+                }));
+                return;
+            }
+
             if (msg.type === 'chat_typing' && msg.user && msg.room) {
+
                 const uClean = String(msg.user).trim();
                 markUserOnline(uClean);
                 if (!typingDB[msg.room]) typingDB[msg.room] = {};

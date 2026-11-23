@@ -418,6 +418,18 @@ window.handleIncomingChatWS = function(packet) {
     chatUser = getActiveChatIdentity();
     if (!chatUser) return;
 
+    if (packet.type === 'room_history' && packet.room && Array.isArray(packet.messages)) {
+        var rLow = String(packet.room).trim().toLowerCase();
+        if (currentRoomId && String(currentRoomId).trim().toLowerCase() === rLow) {
+            var mDivH = getMessagesDiv();
+            var modalH = document.getElementById('messenger-modal');
+            var isOpenH = modalH && modalH.style.display === 'flex';
+            if (mDivH) applyMessagesToDOM(mDivH, packet.messages, isOpenH);
+        }
+        return;
+    }
+
+
     if (packet.type === 'avatar_updated' && packet.user) {
         delete avatarLocalMem[String(packet.user).toLowerCase()];
         getCachedUserAvatar(packet.user, 'force_' + Date.now());
@@ -1618,8 +1630,18 @@ function selectChat(itemObj) {
     requestAnimationFrame(function() {
         fetchMessages();
         markChatAsRead(currentRoomId);
+        if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
+            try {
+                ws.send(JSON.stringify({
+                    type: 'get_room_history',
+                    room: currentRoomId,
+                    user: chatUser
+                }));
+            } catch (e) {}
+        }
     });
 }
+
 
 function closeChatMobile() {
     var sb = document.getElementById('app-sidebar');
@@ -2099,11 +2121,9 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
         renderPendingBubbles();
         return;
     }
-
     var placeholder = mDiv.querySelector('.chat-placeholder');
     if (placeholder) placeholder.remove();
     var addedNew = false, hasUnreadIncoming = false;
-
     var frag = document.createDocumentFragment();
     data.forEach(function(msg) {
         var isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();

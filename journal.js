@@ -946,7 +946,7 @@ function handleWsIncomingEvent(event) {
         return;
     }
 
-    if ((msg.type === 'chat_new_msg' || msg.type === 'chat_msg_deleted' || msg.type === 'chat_msg_edited' || msg.type === 'chat_room_read' || msg.type === 'avatar_updated') && typeof window.handleIncomingChatWS === 'function') {
+    if ((msg.type === 'room_history' || msg.type === 'chat_new_msg' || msg.type === 'chat_msg_deleted' || msg.type === 'chat_msg_edited' || msg.type === 'chat_room_read' || msg.type === 'avatar_updated') && typeof window.handleIncomingChatWS === 'function') {
         window.handleIncomingChatWS(msg);
         return;
     }
