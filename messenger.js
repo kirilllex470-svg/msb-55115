@@ -1901,76 +1901,186 @@ function toggleVoiceRecord() {
 var roundCamFacing = 'user';
 var roundRecCanvas = null;
 var roundRecRaf = null;
-var roundRecStartTs = 0;
+var roundRecAccMs = 0;
+var roundRecSegTs = 0;
+var roundRecPaused = false;
+var roundRecTrash = false;
 var roundAudioStream = null;
 var MAX_ROUND_SEC = 60;
 
 function ensureRoundVideoStage() {
-    var stage = document.getElementById('msb-round-stage');
-    if (stage) return stage;
+    var st = document.getElementById('msb-round-stage');
+    if (st) return st;
 
-    stage = document.createElement('div');
-    stage.id = 'msb-round-stage';
-    stage.innerHTML = [
+    st = document.createElement('div');
+    st.id = 'msb-round-stage';
+    st.innerHTML = [
         '<svg class="msb-round-ring-svg" viewBox="0 0 120 120">',
         '  <circle class="msb-round-ring-bg" cx="60" cy="60" r="57"></circle>',
         '  <circle id="msb-round-ring-prog" class="msb-round-ring-prog" cx="60" cy="60" r="57"></circle>',
         '</svg>',
-        '<div id="msb-round-time-pill" class="msb-round-time-pill">0:00</div>',
-        '<button type="button" id="msb-round-cam-flip" class="msb-round-cam-flip" title="Переключить камеру">🔄</button>',
-        '<button type="button" id="msb-round-stop-send" class="msb-round-stop-send" title="Остановить и отправить">➤</button>'
+        '<div id="msb-round-time-pill" class="msb-round-time-pill">',
+        '  <span class="msb-rec-dot"></span>',
+        '  <span id="msb-round-time-text">0:00</span>',
+        '</div>',
+        '<div class="msb-round-controls-bar">',
+        '  <button type="button" id="msb-round-discard" class="msb-round-ctrl-btn trash-round-btn" title="Удалить">🗑️</button>',
+        '  <button type="button" id="msb-round-cam-flip" class="msb-round-ctrl-btn" title="Камера">🔄</button>',
+        '  <button type="button" id="msb-round-pause-play" class="msb-round-ctrl-btn" title="Пауза">⏸</button>',
+        '  <button type="button" id="msb-round-stop-send" class="msb-round-ctrl-btn send-round-btn" title="Отправить">⏹</button>',
+        '</div>'
     ].join('');
-    document.body.appendChild(stage);
+    document.body.appendChild(st);
 
+    document.getElementById('msb-round-discard').onclick = function(e) {
+        e.stopPropagation();
+        discardRoundRecording();
+    };
     document.getElementById('msb-round-cam-flip').onclick = function(e) {
         e.stopPropagation();
         switchRoundCameraLive();
     };
+    document.getElementById('msb-round-pause-play').onclick = function(e) {
+        e.stopPropagation();
+        toggleRoundPausePlay();
+    };
     document.getElementById('msb-round-stop-send').onclick = function(e) {
         e.stopPropagation();
-        if (videoRecorder && videoRecorder.state === 'recording') {
+        if (videoRecorder && videoRecorder.state !== 'inactive') {
             toggleVideoRecord();
         }
     };
-    return stage;
+    return st;
 }
-
-function setRoundRingProgress(fraction, timeSec, isRecording) {
+function setRoundRingProgress(frac, sec, isRec) {
     var prog = document.getElementById('msb-round-ring-prog');
     var pill = document.getElementById('msb-round-time-pill');
-    var circumference = 358.14;
-    var clamped = Math.max(0, Math.min(1, fraction || 0));
+    var txt = document.getElementById('msb-round-time-text');
+    var circ = 358.14;
+    var cl = Math.max(0, Math.min(1, frac || 0));
+
     if (prog) {
-        prog.style.strokeDashoffset = String(circumference * (1 - clamped));
+        prog.style.strokeDashoffset = String(circ * (1 - cl));
+        prog.classList.toggle('is-rec-active', Boolean(isRec && !roundRecPaused));
     }
     if (pill) {
-        var total = Math.max(0, Math.floor(timeSec || 0));
-        var mm = Math.floor(total / 60);
-        var ss = String(total % 60).padStart(2, '0');
-        pill.innerHTML = (isRecording ? '<span class="msb-rec-dot"></span>' : '') + mm + ':' + ss;
+        pill.classList.toggle('is-rec-blinking', Boolean(isRec && !roundRecPaused));
+        pill.classList.toggle('is-rec-paused', Boolean(isRec && roundRecPaused));
+    }
+    var tot = Math.max(0, Math.floor(sec || 0));
+    var mm = Math.floor(tot / 60);
+    var ss = String(tot % 60).padStart(2, '0');
+    if (txt) {
+        txt.textContent = mm + ':' + ss;
+    } else if (pill) {
+        pill.innerHTML = (isRec ? '<span class="msb-rec-dot"></span>' : '') + mm + ':' + ss;
     }
 }
 
-function switchRoundCameraLive() {
-    if (!videoRecorder || videoRecorder.state !== 'recording') return;
-    var nextFacing = (roundCamFacing === 'user') ? 'environment' : 'user';
-    var preview = document.getElementById('video-preview');
+function toggleRoundPausePlay() {
+    if (!videoRecorder || videoRecorder.state === 'inactive') return;
+    var pp = document.getElementById('msb-round-pause-play');
 
-    navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 360, max: 480 }, height: { ideal: 360, max: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: { ideal: nextFacing } },
+    if (videoRecorder.state === 'recording') {
+        try { videoRecorder.pause(); } catch (e) {}
+        roundRecAccMs += (Date.now() - roundRecSegTs);
+        roundRecPaused = true;
+        if (pp) pp.textContent = '▶️';
+        setRoundRingProgress((roundRecAccMs / 1000) / MAX_ROUND_SEC, roundRecAccMs / 1000, true);
+    } else if (videoRecorder.state === 'paused') {
+        try { videoRecorder.resume(); } catch (e) {}
+        roundRecSegTs = Date.now();
+        roundRecPaused = false;
+        if (pp) pp.textContent = '⏸';
+    }
+}
+
+function discardRoundRecording() {
+    roundRecTrash = true;
+    var btn = document.getElementById('video-btn');
+    if (btn) {
+        btn.classList.remove('recording');
+        btn.textContent = '🎥';
+    }
+    if (videoRecorder && videoRecorder.state !== 'inactive') {
+        try { videoRecorder.stop(); } catch (e) {}
+    }
+    cleanupRoundRecordingUI();
+}
+async function openCameraByFacing(facing) {
+    var base = {
+        width: { ideal: 360, max: 480 },
+        height: { ideal: 360, max: 480 },
+        frameRate: { ideal: 24, max: 30 }
+    };
+    try {
+        return await navigator.mediaDevices.getUserMedia({
+            video: Object.assign({}, base, { facingMode: { exact: facing } }),
+            audio: false
+        });
+    } catch (e1) {}
+
+    try {
+        var devs = await navigator.mediaDevices.enumerateDevices();
+        var cams = devs.filter(function(d) { return d.kind === 'videoinput'; });
+        if (cams.length > 1) {
+            var wantFront = (facing === 'user');
+            var found = cams.find(function(d) {
+                var l = String(d.label || '').toLowerCase();
+                return wantFront
+                    ? (l.indexOf('front') !== -1 || l.indexOf('user') !== -1 || l.indexOf('передн') !== -1)
+                    : (l.indexOf('back') !== -1 || l.indexOf('rear') !== -1 || l.indexOf('environment') !== -1 || l.indexOf('задн') !== -1);
+            });
+            var pick = found || (wantFront ? cams : cams[cams.length - 1]);
+            if (pick && pick.deviceId) {
+                return await navigator.mediaDevices.getUserMedia({
+                    video: Object.assign({}, base, { deviceId: { exact: pick.deviceId } }),
+                    audio: false
+                });
+            }
+        }
+    } catch (e2) {}
+
+    return await navigator.mediaDevices.getUserMedia({
+        video: Object.assign({}, base, { facingMode: facing }),
         audio: false
-    }).then(function(newCamStream) {
-        if (videoStreamRef) {
-            videoStreamRef.getVideoTracks().forEach(function(t) { t.stop(); });
+    });
+}
+
+async function switchRoundCameraLive() {
+    if (!videoRecorder || videoRecorder.state === 'inactive') return;
+    var flip = document.getElementById('msb-round-cam-flip');
+    if (flip) flip.disabled = true;
+
+    var next = (roundCamFacing === 'user') ? 'environment' : 'user';
+    var prev = document.getElementById('video-preview');
+
+    if (videoStreamRef) {
+        videoStreamRef.getVideoTracks().forEach(function(t) { t.stop(); });
+        videoStreamRef = null;
+    }
+
+    try {
+        var ns = await openCameraByFacing(next);
+        roundCamFacing = next;
+        videoStreamRef = ns;
+        if (prev) {
+            prev.srcObject = ns;
+            prev.classList.toggle('rear-cam', roundCamFacing === 'environment');
+            await prev.play().catch(function() {});
         }
-        roundCamFacing = nextFacing;
-        videoStreamRef = newCamStream;
-        if (preview) {
-            preview.srcObject = newCamStream;
-            preview.classList.toggle('rear-cam', roundCamFacing === 'environment');
-            preview.play().catch(function() {});
-        }
-    }).catch(function() {});
+    } catch (err) {
+        try {
+            var fb = await openCameraByFacing(roundCamFacing);
+            videoStreamRef = fb;
+            if (prev) {
+                prev.srcObject = fb;
+                await prev.play().catch(function() {});
+            }
+        } catch (e) {}
+    } finally {
+        if (flip) flip.disabled = false;
+    }
 }
 
 function cleanupRoundRecordingUI() {
@@ -1978,15 +2088,21 @@ function cleanupRoundRecordingUI() {
         cancelAnimationFrame(roundRecRaf);
         roundRecRaf = null;
     }
-    var preview = document.getElementById('video-preview');
-    if (preview) {
-        preview.style.display = 'none';
-        preview.srcObject = null;
+    roundRecPaused = false;
+    roundRecAccMs = 0;
+
+    var pp = document.getElementById('msb-round-pause-play');
+    if (pp) pp.textContent = '⏸';
+
+    var prev = document.getElementById('video-preview');
+    if (prev) {
+        prev.style.display = 'none';
+        prev.srcObject = null;
     }
-    var stage = document.getElementById('msb-round-stage');
-    if (stage) {
-        stage.style.display = 'none';
-        stage.classList.remove('mode-rec');
+    var st = document.getElementById('msb-round-stage');
+    if (st) {
+        st.style.display = 'none';
+        st.classList.remove('mode-rec');
     }
     if (videoStreamRef) {
         videoStreamRef.getTracks().forEach(function(t) { t.stop(); });
@@ -1997,18 +2113,17 @@ function cleanupRoundRecordingUI() {
         roundAudioStream = null;
     }
 }
-
 function toggleVideoRecord() {
     chatUser = getActiveChatIdentity();
-    if (!currentRoomId) return alert("Сначала выберите чат слева!");
+    if (!currentRoomId) return alert('Сначала выберите чат слева!');
     var btn = document.getElementById('video-btn');
-    var preview = document.getElementById('video-preview');
+    var prev = document.getElementById('video-preview');
 
-    if (videoRecorder && videoRecorder.state === "recording") {
-        videoRecorder.stop();
+    if (videoRecorder && videoRecorder.state !== 'inactive') {
+        try { videoRecorder.stop(); } catch (e) {}
         if (btn) {
             btn.classList.remove('recording');
-            btn.textContent = "🎥";
+            btn.textContent = '🎥';
         }
         cleanupRoundRecordingUI();
         return;
@@ -2016,28 +2131,34 @@ function toggleVideoRecord() {
 
     closeBigVideoRoundOverlay();
     roundCamFacing = 'user';
+    roundRecPaused = false;
+    roundRecTrash = false;
+    roundRecAccMs = 0;
 
     navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1, sampleRate: 16000 },
-        video: { width: { ideal: 360, max: 480 }, height: { ideal: 360, max: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: "user" }
+        video: { width: { ideal: 360, max: 480 }, height: { ideal: 360, max: 480 }, frameRate: { ideal: 24, max: 30 }, facingMode: 'user' }
     }).then(function(stream) {
         videoChunks = new Array();
         videoStreamRef = new MediaStream(stream.getVideoTracks());
         roundAudioStream = new MediaStream(stream.getAudioTracks());
 
-        var stage = ensureRoundVideoStage();
-        stage.classList.add('mode-rec');
-        stage.style.display = 'block';
+        var st = ensureRoundVideoStage();
+        st.classList.add('mode-rec');
+        st.style.display = 'block';
+
+        var pp = document.getElementById('msb-round-pause-play');
+        if (pp) pp.textContent = '⏸';
         setRoundRingProgress(0, 0, true);
 
-        if (preview) {
-            if (preview.parentElement !== stage) stage.insertBefore(preview, stage.firstChild);
-            preview.classList.remove('rear-cam');
-            preview.muted = true;
-            preview.setAttribute('playsinline', '');
-            preview.srcObject = videoStreamRef;
-            preview.style.display = 'block';
-            preview.play().catch(function() {});
+        if (prev) {
+            if (prev.parentElement !== st) st.insertBefore(prev, st.firstChild);
+            prev.classList.remove('rear-cam');
+            prev.muted = true;
+            prev.setAttribute('playsinline', '');
+            prev.srcObject = videoStreamRef;
+            prev.style.display = 'block';
+            prev.play().catch(function() {});
         }
 
         if (!roundRecCanvas) {
@@ -2046,37 +2167,40 @@ function toggleVideoRecord() {
             roundRecCanvas.height = 360;
         }
         var ctx = roundRecCanvas.getContext('2d');
-        roundRecStartTs = Date.now();
+        roundRecSegTs = Date.now();
 
         function drawFrameLoop() {
-            if (preview && preview.readyState >= 2) {
-                var vw = preview.videoWidth || 360;
-                var vh = preview.videoHeight || 360;
-                var minS = Math.min(vw, vh);
-                var sx = (vw - minS) / 2;
-                var sy = (vh - minS) / 2;
-                ctx.save();
-                if (roundCamFacing === 'user') {
-                    ctx.translate(360, 0);
-                    ctx.scale(-1, 1);
+            if (!roundRecPaused) {
+                if (prev && prev.readyState >= 2) {
+                    var vw = prev.videoWidth || 360;
+                    var vh = prev.videoHeight || 360;
+                    var minS = Math.min(vw, vh);
+                    var sx = (vw - minS) / 2;
+                    var sy = (vh - minS) / 2;
+                    ctx.save();
+                    if (roundCamFacing === 'user') {
+                        ctx.translate(360, 0);
+                        ctx.scale(-1, 1);
+                    }
+                    ctx.drawImage(prev, sx, sy, minS, minS, 0, 0, 360, 360);
+                    ctx.restore();
                 }
-                ctx.drawImage(preview, sx, sy, minS, minS, 0, 0, 360, 360);
-                ctx.restore();
-            }
-            var elapsed = (Date.now() - roundRecStartTs) / 1000;
-            setRoundRingProgress(elapsed / MAX_ROUND_SEC, elapsed, true);
-            if (elapsed >= MAX_ROUND_SEC && videoRecorder && videoRecorder.state === 'recording') {
-                toggleVideoRecord();
-                return;
+                var totMs = roundRecAccMs + (Date.now() - roundRecSegTs);
+                var elap = totMs / 1000;
+                setRoundRingProgress(elap / MAX_ROUND_SEC, elap, true);
+                if (elap >= MAX_ROUND_SEC && videoRecorder && videoRecorder.state !== 'inactive') {
+                    toggleVideoRecord();
+                    return;
+                }
             }
             roundRecRaf = requestAnimationFrame(drawFrameLoop);
         }
         roundRecRaf = requestAnimationFrame(drawFrameLoop);
 
-        var combinedStream = new MediaStream();
-        var canvasStream = roundRecCanvas.captureStream(24);
-        canvasStream.getVideoTracks().forEach(function(t) { combinedStream.addTrack(t); });
-        roundAudioStream.getAudioTracks().forEach(function(t) { combinedStream.addTrack(t); });
+        var comb = new MediaStream();
+        var cStr = roundRecCanvas.captureStream(24);
+        cStr.getVideoTracks().forEach(function(t) { comb.addTrack(t); });
+        roundAudioStream.getAudioTracks().forEach(function(t) { comb.addTrack(t); });
 
         var mime = '';
         if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) mime = 'video/mp4;codecs=avc1,mp4a.40.2';
@@ -2084,32 +2208,41 @@ function toggleVideoRecord() {
         else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mime = 'video/webm;codecs=vp8,opus';
         else if (MediaRecorder.isTypeSupported('video/webm')) mime = 'video/webm';
 
-        var recOptions = { videoBitsPerSecond: 380000, audioBitsPerSecond: 24000 };
-        if (mime) recOptions.mimeType = mime;
+        var opts = { videoBitsPerSecond: 380000, audioBitsPerSecond: 24000 };
+        if (mime) opts.mimeType = mime;
 
-        videoRecorder = new MediaRecorder(combinedStream, recOptions);
+        videoRecorder = new MediaRecorder(comb, opts);
         videoRecorder.ondataavailable = function(e) {
             if (e.data && e.data.size > 0) videoChunks.push(e.data);
         };
         videoRecorder.onstop = function() {
+            if (roundRecTrash) {
+                roundRecTrash = false;
+                videoChunks = new Array();
+                cleanupRoundRecordingUI();
+                return;
+            }
             var blob = new Blob(videoChunks, { type: videoRecorder.mimeType || 'video/mp4' });
-            var fileExt = (videoRecorder.mimeType && videoRecorder.mimeType.indexOf('mp4') !== -1) ? 'mp4' : 'webm';
-            var qId = quotedMessageId || null, qTxt = quotedMessageText || null, qSnd = quotedMessageSender || null;
+            var ext = (videoRecorder.mimeType && videoRecorder.mimeType.indexOf('mp4') !== -1) ? 'mp4' : 'webm';
+            var qId = quotedMessageId || null;
+            var qTxt = quotedMessageText || null;
+            var qSnd = quotedMessageSender || null;
             cancelReply();
             cleanupRoundRecordingUI();
             enqueueChatPayload({
                 sender: chatUser, room: currentRoomId, type: 'video',
-                blob: blob, fileName: 'video.' + fileExt,
+                blob: blob, fileName: 'video.' + ext,
                 quoteId: qId, quoteText: qTxt, quoteSender: qSnd
             });
         };
         videoRecorder.start(400);
         if (btn) {
             btn.classList.add('recording');
-            btn.textContent = "🛑";
+            btn.textContent = '🛑';
         }
-    }).catch(function() { alert("Нет доступа к камере или микрофону!"); });
+    }).catch(function() { alert('Нет доступа к камере или микрофону!'); });
 }
+
 
 
 function uploadAnyFile(inputElement) {
