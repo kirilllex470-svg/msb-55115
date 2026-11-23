@@ -1921,7 +1921,12 @@ function toggleVideoRecord() {
         }).then(function(stream) {
             videoChunks = new Array();
             videoStreamRef = stream;
-            if (preview) { preview.srcObject = stream; preview.style.display = 'block'; }
+            if (preview) {
+                if (preview.parentElement !== document.body) document.body.appendChild(preview);
+                preview.srcObject = stream;
+                preview.style.display = 'block';
+            }
+
             var mime = '';
             if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) mime = 'video/mp4;codecs=avc1,mp4a.40.2';
             else if (MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
@@ -2462,19 +2467,35 @@ function startEditingMessage(msgId, oldText) {
 
 
 
+var activeSmallRoundVideo = null;
+
 function closeBigVideoRoundOverlay() {
     var ov = document.getElementById('msb-video-round-backdrop');
     if (ov) ov.style.display = 'none';
-    document.querySelectorAll('#messages video.video-round.is-playing-big').forEach(function(vid) {
-        vid.classList.remove('is-playing-big');
-        vid.muted = true;
-        vid.loop = true;
-        vid.pause();
-    });
+    var floatVid = document.getElementById('msb-floating-round-player');
+    if (floatVid) {
+        try { floatVid.pause(); } catch (e) {}
+        floatVid.removeAttribute('src');
+        floatVid.style.display = 'none';
+    }
+    if (activeSmallRoundVideo) {
+        activeSmallRoundVideo.style.visibility = 'visible';
+        activeSmallRoundVideo = null;
+    }
 }
 
 function playVideoWithSound(v) {
     if (!v) return;
+
+    // Если повторно нажали — закрываем большой кружок
+    if (activeSmallRoundVideo === v) {
+        closeBigVideoRoundOverlay();
+        return;
+    }
+
+    closeBigVideoRoundOverlay();
+
+    // Прозрачный слой без затемнения (чтобы тап мимо кружка сворачивал его обратно)
     var ov = document.getElementById('msb-video-round-backdrop');
     if (!ov) {
         ov = document.createElement('div');
@@ -2483,26 +2504,35 @@ function playVideoWithSound(v) {
         document.body.appendChild(ov);
     }
 
-    // Если нажали на уже открытый большой кружок — уменьшаем обратно в чат
-    if (v.classList.contains('is-playing-big')) {
-        closeBigVideoRoundOverlay();
-        return;
+    // Отдельный большой круглый плеер прямо поверх экрана (не режется контейнером чата!)
+    var floatVid = document.getElementById('msb-floating-round-player');
+    if (!floatVid) {
+        floatVid = document.createElement('video');
+        floatVid.id = 'msb-floating-round-player';
+        floatVid.setAttribute('playsinline', '');
+        floatVid.onclick = function() { closeBigVideoRoundOverlay(); };
+        document.body.appendChild(floatVid);
     }
 
-    // Останавливаем все остальные кружки
-    closeBigVideoRoundOverlay();
+    document.querySelectorAll('#messages video.video-round').forEach(function(other) {
+        other.muted = true;
+        other.pause();
+    });
 
-    // Делаем кружок большим по центру экрана со звуком (как в Telegram)
+    activeSmallRoundVideo = v;
+    v.style.visibility = 'hidden';
+
+    var cleanSrc = String(v.getAttribute('src') || v.src || '').split('#')[0];
     ov.style.display = 'block';
-    v.classList.add('is-playing-big');
-    v.muted = false;
-    v.loop = false;
-    v.currentTime = 0;
-    v.play().catch(function() {});
+    floatVid.src = cleanSrc;
+    floatVid.style.display = 'block';
+    floatVid.muted = false;
+    floatVid.loop = false;
+    floatVid.currentTime = 0;
+    floatVid.play().catch(function() {});
 
-    v.onended = function() {
+    floatVid.onended = function() {
         closeBigVideoRoundOverlay();
-        v.currentTime = 0.001;
     };
 }
 
