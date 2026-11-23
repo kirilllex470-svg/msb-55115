@@ -878,7 +878,7 @@ jobs:
                           } catch (Exception ignored) {}
                       }).start();
                   }
-                  @JavascriptInterface
+                                    @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
                           runOnUiThread(() -> Toast.makeText(MainActivity.this, "Разрешите установку из этого источника и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show());
@@ -906,7 +906,7 @@ jobs:
                               int totalLen = conn.getContentLength();
                               InputStream is = conn.getInputStream();
                               FileOutputStream fos = new FileOutputStream(outFile);
-                              byte[] buf = new byte[16384];
+                              byte[] buf = new byte[8192];
                               int len;
                               long downloaded = 0;
                               int lastPct = -1;
@@ -953,7 +953,7 @@ jobs:
                           }
                       }).start();
                   }
-
+              }
 
               private void requestRequiredPermissions() {
                   List<String> need = new ArrayList<>();
@@ -966,13 +966,14 @@ jobs:
                   if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != g) need.add(Manifest.permission.RECORD_AUDIO);
                   if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != g) need.add(Manifest.permission.CAMERA);
                   if (!need.isEmpty()) {
-                      String[] arr = (String[]) Array.newInstance(String.class, need.size());
+                      String[] arr = new String[need.size()];
                       need.toArray(arr);
                       ActivityCompat.requestPermissions(this, arr, 101);
                   }
               }
           }
           EOF
+
 
       - name: Подпись единым ключом и компиляция APK
         env:
