@@ -2391,25 +2391,30 @@ function inlineDeleteMessage(msgId) {
 
     row.setAttribute('data-ant-eating', '1');
     var roomToDel = currentRoomId;
+    var container = row.querySelector('.swipe-container');
     var bubble = row.querySelector('.bubble');
-    var isMy = row.classList.contains('my-msg');
 
     if (bubble) {
-        bubble.classList.add('ant-being-eaten');
-
-        // Lớp phủ gặm nhấm làm biến mất dần bong bóng từ một phía sang phía kia
-        var biteMask = document.createElement('div');
-        biteMask.className = 'ant-bite-mask ' + (isMy ? 'from-right' : 'from-left');
-        bubble.appendChild(biteMask);
-
-        // Chú kiến 🐜 chạy zig-zag, gặm tin nhắn và rải vụn trong 10 giây
-        var ant = document.createElement('div');
-        ant.className = 'ant-eater-sprite ' + (isMy ? 'walk-left' : 'walk-right');
-        ant.innerHTML = '<span class="ant-body">🐜</span><span class="ant-crumbs">✦ ‧ ✦</span>';
-        bubble.appendChild(ant);
+        bubble.classList.add('ant-being-eaten-both');
     }
 
-    // Sau đúng 10 giây chú kiến ăn xong -> thu gọn dòng và xóa trên сервер
+    if (container) {
+        container.classList.add('ant-stage-wrap');
+
+        // Муравей слева (ползёт снаружи слева к центру и грызёт)
+        var antLeft = document.createElement('div');
+        antLeft.className = 'ant-dual-eater ant-from-left';
+        antLeft.innerHTML = '<span class="ant-crumbs">✦ ‧</span><span class="ant-bug">🐜</span>';
+        container.appendChild(antLeft);
+
+        // Муравей справа (ползёт снаружи справа к центру и грызёт)
+        var antRight = document.createElement('div');
+        antRight.className = 'ant-dual-eater ant-from-right';
+        antRight.innerHTML = '<span class="ant-bug">🐜</span><span class="ant-crumbs">‧ ✦</span>';
+        container.appendChild(antRight);
+    }
+
+    // Через 10 секунд оба муравья доедают сообщение в центре -> строка схлопывается и удаляется
     setTimeout(function() {
         row.classList.add('ant-row-collapse');
         setTimeout(function() {
@@ -2424,6 +2429,7 @@ function inlineDeleteMessage(msgId) {
         }).catch(function() {});
     }, 10000);
 }
+
 
 
 function fetchMessages() {
