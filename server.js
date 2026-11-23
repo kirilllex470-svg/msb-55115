@@ -1169,8 +1169,7 @@ const server = http.createServer(function(req, res) {
             return Object.assign({}, msg, { read: isRead });
         });
         return sendJsonCompressed(req, res, 200, {
-        return sendJsonCompressed(req, res, 200, {
-            messages: enriched,
+                    messages: enriched,
             totalCount: rawList.length,
             isDelta: sinceTs > 0,
             partnerOnline: partnerOnline,
