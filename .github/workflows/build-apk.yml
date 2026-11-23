@@ -881,6 +881,7 @@ jobs:
                   @JavascriptInterface
                   public void installApkUpdate(final String apkUrl) {
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
+                          runOnUiThread(() -> Toast.makeText(MainActivity.this, "Разрешите установку из этого источника и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show());
                           try {
                               Intent perm = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
                               perm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -890,36 +891,69 @@ jobs:
                       }
                       new Thread(() -> {
                           try {
-                              File outFile = new File(getCacheDir(), "update_msb.apk");
+                              File baseDir = getExternalCacheDir() != null ? getExternalCacheDir() : getCacheDir();
+                              File outFile = new File(baseDir, "update_msb.apk");
                               if (outFile.exists()) outFile.delete();
                               HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
                               conn.setInstanceFollowRedirects(true);
                               conn.setConnectTimeout(20000);
                               conn.setReadTimeout(90000);
                               conn.connect();
-                              if (conn.getResponseCode() != 200) return;
+                              if (conn.getResponseCode() != 200) {
+                                  evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ Ошибка сервера: " + conn.getResponseCode() + "', true);");
+                                  return;
+                              }
+                              int totalLen = conn.getContentLength();
                               InputStream is = conn.getInputStream();
                               FileOutputStream fos = new FileOutputStream(outFile);
-                              byte[] buf = (byte[]) Array.newInstance(byte.class, 8192);
+                              byte[] buf = new byte[16384];
                               int len;
-                              while ((len = is.read(buf)) != -1) fos.write(buf, 0, len);
+                              long downloaded = 0;
+                              int lastPct = -1;
+                              while ((len = is.read(buf)) != -1) {
+                                  fos.write(buf, 0, len);
+                                  downloaded += len;
+                                  if (totalLen > 0) {
+                                      int pct = (int) ((downloaded * 100L) / totalLen);
+                                      if (pct != lastPct && pct % 5 == 0) {
+                                          lastPct = pct;
+                                          evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('📥 Загрузка: " + pct + "%', false);");
+                                      }
+                                  }
+                              }
                               fos.flush();
                               fos.close();
                               is.close();
-                              if (outFile.length() < 500000) return;
+                              if (outFile.length() < 500000) {
+                                  evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ Файл повреждён', true);");
+                                  return;
+                              }
+                              evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('⚙️ Запуск установки...', true);");
                               final Uri apkUri = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".msbprovider", outFile);
                               runOnUiThread(() -> {
                                   try {
-                                      Intent i = new Intent(Intent.ACTION_VIEW);
-                                      i.setDataAndType(apkUri, "application/vnd.android.package-archive");
-                                      i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                                      Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+                                      i.setData(apkUri);
+                                      i.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                                      i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
                                       startActivity(i);
-                                  } catch (Exception ignored) {}
+                                  } catch (Exception e1) {
+                                      try {
+                                          Intent i2 = new Intent(Intent.ACTION_VIEW);
+                                          i2.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                          i2.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                          startActivity(i2);
+                                      } catch (Exception e2) {
+                                          Toast.makeText(MainActivity.this, "Ошибка запуска установщика: " + e2.getMessage(), Toast.LENGTH_LONG).show();
+                                      }
+                                  }
                               });
-                          } catch (Exception ignored) {}
+                          } catch (Exception e) {
+                              evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ Ошибка загрузки', true);");
+                          }
                       }).start();
                   }
-              }
+
 
               private void requestRequiredPermissions() {
                   List<String> need = new ArrayList<>();
