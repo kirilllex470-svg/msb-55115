@@ -468,8 +468,10 @@ window.handleIncomingChatWS = function(packet) {
             var selEd = '.message-row[data-msg-id="' + packet.messageId + '"]';
             var rowEd = document.querySelector(selEd);
             if (rowEd) {
+                rowEd.setAttribute('data-raw-text', String(packet.text || ''));
                 var txtEl = rowEd.querySelector('.msg-text');
                 if (txtEl) txtEl.innerHTML = renderMessageTextWithLiveEmojis(packet.text);
+
                 var timeEl = rowEd.querySelector('.msg-time');
 
                 if (timeEl && timeEl.textContent.indexOf('изм.') === -1) {
@@ -1635,22 +1637,63 @@ function sendMessage() {
 
     if (editingMessageId) {
         var editId = editingMessageId;
+        var editRoom = currentRoomId;
         editingMessageId = null;
         textInput.value = '';
         textInput.style.height = '36px';
         lastKnownScrollH = 36;
+        if (stopTypingDebounce) clearTimeout(stopTypingDebounce);
+        notifyServerTyping(false);
         cancelReply();
-        fetch('/api/messages/edit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                room: currentRoomId,
+
+        // 1. Сразу обновляем сообщение на экране и в локальном кэше без ожидания сети
+        if (typeof window.handleIncomingChatWS === 'function') {
+            window.handleIncomingChatWS({
+                type: 'chat_msg_edited',
+                room: editRoom,
                 messageId: editId,
                 text: text
-            })
-        });
+            });
+        }
+
+        // 2. Дублируем по WebSocket для мгновенной доставки собеседнику
+        if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
+            try {
+                ws.send(JSON.stringify({
+                    type: 'chat_edit_ws',
+                    room: editRoom,
+                    messageId: editId,
+                    sender: chatUser,
+                    text: text
+                }));
+            } catch (e) {}
+        }
+
+        // 3. Отправляем по HTTP с автоповтором при слабой сети
+        var sendEditHttp = function(attempt) {
+            fetch('/api/messages/edit', {
+                method: 'POST',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room: editRoom,
+                    messageId: editId,
+                    sender: chatUser,
+                    text: text
+                })
+            }).then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                loadFriendsAndRequests(true);
+            }).catch(function() {
+                if (attempt < 5) {
+                    setTimeout(function() { sendEditHttp(attempt + 1); }, 2500);
+                }
+            });
+        };
+        sendEditHttp(1);
         return;
     }
+
 
     var qId = quotedMessageId || null;
     var qTxt = quotedMessageText || null;
@@ -1840,16 +1883,22 @@ function handleQuoteTrigger(id, text, sender) {
 }
 
 function cancelReply() {
+    var wasEditing = Boolean(editingMessageId);
     editingMessageId = null;
     quotedMessageId = null;
     quotedMessageText = null;
     quotedMessageSender = null;
     var bar = document.getElementById('reply-bar');
     if (bar) bar.style.display = 'none';
-    if (window.MsbNative && typeof window.MsbNative.setChatBarText === 'function') {
-        window.MsbNative.setChatBarText('', false);
+    if (wasEditing) {
+        var input = document.getElementById('text-input');
+        if (input) {
+            input.value = '';
+            input.style.height = '36px';
+        }
     }
 }
+
 
 
 
@@ -2001,16 +2050,22 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
                 : ' <span class="msg-check" style="color:rgba(255,255,255,0.6);font-weight:bold;margin-left:5px;font-size:13px;" title="Доставлено">✓</span>')
             : '';
         if (renderedMsgIds.has(msg.id)) {
-            if (isMy) {
-                var existingRow = mDiv.querySelector('.message-row[data-msg-id="' + msg.id + '"]');
-                if (existingRow) {
-                    var timeBox = existingRow.querySelector('.msg-time');
-                    var desiredTimeHTML = msg.time + checkIcon;
-                    if (timeBox && timeBox.innerHTML !== desiredTimeHTML) timeBox.innerHTML = desiredTimeHTML;
+            var existingRow = mDiv.querySelector('.message-row[data-msg-id="' + msg.id + '"]');
+            if (existingRow) {
+                // Синхронизируем текст, если сообщение было исправлено, пока телефон был без сети
+                if ((!msg.type || msg.type === 'text') && existingRow.getAttribute('data-raw-text') !== String(msg.text || '')) {
+                    existingRow.setAttribute('data-raw-text', String(msg.text || ''));
+                    var txtBox = existingRow.querySelector('.msg-text');
+                    if (txtBox) txtBox.innerHTML = renderMessageTextWithLiveEmojis(msg.text);
                 }
+                var editedTag = msg.edited ? '<span class="msg-edited-tag">(изм.)</span>' : '';
+                var timeBox = existingRow.querySelector('.msg-time');
+                var desiredTimeHTML = editedTag + msg.time + checkIcon;
+                if (timeBox && timeBox.innerHTML !== desiredTimeHTML) timeBox.innerHTML = desiredTimeHTML;
             }
             return;
         }
+
         renderedMsgIds.add(msg.id);
         addedNew = true;
         renderSingleRow(frag, msg, isMy, checkIcon);
@@ -2033,8 +2088,9 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
         saveTextOutboxToStorage();
     }
     var row = document.createElement('div');
-    row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
     row.setAttribute('data-msg-id', msg.id);
+    row.setAttribute('data-raw-text', String(msg.text || ''));
+
     if (msg.clientMsgId) row.setAttribute('data-client-id', msg.clientMsgId);
     row.innerHTML = '<div class="swipe-indicator left-indicator">💬</div><div class="swipe-container"><div class="bubble"></div></div><div class="swipe-indicator right-indicator">↪️</div>';
     var bubble = row.querySelector('.bubble');
@@ -2116,33 +2172,41 @@ function copyTextUniversal(text) {
 function attachLongPressActions(rowEl, msg, isMy) {
     var bubble = rowEl.querySelector('.bubble');
     if (!bubble) return;
+    bubble.style.webkitUserSelect = 'none';
+    bubble.style.userSelect = 'none';
+    bubble.style.webkitTouchCallout = 'none';
+
     var pressTimer = null;
+    var holdFired = false;
     var startX = 0;
     var startY = 0;
+    var msgType = msg.type || 'text';
 
     function triggerHold() {
+        pressTimer = null;
+        holdFired = true;
         if (navigator.vibrate) navigator.vibrate(45);
-        var txtNode = rowEl.querySelector('.msg-text');
-        var actualText = txtNode ? txtNode.textContent : (msg.text || '');
-        if (msg.type === 'text' && actualText) {
+        var actualText = rowEl.getAttribute('data-raw-text') || msg.text || '';
+        if (msgType === 'text' && actualText) {
             copyTextUniversal(actualText);
         }
-        openMessageActionSheet(msg.id, actualText, msg.type, isMy);
+        openMessageActionSheet(msg.id, actualText, msgType, isMy);
     }
 
     bubble.addEventListener('touchstart', function(e) {
+        if (e.target && e.target.closest('button, a, audio, video')) return;
+        holdFired = false;
         var t = e.touches.item(0);
         startX = t.clientX;
         startY = t.clientY;
-        pressTimer = setTimeout(triggerHold, 520);
+        if (pressTimer) clearTimeout(pressTimer);
+        pressTimer = setTimeout(triggerHold, 420);
     }, { passive: true });
 
     bubble.addEventListener('touchmove', function(e) {
         if (!pressTimer) return;
         var t = e.touches.item(0);
-        var dx = Math.abs(t.clientX - startX);
-        var dy = Math.abs(t.clientY - startY);
-        if (dx > 10 || dy > 10) {
+        if (Math.abs(t.clientX - startX) > 16 || Math.abs(t.clientY - startY) > 16) {
             clearTimeout(pressTimer);
             pressTimer = null;
         }
@@ -2155,76 +2219,42 @@ function attachLongPressActions(rowEl, msg, isMy) {
         }
     });
 
+    bubble.addEventListener('touchcancel', function() {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+    });
+
     bubble.addEventListener('contextmenu', function(e) {
+        if (e.target && e.target.closest('a, audio, video')) return;
         e.preventDefault();
-        triggerHold();
+        if (!holdFired) triggerHold();
     });
 }
-
-function openMessageActionSheet(msgId, text, msgType, isMy) {
-    var sheet = document.getElementById('msb-msg-action-sheet');
-    if (!sheet) {
-        sheet = document.createElement('div');
-        sheet.id = 'msb-msg-action-sheet';
-        sheet.className = 'custom-modal-overlay';
-        sheet.style.zIndex = '225000';
-        sheet.onclick = function(e) {
-            if (e.target === sheet) sheet.style.display = 'none';
-        };
-        document.body.appendChild(sheet);
-    }
-    var canEdit = isMy && msgType === 'text';
-    var editBtnHtml = canEdit
-        ? '<button type="button" id="act-edit-msg-btn" ' +
-          'class="msb-themed-btn" style="margin-bottom:8px;">' +
-          '✏️ Исправить сообщение</button>'
-        : '';
-
-    sheet.innerHTML = [
-        '<div class="login-box msb-themed-card" style="max-width:340px;">',
-        '<div class="msb-themed-title" style="font-size:14px;">',
-        '📋 Текст сразу скопирован в буфер!',
-        '</div>',
-        editBtnHtml,
-        '<button type="button" id="act-copy-msg-btn" ',
-        'class="msb-themed-btn-alt" style="margin-bottom:8px;">',
-        '📋 Скопировать ещё раз',
-        '</button>',
-        '<button type="button" class="viewer-btn" id="act-close-msg-btn">',
-        'Отмена',
-        '</button>',
-        '</div>'
-    ].join('');
-
-    sheet.style.display = 'flex';
-
-    document.getElementById('act-close-msg-btn').onclick = function() {
-        sheet.style.display = 'none';
-    };
-    document.getElementById('act-copy-msg-btn').onclick = function() {
-        copyTextUniversal(text);
-        sheet.style.display = 'none';
-    };
-    if (canEdit) {
-        document.getElementById('act-edit-msg-btn').onclick = function() {
-            sheet.style.display = 'none';
-            startEditingMessage(msgId, text);
-        };
-    }
-}
-
 function startEditingMessage(msgId, oldText) {
+    quotedMessageId = null;
+    quotedMessageText = null;
+    quotedMessageSender = null;
     editingMessageId = msgId;
+
     var bar = document.getElementById('reply-bar');
     var textEl = document.getElementById('reply-bar-text');
     var input = document.getElementById('text-input');
+
     if (textEl) textEl.textContent = '✏️ Исправление: ' + oldText;
     if (bar) bar.style.display = 'flex';
-    if (window.MsbNative && typeof window.MsbNative.setChatBarText === 'function') {
-        window.MsbNative.setChatBarText(oldText, true);
-    } else if (input) {
-        input.value = oldText;
-        input.focus();
+
+    if (input) {
+        input.removeAttribute('disabled');
+        input.disabled = false;
+        input.value = oldText || '';
+        input.dispatchEvent(new Event('input'));
+        setTimeout(function() {
+            input.focus();
+            var len = input.value.length;
+            try { input.setSelectionRange(len, len); } catch (e) {}
+        }, 60);
     }
 }
 

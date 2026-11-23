@@ -1064,20 +1064,22 @@ const server = http.createServer(function(req, res) {
         });
     }
 
-    if (urlPath === '/api/messages/edit' && req.method === 'POST') {
+      if (urlPath === '/api/messages/edit' && req.method === 'POST') {
         return readBodyJSON(req, function(err, data) {
             if (!err && data && data.room && data.messageId && typeof data.text === 'string' && Array.isArray(roomsDB[data.room])) {
-                const msg = roomsDB[data.room].find(function(m) { return m.id === data.messageId; });
-                if (msg && msg.type === 'text') {
-                    msg.text = data.text.trim();
+                const cleanTxt = data.text.trim();
+                const msg = roomsDB[data.room].find(function(m) { return String(m.id) === String(data.messageId); });
+                if (msg && cleanTxt && (!msg.type || msg.type === 'text')) {
+                    msg.text = cleanTxt;
                     msg.edited = true;
                     writeJSON(CHAT_ROOMS_FILE, roomsDB);
-                    broadcastWS({ type: 'chat_msg_edited', room: data.room, messageId: data.messageId, text: msg.text });
+                    broadcastWS({ type: 'chat_msg_edited', room: data.room, messageId: msg.id, text: msg.text });
                 }
             }
             return sendJsonCompressed(req, res, 200, { ok: true });
         });
     }
+
 
 
     if (urlPath === '/api/typing' && req.method === 'POST') {
@@ -1969,7 +1971,21 @@ wss.on('connection', function(ws) {
                 broadcastWS({ type: 'chat_typing', room: msg.room, user: uClean, typing: msg.typing !== false });
                 return;
             }
+                        if (msg.type === 'chat_edit_ws' && msg.room && msg.messageId && typeof msg.text === 'string') {
+                const cleanTxt = msg.text.trim();
+                if (cleanTxt && Array.isArray(roomsDB[msg.room])) {
+                    const targetMsg = roomsDB[msg.room].find(function(m) { return String(m.id) === String(msg.messageId); });
+                    if (targetMsg && (!targetMsg.type || targetMsg.type === 'text')) {
+                        targetMsg.text = cleanTxt;
+                        targetMsg.edited = true;
+                        writeJSON(CHAT_ROOMS_FILE, roomsDB);
+                        broadcastWS({ type: 'chat_msg_edited', room: msg.room, messageId: targetMsg.id, text: targetMsg.text });
+                    }
+                }
+                return;
+            }
             if (msg.type === 'chat_send_ws' && msg.sender && msg.room) {
+
                 saveMultipartChatMsg({
                     sender: msg.sender,
                     room: msg.room,
