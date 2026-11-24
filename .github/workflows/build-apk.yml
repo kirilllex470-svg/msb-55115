@@ -749,6 +749,21 @@ jobs:
           import org.json.JSONObject;
 
           public class MainActivity extends BridgeActivity {
+              private android.webkit.PermissionRequest pendingWebRtcPerm = null;
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == 102 && pendingWebRtcPerm != null) {
+                      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                          pendingWebRtcPerm.grant(pendingWebRtcPerm.getResources());
+                      } else {
+                          pendingWebRtcPerm.deny();
+                      }
+                      pendingWebRtcPerm = null;
+                  }
+              }
+
               @Override
               public void onStart() {
                   super.onStart();
@@ -825,10 +840,17 @@ jobs:
                       ws.setDomStorageEnabled(true);
                       ws.setCacheMode(WebSettings.LOAD_DEFAULT);
                       ws.setMediaPlaybackRequiresUserGesture(false);
-                      wv.setWebChromeClient(new android.webkit.WebChromeClient() {
+                      wv.setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(getBridge()) {
                           @Override
                           public void onPermissionRequest(final android.webkit.PermissionRequest request) {
-                              runOnUiThread(() -> request.grant(request.getResources()));
+                              runOnUiThread(() -> {
+                                  if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                      pendingWebRtcPerm = request;
+                                      ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 102);
+                                  } else {
+                                      request.grant(request.getResources());
+                                  }
+                              });
                           }
                       });
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
@@ -891,6 +913,42 @@ jobs:
                   public void downloadFile(final String url, final String fileName) {
                       enqueueSystemDownload(url, fileName);
                   }
+
+                  @JavascriptInterface
+                  public boolean ensureMicPermission() {
+                      if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                          return true;
+                      }
+                      ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
+                      return false;
+                  }
+
+                  @JavascriptInterface
+                  public void setSpeakerphone(final boolean on) {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+                                  am.setSpeakerphoneOn(on);
+                              }
+                          } catch (Exception ignored) {}
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void resetAudioMode() {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  am.setSpeakerphoneOn(false);
+                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
+                              }
+                          } catch (Exception ignored) {}
+                      });
+                  }
+
 
                   @JavascriptInterface
                   public void setSpeakerphone(final boolean on) {
