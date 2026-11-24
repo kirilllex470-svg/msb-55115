@@ -39,7 +39,6 @@ jobs:
           if os.path.exists(p):
               cfg = json.load(open(p, encoding="utf-8"))
           else:
-          else:
               cfg = {"appName": "МСБ-55115", "webDir": "www"}
           cfg["appId"] = pkg
           cfg["webDir"] = "www"
@@ -47,10 +46,10 @@ jobs:
           cfg.setdefault("plugins", {})["PushNotifications"] = {
               "presentationOptions": ["badge", "sound", "alert"]
           }
-
           json.dump(cfg, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
           print("Установлен appId:", pkg)
           '
+
 
       - name: Установка Capacitor 8 и Push Notifications
         run: |
