@@ -1,23 +1,1203 @@
-{
-  "appId": "ru.msb55115.app",
-  "appName": "МСБ-55115",
-  "webDir": "www",
-  "server": {
-    "url": "https://msb-55115-kirill000000007.mia0.amvera.tech",
-    "cleartext": false,
-    "allowNavigation": [
-      "*.amvera.io",
-      "salutejazz.ru"
-    ]
-  },
-  "android": {
-    "allowMixedContent": true,
-    "captureInput": true,
-    "webContentsDebuggingEnabled": false
-  },
-  "plugins": {
-    "PushNotifications": {
-      "presentationOptions": ["badge", "sound", "alert"]
-    }
-  }
-}
+name: Сборка Android APK (МСБ-55115 + FCM)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Скачивание кода проекта
+        uses: actions/checkout@v4
+
+      - name: Установка Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Установка Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Синхронизация google-services.json и capacitor.config.json
+        run: |
+          if [ ! -f google-services.json ]; then
+            echo "ОШИБКА: google-services.json не найден!"
+            exit 1
+          fi
+          python3 -c '
+          import json, os
+          gs = json.load(open("google-services.json", encoding="utf-8"))
+          first_client = next(iter(gs["client"]))
+          pkg = first_client["client_info"]["android_client_info"]["package_name"]
+          p = "capacitor.config.json"
+          if os.path.exists(p):
+              cfg = json.load(open(p, encoding="utf-8"))
+          else:
+              cfg = {"appName": "МСБ-55115", "webDir": "www"}
+
+          cfg["appId"] = pkg
+          cfg["webDir"] = "www"
+          cfg["server"] = {"androidScheme": "https", "cleartext": True}
+          cfg.setdefault("plugins", {})["PushNotifications"] = {
+              "presentationOptions": ["badge", "sound", "alert"]
+          }
+          json.dump(cfg, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          print("Установлен appId:", pkg)
+          '
+
+
+      - name: Установка Capacitor 8 и Push Notifications
+        run: |
+          if [ ! -f package.json ]; then npm init -y; fi
+          mkdir -p www
+          cp -f index.html style.css journal.js messenger.js www/ 2>/dev/null || true
+          for img in logo.jpg logo.jpeg logo.png; do
+            if [ -f "$img" ]; then cp -f "$img" www/; fi
+          done
+          npm install --save \
+            @capacitor/core@8 \
+            @capacitor/cli@8 \
+            @capacitor/android@8 \
+            @capacitor/push-notifications@8
+          npx cap add android
+      - name: Подключение google-services.json в Gradle
+        run: |
+          python3 -c '
+          import glob, re
+          for p in glob.glob("node_modules/@capacitor/android/**/CapacitorWebView.java", recursive=True):
+              s = open(p, encoding="utf-8").read()
+              # 1. Аккуратно удаляем встроенный onCreateInputConnection из Capacitor 8 (если он есть)
+              m = re.search(r"(@Override\s+)?public\s+InputConnection\s+onCreateInputConnection\s*\([^)]*\)\s*\{", s)
+              if m:
+                  start = m.start()
+                  brace_pos = s.find("{", m.end() - 1)
+                  depth = 0
+                  end = brace_pos
+                  for i in range(brace_pos, len(s)):
+                      if s[i] == "{":
+                          depth += 1
+                      elif s[i] == "}":
+                          depth -= 1
+                          if depth == 0:
+                              end = i + 1
+                              break
+                  s = s[:start] + s[end:]
+
+              # 2. Вставляем наш единственный метод с верхней панелью клавиатуры (буфер, смайлы, настройки)
+              patch = """
+              @Override
+              public android.view.inputmethod.InputConnection onCreateInputConnection(android.view.inputmethod.EditorInfo outAttrs) {
+                  android.view.inputmethod.InputConnection ic = super.onCreateInputConnection(outAttrs);
+                  if (outAttrs != null) {
+                      int cls = outAttrs.inputType & android.text.InputType.TYPE_MASK_CLASS;
+                      int var = outAttrs.inputType & android.text.InputType.TYPE_MASK_VARIATION;
+                      boolean isPass = (var == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD)
+                          || (var == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD)
+                          || (var == android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+                      if (cls == android.text.InputType.TYPE_CLASS_TEXT && !isPass) {
+                          outAttrs.inputType = android.text.InputType.TYPE_CLASS_TEXT
+                              | android.text.InputType.TYPE_TEXT_VARIATION_SHORT_MESSAGE
+                              | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                              | android.text.InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
+                              | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE;
+                          outAttrs.imeOptions &= ~android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI;
+                      }
+                  }
+                  return ic;
+              }
+          """
+              idx = s.rfind("}")
+              s = s[:idx] + patch + "\n}\n"
+              open(p, "w", encoding="utf-8").write(s)
+              print("Successfully replaced onCreateInputConnection in:", p)
+          '
+          cp google-services.json android/app/google-services.json
+
+          if ! grep -q "com.google.gms:google-services" android/build.gradle; then
+            sed -i 's/dependencies {/dependencies {\n        classpath "com.google.gms:google-services:4.4.2"/' android/build.gradle
+          fi
+          if ! grep -q "firebase-messaging" android/app/build.gradle; then
+            echo "" >> android/app/build.gradle
+            echo "dependencies {" >> android/app/build.gradle
+            echo "    implementation \"com.google.firebase:firebase-messaging:24.1.0\"" >> android/app/build.gradle
+            echo "}" >> android/app/build.gradle
+          fi
+          if ! grep -q "com.google.gms.google-services" android/app/build.gradle; then
+            echo "" >> android/app/build.gradle
+            echo "apply plugin: \"com.google.gms.google-services\"" >> android/app/build.gradle
+          fi
+
+      - name: Настройка AndroidManifest.xml
+        run: |
+          pip install pillow --quiet --break-system-packages || pip install pillow --quiet
+          python3 -c '
+          import json, os
+          gs = json.load(open("google-services.json", encoding="utf-8"))
+          pkg = next(iter(gs["client"]))["client_info"]["android_client_info"]["package_name"]
+
+          p = "android/app/src/main/AndroidManifest.xml"
+          s = open(p, encoding="utf-8").read()
+          names = [
+              "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_WIFI_STATE",
+              "CHANGE_WIFI_STATE", "CAMERA", "RECORD_AUDIO",
+              "MODIFY_AUDIO_SETTINGS", "POST_NOTIFICATIONS", "VIBRATE",
+              "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED", "FOREGROUND_SERVICE",
+              "FOREGROUND_SERVICE_DATA_SYNC",
+              "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+              "REQUEST_INSTALL_PACKAGES"
+          ]
+          tag = "<uses-permission android:name=\"android.permission.{}\" />"
+          perms = "\n    ".join([tag.format(n) for n in names])
+          old_p = tag.format("INTERNET")
+          if old_p in s:
+              s = s.replace(old_p, perms, 1)
+          else:
+              s = s.replace("<application", perms + "\n    <application", 1)
+
+          if "usesCleartextTraffic" not in s:
+              ct = "<application android:usesCleartextTraffic=\"true\" android:hardwareAccelerated=\"true\""
+              s = s.replace("<application", ct, 1)
+
+          if "windowSoftInputMode" in s:
+              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:windowSoftInputMode=\"adjustResize\"")
+          else:
+              s = s.replace("<activity", "<activity android:windowSoftInputMode=\"adjustResize\"", 1)
+          svc = "\n".join([
+              "        <meta-data",
+              "            android:name=\"com.google.firebase.messaging.default_notification_channel_id\"",
+              "            android:value=\"msb_alerts_high_v5\" />",
+              "        <provider",
+              "            android:name=\"androidx.core.content.FileProvider\"",
+              "            android:authorities=\"" + pkg + ".msbprovider\"",
+              "            android:exported=\"false\"",
+              "            android:grantUriPermissions=\"true\">",
+              "            <meta-data",
+              "                android:name=\"android.support.FILE_PROVIDER_PATHS\"",
+              "                android:resource=\"@xml/msb_file_paths\" />",
+              "        </provider>",
+              "        <service android:name=\".MsbKeepAliveService\"",
+              "            android:enabled=\"true\" android:exported=\"false\"",
+              "            android:stopWithTask=\"false\"",
+              "            android:foregroundServiceType=\"dataSync\" />",
+              "        <service android:name=\".MsbFcmService\"",
+              "            android:exported=\"false\">",
+              "            <intent-filter android:priority=\"999\">",
+              "                <action android:name=\"com.google.firebase.MESSAGING_EVENT\" />",
+              "            </intent-filter>",
+              "        </service>",
+              "        <receiver android:name=\".MsbRestartReceiver\"",
+              "            android:enabled=\"true\" android:exported=\"true\">",
+              "            <intent-filter>",
+              "                <action android:name=\"android.intent.action.BOOT_COMPLETED\" />",
+              "                <action android:name=\"android.intent.action.MY_PACKAGE_REPLACED\" />",
+              "            </intent-filter>",
+              "        </receiver>",
+              "        <receiver android:name=\".MsbNotifReplyReceiver\"",
+              "            android:enabled=\"true\" android:exported=\"false\" />",
+              "    </application>"
+          ])
+          queries_xml = "\n".join([
+              "    <queries>",
+              "        <intent>",
+              "            <action android:name=\"android.intent.action.VIEW\" />",
+              "            <data android:mimeType=\"application/vnd.android.package-archive\" />",
+              "        </intent>",
+              "        <intent>",
+              "            <action android:name=\"android.intent.action.INSTALL_PACKAGE\" />",
+              "        </intent>",
+              "    </queries>",
+              "</manifest>"
+          ])
+          s = s.replace("</application>", svc, 1).replace("</manifest>", queries_xml, 1)
+          open(p, "w", encoding="utf-8").write(s)
+
+          os.makedirs("android/app/src/main/res/xml", exist_ok=True)
+          fp_xml = "\n".join([
+              "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+              "<paths>",
+              "    <cache-path name=\"apk_cache\" path=\".\" />",
+              "    <external-cache-path name=\"ext_cache\" path=\".\" />",
+              "</paths>"
+          ])
+          open("android/app/src/main/res/xml/msb_file_paths.xml", "w", encoding="utf-8").write(fp_xml)
+          from PIL import Image, ImageDraw, ImageOps
+          import glob
+          jpg_candidates = ["logo.jpg", "logo.jpeg", "logo.JPG", "logo.png"] + glob.glob("*.jpg") + glob.glob("*.jpeg")
+          logo_path = next((f for f in jpg_candidates if os.path.exists(f)), None)
+
+          def build_logo_png(size, silhouette_only):
+              if logo_path:
+                  img = Image.open(logo_path).convert("RGBA")
+                  img = ImageOps.fit(img, (size, size), Image.Resampling.LANCZOS)
+                  if silhouette_only:
+                      gray = img.convert("L")
+                      bg_val = gray.getpixel((0, 0))
+                      out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                      px_g = gray.load()
+                      px_o = out.load()
+                      for y in range(size):
+                          for x in range(size):
+                              if abs(px_g[x, y] - bg_val) > 32:
+                                  px_o[x, y] = (255, 255, 255, 255)
+                      return out
+                  mask = Image.new("L", (size, size), 0)
+                  ImageDraw.Draw(mask).ellipse((0, 0, size - 1, size - 1), fill=255)
+                  out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+                  out.paste(img, (0, 0), mask)
+                  return out
+              out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+              d = ImageDraw.Draw(out)
+              col = (255, 255, 255, 255) if silhouette_only else (34, 197, 94, 255)
+              d.ellipse((4, 4, size - 5, size - 5), outline=col, width=max(2, size // 12))
+              return out
+          os.makedirs("android/app/src/main/res/drawable", exist_ok=True)
+          build_logo_png(96, True).save("android/app/src/main/res/drawable/ic_msb_logo.png", "PNG")
+          build_logo_png(192, False).save("android/app/src/main/res/drawable/msb_brand_logo.png", "PNG")
+
+          for d_name, sz in [("mipmap-mdpi", 48), ("mipmap-hdpi", 72), ("mipmap-xhdpi", 96), ("mipmap-xxhdpi", 144), ("mipmap-xxxhdpi", 192)]:
+              d_dir = "android/app/src/main/res/" + d_name
+              os.makedirs(d_dir, exist_ok=True)
+              ic = build_logo_png(sz, False)
+              ic.save(d_dir + "/ic_launcher.png", "PNG")
+              ic.save(d_dir + "/ic_launcher_round.png", "PNG")
+
+          for xml_f in ["android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml", "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"]:
+              if os.path.exists(xml_f):
+                  os.remove(xml_f)
+
+          os.makedirs("android/app/src/main/res/layout", exist_ok=True)
+          ns_uri = "/".join(["http:", "", "schemas." + "android." + "com", "apk", "res", "android"])
+          notif_xml = "\n".join([
+              "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+              "<LinearLayout xmlns:android=\"" + ns_uri + "\"",
+              "    android:id=\"@+id/msb_notif_root\"",
+              "    android:layout_width=\"match_parent\"",
+              "    android:layout_height=\"wrap_content\"",
+              "    android:orientation=\"horizontal\"",
+              "    android:gravity=\"center_vertical\"",
+              "    android:paddingStart=\"0dp\"",
+              "    android:paddingEnd=\"6dp\"",
+              "    android:paddingTop=\"4dp\"",
+              "    android:paddingBottom=\"4dp\"",
+              "    android:background=\"@android:color/transparent\">",
+              "    <ImageView",
+              "        android:id=\"@+id/msb_notif_avatar\"",
+              "        android:layout_width=\"36dp\"",
+              "        android:layout_height=\"36dp\"",
+              "        android:layout_marginStart=\"0dp\"",
+              "        android:scaleType=\"centerCrop\" />",
+              "    <LinearLayout",
+              "        android:layout_width=\"0dp\"",
+              "        android:layout_height=\"wrap_content\"",
+              "        android:layout_weight=\"1\"",
+              "        android:layout_marginStart=\"8dp\"",
+              "        android:orientation=\"vertical\">",
+              "        <TextView",
+              "            android:id=\"@+id/msb_notif_title\"",
+              "            android:layout_width=\"match_parent\"",
+              "            android:layout_height=\"wrap_content\"",
+              "            android:textColor=\"#166534\"",
+              "            android:textStyle=\"bold\"",
+              "            android:textSize=\"14sp\"",
+              "            android:maxLines=\"1\" />",
+              "        <TextView",
+              "            android:id=\"@+id/msb_notif_body\"",
+              "            android:layout_width=\"match_parent\"",
+              "            android:layout_height=\"wrap_content\"",
+              "            android:layout_marginTop=\"2dp\"",
+              "            android:textColor=\"#111827\"",
+              "            android:textStyle=\"normal\"",
+              "            android:textSize=\"14sp\"",
+              "            android:maxLines=\"3\" />",
+              "    </LinearLayout>",
+              "</LinearLayout>"
+          ])
+          open("android/app/src/main/res/layout/msb_notif_custom.xml", "w", encoding="utf-8").write(notif_xml)
+          '
+
+      - name: Создание ресивера и фоновой службы
+        run: |
+          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          JAVA_DIR=$(dirname "$MAIN_ACT")
+          PKG_LINE=$(grep "^package " "$MAIN_ACT")
+
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbRestartReceiver.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbRestartReceiver.java"
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+          public class MsbRestartReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context ctx, Intent intent) {
+                  try {
+                      Intent s = new Intent(ctx, MsbKeepAliveService.class);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          ctx.startForegroundService(s);
+                      } else {
+                          ctx.startService(s);
+                      }
+                  } catch (Exception ignored) {}
+              }
+          }
+          EOF
+
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbNotifReplyReceiver.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbNotifReplyReceiver.java"
+
+          import android.app.NotificationManager;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.os.Bundle;
+          import androidx.core.app.RemoteInput;
+          import java.io.OutputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import org.json.JSONObject;
+
+          public class MsbNotifReplyReceiver extends BroadcastReceiver {
+              public static final String KEY_TEXT_REPLY = "msb_key_text_reply";
+
+              @Override
+              public void onReceive(final Context ctx, Intent intent) {
+                  Bundle remoteInput = RemoteInput.getResultsFromIntent(intent);
+                  if (remoteInput == null) return;
+                  CharSequence replyCs = remoteInput.getCharSequence(KEY_TEXT_REPLY);
+                  if (replyCs == null) return;
+                  final String replyText = replyCs.toString().trim();
+                  if (replyText.isEmpty()) return;
+
+                  final String targetSender = intent.getStringExtra("reply_to");
+                  final String notifTag = intent.getStringExtra("notif_tag");
+                  final int notifId = intent.getIntExtra("notif_id", 0);
+
+                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", Context.MODE_PRIVATE);
+                  final String origin = sp.getString("origin", "");
+                  String callsign = sp.getString("callsign", "");
+                  if (callsign.isEmpty()) callsign = sp.getString("user", "");
+                  final String myName = callsign;
+
+                  NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm != null && notifTag != null) {
+                      nm.cancel(notifTag, notifId);
+                  }
+
+                  if (origin.isEmpty() || myName.isEmpty() || targetSender == null) return;
+                  new Thread(() -> {
+                      try {
+                          URL url = new URL(origin + "/api/reply-from-notif");
+                          HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                          conn.setRequestMethod("POST");
+                          conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                          conn.setConnectTimeout(8000);
+                          conn.setReadTimeout(8000);
+                          conn.setDoOutput(true);
+                          JSONObject json = new JSONObject();
+                          json.put("sender", myName);
+                          json.put("target", targetSender);
+                          json.put("text", replyText);
+                          OutputStream os = conn.getOutputStream();
+                          os.write(json.toString().getBytes("UTF-8"));
+                          os.flush();
+                          os.close();
+                          conn.getResponseCode();
+                          conn.disconnect();
+                      } catch (Exception ignored) {}
+                  }).start();
+              }
+          }
+          EOF
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbKeepAliveService.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbKeepAliveService.java"
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.graphics.Bitmap;
+          import android.graphics.Canvas;
+          import android.graphics.Color;
+          import android.graphics.Paint;
+          import android.graphics.Path;
+          import android.media.AudioAttributes;
+          import android.media.RingtoneManager;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.IBinder;
+          import android.widget.RemoteViews;
+          import androidx.core.app.NotificationCompat;
+          import androidx.core.app.RemoteInput;
+
+          public class MsbKeepAliveService extends Service {
+              public static final String ALERT_CH = "msb_alerts_high_v5";
+
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+                  createChannels();
+              }
+
+              public static int resolveThemeBgColor(Context ctx) {
+                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                  String t = sp.getString("theme_id", "military");
+                  if ("rocket".equals(t)) return Color.parseColor("#2e140d");
+                  if ("cosmic".equals(t)) return Color.parseColor("#1c1242");
+                  return Color.parseColor("#102a1a");
+              }
+
+              public static int resolveThemeAccentColor(Context ctx) {
+                  SharedPreferences sp = ctx.getSharedPreferences("msb_prefs", MODE_PRIVATE);
+                  String t = sp.getString("theme_id", "military");
+                  if ("rocket".equals(t)) return Color.parseColor("#f97316");
+                  if ("cosmic".equals(t)) return Color.parseColor("#a855f7");
+                  return Color.parseColor("#22c55e");
+              }
+
+              public static Bitmap prepareLargeCleanAvatar(Bitmap src) {
+                  if (src == null) return null;
+                  int targetSize = 96;
+                  int minSide = Math.min(src.getWidth(), src.getHeight());
+                  int x = (src.getWidth() - minSide) / 2;
+                  int y = (src.getHeight() - minSide) / 2;
+                  Bitmap square = Bitmap.createBitmap(src, x, y, minSide, minSide);
+                  Bitmap scaled = Bitmap.createScaledBitmap(square, targetSize, targetSize, true);
+
+                  Bitmap out = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888);
+                  Canvas canvas = new Canvas(out);
+                  Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                  Path clip = new Path();
+                  clip.addCircle(targetSize / 2f, targetSize / 2f, targetSize / 2f, Path.Direction.CW);
+                  canvas.clipPath(clip);
+                  canvas.drawBitmap(scaled, 0, 0, paint);
+                  return out;
+              }
+
+              public static Notification buildThemedAlertNotification(
+                  Context ctx, String channelId, String title, String body,
+                  int bgCol, int accentCol, Bitmap avatarBmp, PendingIntent pi, boolean ongoing,
+                  String replyTarget, String notifTag, int notifId
+              ) {
+                  String pkg = ctx.getPackageName();
+                  int smallIcon = ctx.getResources().getIdentifier("ic_msb_logo", "drawable", pkg);
+                  if (smallIcon == 0) smallIcon = android.R.drawable.ic_dialog_info;
+
+                  Bitmap bigCleanAvatar = prepareLargeCleanAvatar(avatarBmp);
+                  int layoutId = ctx.getResources().getIdentifier("msb_notif_custom", "layout", pkg);
+                  NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, channelId)
+                      .setSmallIcon(smallIcon)
+                      .setContentTitle(title)
+                      .setContentText(body)
+                      .setColor(accentCol)
+                      .setPriority(ongoing ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_HIGH)
+                      .setOngoing(ongoing)
+                      .setAutoCancel(!ongoing)
+                      .setContentIntent(pi);
+
+                  if (!ongoing && layoutId != 0) {
+                      int rootId = ctx.getResources().getIdentifier("msb_notif_root", "id", pkg);
+                      int avId = ctx.getResources().getIdentifier("msb_notif_avatar", "id", pkg);
+                      int titleId = ctx.getResources().getIdentifier("msb_notif_title", "id", pkg);
+                      int bodyId = ctx.getResources().getIdentifier("msb_notif_body", "id", pkg);
+
+                      RemoteViews rv = new RemoteViews(pkg, layoutId);
+                      rv.setInt(rootId, "setBackgroundColor", Color.TRANSPARENT);
+                      rv.setTextViewText(titleId, title);
+                      if (accentCol != 0) rv.setTextColor(titleId, accentCol);
+                      rv.setTextViewText(bodyId, body);
+                      rv.setTextColor(bodyId, Color.parseColor("#111827"));
+
+                      if (bigCleanAvatar != null) {
+                          rv.setImageViewBitmap(avId, bigCleanAvatar);
+                      } else {
+                          int logoId = ctx.getResources().getIdentifier("msb_brand_logo", "drawable", pkg);
+                          if (logoId == 0) logoId = ctx.getResources().getIdentifier("ic_launcher", "mipmap", pkg);
+                          if (logoId != 0) rv.setImageViewResource(avId, logoId);
+                      }
+
+                      if (replyTarget != null && !replyTarget.isEmpty()) {
+                          RemoteInput remoteInput = new RemoteInput.Builder(MsbNotifReplyReceiver.KEY_TEXT_REPLY)
+                              .setLabel("Написать ответ...")
+                              .build();
+                          Intent replyIntent = new Intent(ctx, MsbNotifReplyReceiver.class);
+                          replyIntent.putExtra("reply_to", replyTarget);
+                          replyIntent.putExtra("notif_tag", notifTag);
+                          replyIntent.putExtra("notif_id", notifId);
+                          int rFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                              rFlags |= PendingIntent.FLAG_MUTABLE;
+                          }
+                          PendingIntent replyPi = PendingIntent.getBroadcast(ctx, notifId, replyIntent, rFlags);
+                          NotificationCompat.Action replyAction = new NotificationCompat.Action.Builder(
+                              android.R.drawable.ic_menu_send, "Ответить", replyPi
+                          ).addRemoteInput(remoteInput).build();
+                          b.addAction(replyAction);
+                      }
+
+                      b.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                      b.setCustomContentView(rv);
+                      b.setCustomBigContentView(rv);
+                      b.setCustomHeadsUpContentView(rv);
+                  } else if (bigCleanAvatar != null) {
+                      b.setLargeIcon(bigCleanAvatar);
+                  }
+                  return b.build();
+              }
+
+              public static void ensureHighPriorityChannel(NotificationManager nm) {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
+                      NotificationChannel bgCh = new NotificationChannel(
+                          "msb_bg_service", "Фоновая связь МСБ-55115",
+                          NotificationManager.IMPORTANCE_LOW
+                      );
+                      nm.createNotificationChannel(bgCh);
+
+                      Uri snd = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+                      AudioAttributes attrs = new AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                          .build();
+                      NotificationChannel alCh = new NotificationChannel(
+                          ALERT_CH, "Сообщения и тревоги МСБ-55115",
+                          NotificationManager.IMPORTANCE_HIGH
+                      );
+                      alCh.enableVibration(true);
+                      alCh.setVibrationPattern(new long[]{0, 400, 150, 400});
+                      alCh.setSound(snd, attrs);
+                      nm.createNotificationChannel(alCh);
+                  }
+              }
+              private void createChannels() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      ensureHighPriorityChannel(getSystemService(NotificationManager.class));
+                  }
+              }
+
+              public static Notification buildBgNotification(Context ctx) {
+                  Intent openIntent = new Intent(ctx, MainActivity.class);
+                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                  }
+                  PendingIntent pi = PendingIntent.getActivity(ctx, 0, openIntent, piFlags);
+                  return buildThemedAlertNotification(
+                      ctx, "msb_bg_service", "МСБ-55115 на связи",
+                      "Защищенный канал оповещений активен",
+                      resolveThemeBgColor(ctx), resolveThemeAccentColor(ctx),
+                      null, pi, true, null, null, 0
+                  );
+              }
+
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  startForeground(55115, buildBgNotification(this));
+                  return START_STICKY;
+              }
+
+              @Override public void onDestroy() { super.onDestroy(); }
+              @Override public IBinder onBind(Intent intent) { return null; }
+          }
+          EOF
+
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
+
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
+          import android.graphics.Color;
+          import android.os.Build;
+          import com.google.firebase.messaging.FirebaseMessagingService;
+          import com.google.firebase.messaging.RemoteMessage;
+          import java.io.InputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.Map;
+
+          public class MsbFcmService extends FirebaseMessagingService {
+              @Override
+              public void onMessageReceived(RemoteMessage msg) {
+                  Map<String, String> data = msg.getData();
+                  String title = data.get("title");
+                  String body = data.get("body");
+                  if (title == null && msg.getNotification() != null) title = msg.getNotification().getTitle();
+                  if (body == null && msg.getNotification() != null) body = msg.getNotification().getBody();
+                  if (title == null) title = "МСБ-55115";
+                  if (body == null) body = "Новое оповещение";
+
+                  int bgCol = MsbKeepAliveService.resolveThemeBgColor(this);
+                  int accCol = MsbKeepAliveService.resolveThemeAccentColor(this);
+                  String bgHex = data.get("bgColor");
+                  String accHex = data.get("accentColor");
+                  if (bgHex != null && bgHex.startsWith("#")) {
+                      try { bgCol = Color.parseColor(bgHex); } catch (Exception ignored) {}
+                  }
+                  if (accHex != null && accHex.startsWith("#")) {
+                      try { accCol = Color.parseColor(accHex); } catch (Exception ignored) {}
+                  }
+
+                  Bitmap avatarBmp = null;
+                  String imgUrl = data.get("image");
+                  if (imgUrl != null && imgUrl.startsWith("http")) {
+                      try {
+                          HttpURLConnection conn = (HttpURLConnection) new URL(imgUrl).openConnection();
+                          conn.setConnectTimeout(3000);
+                          conn.setReadTimeout(3000);
+                          conn.connect();
+                          InputStream is = conn.getInputStream();
+                          avatarBmp = BitmapFactory.decodeStream(is);
+                          is.close();
+                      } catch (Exception ignored) {}
+                  }
+                  NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm == null) return;
+                  MsbKeepAliveService.ensureHighPriorityChannel(nm);
+
+                  Intent openIntent = new Intent(this, MainActivity.class);
+                  openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                  PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
+
+                  String notifTag = data.get("tag");
+                  if (notifTag == null || notifTag.isEmpty()) notifTag = "msb_alert_" + (title + "_" + body).hashCode();
+                  int notifId = notifTag.hashCode() & 0x7fffffff;
+                  nm.notify(notifTag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                      this, MsbKeepAliveService.ALERT_CH, title, body,
+                      bgCol, accCol, avatarBmp, pi, false, data.get("sender"), notifTag, notifId
+                  ));
+              }
+          }
+          EOF
+
+      - name: Настройка MainActivity
+        run: |
+          MAIN_ACT=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
+          PKG_LINE=$(grep "^package " "$MAIN_ACT")
+          echo "$PKG_LINE" > "$MAIN_ACT"
+          cat << 'EOF' >> "$MAIN_ACT"
+
+          import android.Manifest;
+          import android.app.DownloadManager;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.os.Environment;
+          import android.webkit.URLUtil;
+          import android.widget.Toast;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.content.pm.PackageManager;
+          import android.graphics.Color;
+          import android.graphics.Rect;
+          import android.graphics.drawable.GradientDrawable;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.PowerManager;
+          import android.provider.Settings;
+          import android.text.Editable;
+          import android.text.InputType;
+          import android.text.TextWatcher;
+          import android.util.TypedValue;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.view.ViewGroup;
+          import android.view.ViewTreeObserver;
+          import android.view.WindowManager;
+          import android.view.inputmethod.EditorInfo;
+          import android.view.inputmethod.InputConnection;
+          import android.view.inputmethod.InputConnectionWrapper;
+          import android.view.inputmethod.InputMethodManager;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.widget.EditText;
+          import android.widget.FrameLayout;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.ContextCompat;
+          import androidx.core.content.FileProvider;
+          import androidx.core.graphics.Insets;
+          import androidx.core.view.ViewCompat;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.lang.reflect.Array;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.ArrayList;
+          import java.util.List;
+          import org.json.JSONObject;
+
+          public class MainActivity extends BridgeActivity {
+              private android.webkit.PermissionRequest pendingWebRtcPerm = null;
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == 102 && pendingWebRtcPerm != null) {
+                      if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                          pendingWebRtcPerm.grant(pendingWebRtcPerm.getResources());
+                      } else {
+                          pendingWebRtcPerm.deny();
+                      }
+                      pendingWebRtcPerm = null;
+                  }
+              }
+
+              @Override
+              public void onStart() {
+                  super.onStart();
+                  if (getBridge() != null && getBridge().getWebView() != null) {
+                      final WebView origWv = getBridge().getWebView();
+                      origWv.setOnCreateContextMenuListener((menu, v, menuInfo) -> {});
+                  }
+              }
+
+              private int dp(int v) {
+
+
+                  return Math.round(v * getResources().getDisplayMetrics().density);
+              }
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+                  getWindow().getDecorView().setBackgroundColor(Color.parseColor("#0f172a"));
+
+
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationManager nm = getSystemService(NotificationManager.class);
+                      MsbKeepAliveService.ensureHighPriorityChannel(nm);
+                  }
+                  requestRequiredPermissions();
+
+                  try {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                          PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                          String pkg = getPackageName();
+                          if (pm != null && !pm.isIgnoringBatteryOptimizations(pkg)) {
+                              Intent bi = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                              bi.setData(Uri.parse("package:" + pkg));
+                              startActivity(bi);
+                          }
+                      }
+                  } catch (Exception ignored) {}
+
+                  try {
+                      Intent svc = new Intent(this, MsbKeepAliveService.class);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc);
+                      else startService(svc);
+                  } catch (Exception ignored) {}
+                  if (getBridge() != null && getBridge().getWebView() != null) {
+                      WebView wv = getBridge().getWebView();
+                      wv.setBackgroundColor(Color.parseColor("#0f172a"));
+                      wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
+                      WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                      ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, windowInsets) -> {
+                          Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+                          Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+                          int bottomPad = Math.max(sysBars.bottom, ime.bottom);
+                          v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
+                          if (ime.bottom > 0) {
+                              wv.post(() -> wv.evaluateJavascript(
+                                  "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
+                              ));
+                          }
+                          return WindowInsetsCompat.CONSUMED;
+                      });
+
+                      wv.getViewTreeObserver().addOnGlobalFocusChangeListener((oldFocus, newFocus) -> {
+                          wv.postDelayed(() -> {
+                              InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                              if (imm != null) imm.restartInput(wv);
+                          }, 40);
+                      });
+
+                      WebSettings ws = wv.getSettings();
+                      ws.setJavaScriptEnabled(true);
+                      ws.setDomStorageEnabled(true);
+                      ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+                      ws.setMediaPlaybackRequiresUserGesture(false);
+                      wv.setWebChromeClient(new com.getcapacitor.BridgeWebChromeClient(getBridge()) {
+                          @Override
+                          public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                              runOnUiThread(() -> {
+                                  if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                      pendingWebRtcPerm = request;
+                                      ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 102);
+                                  } else {
+                                      request.grant(request.getResources());
+                                  }
+                              });
+                          }
+                      });
+                      wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
+                      wv.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
+                          String fn = URLUtil.guessFileName(url, contentDisposition, mimeType);
+                          enqueueSystemDownload(url, fn);
+                      });
+                  }
+              }
+
+              private void applyNativeBarTheme() {
+              }
+
+
+              private void hideNativeKeyboard() {
+                  View v = getCurrentFocus();
+                  if (v != null) {
+                      InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                      if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                  }
+              }
+
+              private void evalJs(final String script) {
+
+                  runOnUiThread(() -> {
+                      if (getBridge() != null && getBridge().getWebView() != null) {
+                          getBridge().getWebView().evaluateJavascript(script, null);
+                      }
+                  });
+              }
+
+              private void enqueueSystemDownload(final String fileUrl, final String fileName) {
+                  runOnUiThread(() -> {
+                      try {
+                          String cleanName = (fileName != null && !fileName.trim().isEmpty())
+                              ? fileName.replaceAll("[\\\\/:*?\"<>|]", "_")
+                              : "file_" + System.currentTimeMillis();
+                          DownloadManager.Request req = new DownloadManager.Request(Uri.parse(fileUrl));
+                          req.setTitle(cleanName);
+                          req.setDescription("Загрузка файла МСБ-55115...");
+                          req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                          req.allowScanningByMediaScanner();
+                          req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, cleanName);
+                          DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                          if (dm != null) {
+                              dm.enqueue(req);
+                              Toast.makeText(MainActivity.this, "📥 Загрузка началась: " + cleanName, Toast.LENGTH_LONG).show();
+                          }
+                      } catch (Exception e) {
+                          try {
+                              Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
+                              startActivity(browserIntent);
+                          } catch (Exception ignored) {}
+                      }
+                  });
+              }
+
+              public class MsbNativeBridge {
+                  @JavascriptInterface
+                  public void downloadFile(final String url, final String fileName) {
+                      enqueueSystemDownload(url, fileName);
+                  }
+
+                  @JavascriptInterface
+                  public boolean ensureMicPermission() {
+                      if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                          return true;
+                      }
+                      runOnUiThread(() -> ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 101));
+                      return false;
+                  }
+
+                  @JavascriptInterface
+                  public void setSpeakerphone(final boolean on) {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+                                  am.setSpeakerphoneOn(on);
+                              }
+                          } catch (Exception ignored) {}
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void resetAudioMode() {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  am.setSpeakerphoneOn(false);
+                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
+                              }
+                          } catch (Exception ignored) {}
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void setChatBarVisible(final boolean v) {
+                      if (!v) runOnUiThread(() -> hideNativeKeyboard());
+                  }
+
+                  @JavascriptInterface
+                  public void setChatBarText(final String t, final boolean f) {}
+
+                  @JavascriptInterface
+                  public void appendChatEmoji(final String em) {}
+
+                  @JavascriptInterface
+                  public void setIdentity(String u, String c, String o) {
+
+
+                      try {
+                          getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
+                              .putString("user", u != null ? u : "")
+                              .putString("callsign", c != null ? c : "")
+                              .putString("origin", o != null ? o : "")
+                              .apply();
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void setTheme(String t, String hex) {
+                      try {
+                          getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
+                              .putString("theme_id", t != null ? t : "military")
+                              .apply();
+                          runOnUiThread(() -> applyNativeBarTheme());
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void setSound(String s) {
+                      try {
+                          getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
+                              .putString("sound_id", s != null ? s : "alarm1")
+                              .apply();
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void notify(final String title, final String body, final String idStr, final String colorHex) {
+                      new Thread(() -> {
+                          try {
+                              NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                              if (nm == null) return;
+                              MsbKeepAliveService.ensureHighPriorityChannel(nm);
+                              int bgCol = MsbKeepAliveService.resolveThemeBgColor(MainActivity.this);
+                              int accCol = MsbKeepAliveService.resolveThemeAccentColor(MainActivity.this);
+                              android.graphics.Bitmap avatarBmp = null;
+                              try {
+                                  String origin = getSharedPreferences("msb_prefs", MODE_PRIVATE).getString("origin", "");
+                                  if (!origin.isEmpty() && title != null) {
+                                      String raw = title.contains("•") ? title.substring(title.lastIndexOf('•') + 1) : title;
+                                      String sRaw = raw.replace("👥", "").trim().toLowerCase();
+                                      if (!sRaw.isEmpty()) {
+                                          String u = origin + "/api/avatar-img/" + java.net.URLEncoder.encode(sRaw, "UTF-8") + ".jpg";
+                                          HttpURLConnection conn = (HttpURLConnection) new URL(u).openConnection();
+                                          conn.setConnectTimeout(2500);
+                                          conn.setReadTimeout(2500);
+                                          conn.connect();
+                                          if (conn.getResponseCode() == 200) {
+                                              InputStream is = conn.getInputStream();
+                                              avatarBmp = android.graphics.BitmapFactory.decodeStream(is);
+                                              is.close();
+                                          }
+                                      }
+                                  }
+                              } catch (Exception ignored) {}
+                              Intent openIntent = new Intent(MainActivity.this, MainActivity.class);
+                              openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                              int piFlags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+                              PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 1, openIntent, piFlags);
+                              String tag = (idStr != null && !idStr.isEmpty())
+                                  ? ("msb-alert-" + idStr)
+                                  : ("msb-alert-" + (title + "_" + body).hashCode());
+                              int notifId = tag.hashCode() & 0x7fffffff;
+                              String replyTarget = (title != null && title.contains("•"))
+                                  ? title.substring(title.lastIndexOf('•') + 1).trim()
+                                  : title;
+                              nm.notify(tag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                                  MainActivity.this, MsbKeepAliveService.ALERT_CH,
+                                  title != null ? title : "МСБ-55115",
+                                  body != null ? body : "",
+                                  bgCol, accCol, avatarBmp, pi, false,
+                                  replyTarget, tag, notifId
+                              ));
+                          } catch (Exception ignored) {}
+                      }).start();
+                  }
+                                    @JavascriptInterface
+                  public void installApkUpdate(final String apkUrl) {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getPackageManager().canRequestPackageInstalls()) {
+                          runOnUiThread(() -> Toast.makeText(MainActivity.this, "Разрешите установку из этого источника и нажмите кнопку ещё раз", Toast.LENGTH_LONG).show());
+                          try {
+                              Intent perm = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName()));
+                              perm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              startActivity(perm);
+                          } catch (Exception ignored) {}
+                          return;
+                      }
+                      new Thread(() -> {
+                          try {
+                              File baseDir = getExternalCacheDir() != null ? getExternalCacheDir() : getCacheDir();
+                              File outFile = new File(baseDir, "update_msb.apk");
+                              if (outFile.exists()) outFile.delete();
+                              HttpURLConnection conn = (HttpURLConnection) new URL(apkUrl).openConnection();
+                              conn.setInstanceFollowRedirects(true);
+                              conn.setConnectTimeout(20000);
+                              conn.setReadTimeout(90000);
+                              conn.connect();
+                              if (conn.getResponseCode() != 200) {
+                                  evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ Ошибка сервера: " + conn.getResponseCode() + "', true);");
+                                  return;
+                              }
+                              int totalLen = conn.getContentLength();
+                              InputStream is = conn.getInputStream();
+                              FileOutputStream fos = new FileOutputStream(outFile);
+                              byte[] buf = new byte[8192];
+                              int len;
+                              long downloaded = 0;
+                              int lastPct = -1;
+                              while ((len = is.read(buf)) != -1) {
+                                  fos.write(buf, 0, len);
+                                  downloaded += len;
+                                  if (totalLen > 0) {
+                                      int pct = (int) ((downloaded * 100L) / totalLen);
+                                      if (pct != lastPct && pct % 5 == 0) {
+                                          lastPct = pct;
+                                          evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('📥 Загрузка: " + pct + "%', false);");
+                                      }
+                                  }
+                              }
+                              fos.flush();
+                              fos.close();
+                              is.close();
+                              java.io.RandomAccessFile raf = new java.io.RandomAccessFile(outFile, "r");
+                              int b1 = raf.read();
+                              int b2 = raf.read();
+                              raf.close();
+                              if (outFile.length() < 1000000 || b1 != 0x50 || b2 != 0x4B) {
+                                  outFile.delete();
+                                  evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ На сервере нет целого APK-файла', true);");
+                                  return;
+                              }
+
+                              evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('⚙️ Запуск установки...', true);");
+                              final Uri apkUri = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".msbprovider", outFile);
+                              runOnUiThread(() -> {
+                                  try {
+                                      Intent i = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+                                      i.setData(apkUri);
+                                      i.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                                      i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                      startActivity(i);
+                                  } catch (Exception e1) {
+                                      try {
+                                          Intent i2 = new Intent(Intent.ACTION_VIEW);
+                                          i2.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                          i2.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                                          startActivity(i2);
+                                      } catch (Exception e2) {
+                                          Toast.makeText(MainActivity.this, "Ошибка запуска установщика: " + e2.getMessage(), Toast.LENGTH_LONG).show();
+                                      }
+                                  }
+                              });
+                          } catch (Exception e) {
+                              evalJs("if(window.onNativeApkProgress)window.onNativeApkProgress('❌ Ошибка загрузки', true);");
+                          }
+                      }).start();
+                  }
+              }
+
+              private void requestRequiredPermissions() {
+                  List<String> need = new ArrayList<>();
+                  int g = PackageManager.PERMISSION_GRANTED;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != g) {
+                          need.add(Manifest.permission.POST_NOTIFICATIONS);
+                      }
+                  }
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != g) need.add(Manifest.permission.RECORD_AUDIO);
+                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != g) need.add(Manifest.permission.CAMERA);
+                  if (!need.isEmpty()) {
+                      String[] arr = new String[need.size()];
+                      need.toArray(arr);
+                      ActivityCompat.requestPermissions(this, arr, 101);
+                  }
+              }
+          }
+          EOF
+
+
+      - name: Подпись единым ключом и компиляция APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/msb.keystore
+          else
+            keytool -genkey -v -keystore android/app/msb.keystore -alias msbkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass msb55115 -keypass msb55115 \
+              -dname "CN=MSB55115, OU=Unit, O=MSB, L=RU, S=RU, C=RU"
+          fi
+          npx cap sync android
+          VER_CODE=$(date +%s)
+          sed -i "s/versionCode [0-9]*/versionCode $VER_CODE/g" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/g" android/app/build.gradle
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease -x lintVitalRelease
+          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" ! -name "app-release.apk" ! -name "app-aligned.apk" | head -n 1)
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name "zipalign" | sort -V | tail -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" | sort -V | tail -n 1)
+          "$ZIPALIGN" -f -p 4 "$RAW_APK" app/build/outputs/apk/release/app-aligned.apk
+          "$APKSIGNER" sign \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --ks app/msb.keystore \
+            --ks-key-alias msbkey \
+            --ks-pass pass:msb55115 \
+            --key-pass pass:msb55115 \
+            --out app/build/outputs/apk/release/app-release.apk \
+            app/build/outputs/apk/release/app-aligned.apk
+          "$APKSIGNER" verify --verbose app/build/outputs/apk/release/app-release.apk
+
+      - name: Отправка нового APK на сервер и удаление старого
+      
+        env:
+          SERVER_URL: ${{ secrets.SERVER_URL }}
+          UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
+        run: |
+          if [ -n "$SERVER_URL" ]; then
+            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+            VER_CODE=$(date +%s)
+            curl -f -X POST "$SERVER_URL/api/app/upload-apk" \
+              -H "x-update-secret: ${UPDATE_SECRET:-msb55115_ota_key}" \
+              -H "x-version-code: $VER_CODE" \
+              -H "x-version-name: 1.0.${{ github.run_number }}" \
+              --data-binary "@$APK_PATH"
+          fi
+
+      - name: Выгрузка готового APK в Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MSB55115-FCM-APK
+          path: android/app/build/outputs/apk/release/app-release.apk
