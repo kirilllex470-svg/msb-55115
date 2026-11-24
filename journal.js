@@ -1,6 +1,7 @@
+const MSB_SERVER_ORIGIN = localStorage.getItem('msb_server_url') || 'https://msb-55115-kirill000000007.mia0.amvera.tech';
 const IS_LOCAL_APK = Boolean(window.Capacitor) || location.protocol === 'capacitor:' || location.hostname !== 'msb-55115-kirill000000007.mia0.amvera.tech';
-const IS_LOCAL_APK = (location.hostname === 'localhost' || location.protocol === 'capacitor:');
 const API_ORIGIN = IS_LOCAL_APK ? MSB_SERVER_ORIGIN : location.origin;
+
 
 window.API_ORIGIN = API_ORIGIN;
 window.resolveMsbMediaUrl = function(u) {
