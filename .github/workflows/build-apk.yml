@@ -40,6 +40,7 @@ jobs:
               cfg = json.load(open(p, encoding="utf-8"))
           else:
               cfg = {"appName": "МСБ-55115", "webDir": "www"}
+
           cfg["appId"] = pkg
           cfg["webDir"] = "www"
           cfg["server"] = {"androidScheme": "https", "cleartext": True}
@@ -824,6 +825,12 @@ jobs:
                       ws.setDomStorageEnabled(true);
                       ws.setCacheMode(WebSettings.LOAD_DEFAULT);
                       ws.setMediaPlaybackRequiresUserGesture(false);
+                      wv.setWebChromeClient(new android.webkit.WebChromeClient() {
+                          @Override
+                          public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                              runOnUiThread(() -> request.grant(request.getResources()));
+                          }
+                      });
                       wv.addJavascriptInterface(new MsbNativeBridge(), "MsbNative");
                       wv.setDownloadListener((url, userAgent, contentDisposition, mimeType, contentLength) -> {
                           String fn = URLUtil.guessFileName(url, contentDisposition, mimeType);
@@ -883,6 +890,32 @@ jobs:
                   @JavascriptInterface
                   public void downloadFile(final String url, final String fileName) {
                       enqueueSystemDownload(url, fileName);
+                  }
+
+                  @JavascriptInterface
+                  public void setSpeakerphone(final boolean on) {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+                                  am.setSpeakerphoneOn(on);
+                              }
+                          } catch (Exception ignored) {}
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void resetAudioMode() {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  am.setSpeakerphoneOn(false);
+                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
+                              }
+                          } catch (Exception ignored) {}
+                      });
                   }
 
                   @JavascriptInterface
