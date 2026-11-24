@@ -2721,24 +2721,16 @@ function backToPinKeypad() {
 }
 
 (function syncNativeIdentityOnce() {
-   if (
-    window.MsbNative &&
-    typeof window.MsbNative.setIdentity === 'function'
-) {
-    window.MsbNative.setIdentity(
-        currentUser || '',
-        currentCallsign || '',
-        API_ORIGIN
-    );
-}
-
-        var u = currentUser || localStorage.getItem('journal_user') || '';
-        var c = currentCallsign || localStorage.getItem('journal_callsign') || '';
-        if (u || c) {
-            window.MsbNative.setIdentity(u, c, location.origin);
-        }
+    var hasNat = window.MsbNative &&
+        typeof window.MsbNative.setIdentity === 'function';
+    if (!hasNat) return;
+    var u = currentUser || localStorage.getItem('journal_user') || '';
+    var c = currentCallsign || localStorage.getItem('journal_callsign') || '';
+    if (u || c) {
+        window.MsbNative.setIdentity(u, c, API_ORIGIN);
     }
 })();
+
 
 initApp();
 
@@ -2984,23 +2976,7 @@ window.downloadMsbApkDirect = downloadMsbApkDirect;
 window.manualCheckApkUpdate = downloadMsbApkDirect;
 window.adminUploadApkForAll = adminUploadApkForAll;
 
-// === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 1/3) ===
-
-var msbCall = {
-    pc: null,
-    stream: null,
-    partner: '',
-    state: 'idle',
-    muted: false,
-    speaker: true,
-    timer: null,
-    ringTimer: null,
-    waitTimer: null,
-    startTs: 0,
-    offer: null,
-    iceQueue: []
-};
-
+// === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 1/3) ==
 var msbCall = {
     pc: null,
     stream: null,
