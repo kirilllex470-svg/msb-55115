@@ -2310,3 +2310,198 @@ body.theme-cosmic .msb-round-ctrl-btn.send-round-btn {
     overflow: hidden;
     transition: all 0.32s ease;
 }
+/* === ПАНЕЛЬ ЗАПИСИ ГОЛОСОВОГО СООБЩЕНИЯ С ТОЧНЫМ ТАЙМЕРОМ === */
+.msb-voice-rec-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(127, 29, 29, 0.92), rgba(15, 23, 42, 0.96));
+    border: 1.5px solid #ef4444;
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
+    animation: alertPopIn 0.2s ease;
+}
+
+.voice-rec-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.voice-rec-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+    box-shadow: 0 0 10px #ef4444;
+    animation: pulseLive 0.9s infinite;
+}
+
+.voice-rec-clock {
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: 900;
+    color: #facc15;
+    min-width: 44px;
+}
+
+.voice-rec-label {
+    font-size: 13px;
+    color: #fecaca;
+    font-weight: 600;
+}
+
+.voice-rec-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.voice-rec-cancel-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fca5a5;
+    padding: 6px 10px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.voice-rec-send-btn {
+    background: linear-gradient(135deg, #22c55e, #15803d);
+    border: 1px solid #86efac;
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+/* === КРАСИВЫЙ ГОЛОСОВОЙ ПЛЕЕР С АНИМИРОВАННЫМ ЭКВАЛАЙЗЕРОМ === */
+.msb-hidden-audio {
+    display: none !important;
+}
+
+.msb-voice-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 215px;
+    max-width: 270px;
+    padding: 4px 2px;
+}
+
+.msb-voice-play-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.32);
+    color: #ffffff;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.msb-voice-play-btn:active {
+    transform: scale(0.9);
+}
+
+.msb-voice-card.is-playing .msb-voice-play-btn {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.65);
+}
+
+.msb-voice-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+.msb-voice-eq-track {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 2px 0;
+}
+
+.msb-voice-eq-bars {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2.5px;
+    width: 100%;
+    height: 24px;
+}
+
+.msb-eq-bar {
+    flex: 1;
+    min-width: 3px;
+    max-width: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.32);
+    transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.msb-eq-bar.played {
+    background: #facc15;
+    box-shadow: 0 0 6px rgba(250, 204, 21, 0.6);
+}
+
+@keyframes msbEqDance {
+    0%, 100% { transform: scaleY(0.45); }
+    50%      { transform: scaleY(1.18); }
+}
+
+.msb-voice-card.is-playing .msb-eq-bar {
+    background: rgba(255, 255, 255, 0.65);
+    animation: msbEqDance 0.55s ease-in-out infinite;
+    animation-delay: calc(var(--bar-i) * -0.07s);
+}
+
+.msb-voice-card.is-playing .msb-eq-bar.played {
+    background: #4ade80;
+    box-shadow: 0 0 8px rgba(74, 222, 128, 0.8);
+}
+
+body.theme-rocket .msb-voice-card.is-playing .msb-eq-bar.played {
+    background: #fed7aa;
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.85);
+}
+
+body.theme-cosmic .msb-voice-card.is-playing .msb-eq-bar.played {
+    background: #e9d5ff;
+    box-shadow: 0 0 8px rgba(192, 132, 252, 0.85);
+}
+
+.msb-voice-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.82);
+    font-family: monospace;
+}
+
+.msb-voice-timer {
+    font-weight: 800;
+    color: #facc15;
+}
+
+.msb-voice-badge {
+    opacity: 0.75;
+    font-size: 10px;
+}
