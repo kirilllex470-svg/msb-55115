@@ -3263,10 +3263,49 @@ window.startMsbAudioCall = async function(targetName) {
     startMsbRing(false);
 
     try {
-        msbCall.stream = await navigator.mediaDevices.getUserMedia({
+// === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 3/3 - ИСПРАВЛЕННАЯ ДЛЯ APK) ===
+async function getMsbMicStream() {
+    if (window.MsbNative && typeof window.MsbNative.ensureMicPermission === 'function') {
+        try { window.MsbNative.ensureMicPermission(); } catch (e) {}
+    }
+    try {
+        return await navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
             video: false
         });
+    } catch (e1) {
+        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    }
+}
+
+window.startMsbAudioCall = async function(targetName) {
+    var me = getMsbCallerName();
+    if (!me) return alert('Сначала войдите под своим позывным!');
+    if (msbCall.state !== 'idle') return;
+
+    var partner = String(targetName || '').trim();
+    if (!partner && typeof isCurrentGroup !== 'undefined' && !isCurrentGroup && typeof currentPartner !== 'undefined' && currentPartner) {
+        partner = currentPartner;
+    }
+    if (!partner || (typeof isCurrentGroup !== 'undefined' && isCurrentGroup && !targetName)) {
+        openMsbCallContactPicker();
+        return;
+    }
+    partner = partner.replace(/^👥\s*/, '').trim();
+    if (partner.toLowerCase() === me.toLowerCase()) return alert('Нельзя позвонить самому себе!');
+
+    unlockMobileFeatures();
+    if (typeof stopActiveMsbAudio === 'function') stopActiveMsbAudio();
+    msbCall.partner = partner;
+    msbCall.state = 'calling';
+    msbCall.muted = false;
+    msbCall.speaker = true;
+    syncMsbCallControls();
+    showMsbCallModal(partner, '📡 Вызов абонента...', false);
+    startMsbRing(false);
+
+    try {
+        msbCall.stream = await getMsbMicStream();
         var pc = createMsbPeer(partner);
         msbCall.stream.getTracks().forEach(function(t) { pc.addTrack(t, msbCall.stream); });
         var offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
@@ -3277,7 +3316,7 @@ window.startMsbAudioCall = async function(targetName) {
             if (msbCall.state === 'calling') window.endMsbAudioCall(true, 'timeout');
         }, 45000);
     } catch (e) {
-        alert('❌ Нет доступа к микрофону!');
+        alert('❌ Нет доступа к микрофону! Проверьте разрешение Микрофон в настройках Android.');
         window.endMsbAudioCall(false);
     }
 };
@@ -3291,10 +3330,7 @@ window.acceptMsbAudioCall = async function() {
     showMsbCallModal(msbCall.partner, '🔄 Подключение...', false);
 
     try {
-        msbCall.stream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            video: false
-        });
+        msbCall.stream = await getMsbMicStream();
         var pc = createMsbPeer(msbCall.partner);
         msbCall.stream.getTracks().forEach(function(t) { pc.addTrack(t, msbCall.stream); });
 
@@ -3315,7 +3351,6 @@ window.acceptMsbAudioCall = async function() {
         window.endMsbAudioCall(true, 'error');
     }
 };
-
 function syncMsbCallControls() {
     ensureMsbCallModal();
     var mBtn = document.getElementById('msb-btn-mute-call');
