@@ -914,58 +914,7 @@ jobs:
                       enqueueSystemDownload(url, fileName);
                   }
 
-                  @JavascriptInterface
-                  public boolean ensureMicPermission() {
-                      if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                          return true;
-                      }
-                      ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
-                      return false;
-                  }
 
-                  @JavascriptInterface
-                  public void setSpeakerphone(final boolean on) {
-                      runOnUiThread(() -> {
-                          try {
-                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                              if (am != null) {
-                                  am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
-                                  am.setSpeakerphoneOn(on);
-                              }
-                          } catch (Exception ignored) {}
-                      });
-                  }
-
-                  @JavascriptInterface
-                  public void resetAudioMode() {
-                      runOnUiThread(() -> {
-                          try {
-                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                              if (am != null) {
-                                  am.setSpeakerphoneOn(false);
-                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
-                              }
-                          } catch (Exception ignored) {}
-                      });
-                  }
-
-
-                  @JavascriptInterface
-                  public void resetAudioMode() {
-                      runOnUiThread(() -> {
-                          try {
-                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                              if (am != null) {
-                                  am.setSpeakerphoneOn(false);
-                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
-                              }
-                          } catch (Exception ignored) {}
-                      });
-                  }
-
-
-                  @JavascriptInterface
-                  public void setSpeakerphone(final boolean on) {
                       runOnUiThread(() -> {
                           try {
                               android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
