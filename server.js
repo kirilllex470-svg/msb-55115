@@ -1939,9 +1939,12 @@ function broadcastAlert(sender, color, timeStr, target, text) {
 }
 
 
+const pendingCalls = {};
+
 wss.on('connection', function(ws) {
 
     ws.isAlive = true;
+
     ws.on('pong', function() { ws.isAlive = true; });
 
     ws.on('close', function() {
@@ -1975,13 +1978,37 @@ wss.on('connection', function(ws) {
         try {
             const msg = JSON.parse(message.toString());
             ws.isAlive = true;
-                if (msg.type === 'ping') {
-                if (msg.callsign) markUserOnline(msg.callsign, ws);
-                else if (msg.user && msg.user === 'АДМИН') markUserOnline('муравей', ws);
-                else if (msg.user) markUserOnline(msg.user, ws);
-                ws.send(JSON.stringify({ type: 'pong', serverBootId: SERVER_BOOT_ID, serverBootTime: SERVER_BOOT_TIME }));
-                return;
-            }
+if (msg.type === 'ping') {
+    let myKey = '';
+    if (msg.callsign) {
+        markUserOnline(msg.callsign, ws);
+        myKey = String(msg.callsign).trim().toLowerCase();
+    } else if (msg.user && msg.user === 'АДМИН') {
+        markUserOnline('муравей', ws);
+        myKey = 'муравей';
+    } else if (msg.user) {
+        markUserOnline(msg.user, ws);
+        myKey = String(msg.user).trim().toLowerCase();
+    }
+
+    ws.send(JSON.stringify({
+        type: 'pong',
+        serverBootId: SERVER_BOOT_ID,
+        serverBootTime: SERVER_BOOT_TIME
+    }));
+
+    if (myKey && pendingCalls[myKey]) {
+        const pc = pendingCalls[myKey];
+        if (Date.now() - pc.ts < 45000) {
+            try {
+                ws.send(JSON.stringify(pc.offerMsg));
+            } catch (e) {}
+        } else {
+            delete pendingCalls[myKey];
+        }
+    }
+    return;
+}
 
             if (msg.type === 'user_away') {
                 ws.isAway = true;
@@ -2001,28 +2028,49 @@ wss.on('connection', function(ws) {
                 return;
             }
 
-            if (msg.type && msg.type.indexOf('call_') === 0) {
-                const targetKey = String(msg.to || '').trim().toLowerCase();
-                const fromUser = String(msg.from || '').trim();
-                if (!targetKey || !fromUser) return;
-                markUserOnline(fromUser, ws);
+if (msg.type && msg.type.indexOf('call_') === 0) {
+    let targetKey = String(msg.to || '').trim().toLowerCase();
+    if (targetKey === 'админ') targetKey = 'муравей';
 
-                let deliveredActive = false;
-                const rawPacket = JSON.stringify(msg);
-                wss.clients.forEach(function(client) {
-                    if (client.readyState === WebSocket.OPEN && client.userIdentity === targetKey) {
-                        try {
-                            client.send(rawPacket);
-                            if (!client.isAway) deliveredActive = true;
-                        } catch (e) {}
-                    }
-                });
+    const fromUser = String(msg.from || '').trim();
+    const fromKey = fromUser.toLowerCase();
+    if (!targetKey || !fromUser) return;
+    markUserOnline(fromUser, ws);
 
-                if (msg.type === 'call_offer' && !deliveredActive) {
-                    sendChatBackgroundPushOnly(fromUser, targetKey, '📞 Входящий аудиозвонок! Откройте МСБ-55115');
-                }
-                return;
-            }
+    if (msg.type === 'call_offer') {
+        pendingCalls[targetKey] = {
+            offerMsg: msg,
+            fromKey: fromKey,
+            ts: Date.now()
+        };
+    } else if (
+        msg.type === 'call_answer' ||
+        msg.type === 'call_end'
+    ) {
+        delete pendingCalls[targetKey];
+        delete pendingCalls[fromKey];
+    }
+
+    let deliveredActive = false;
+    const rawPacket = JSON.stringify(msg);
+    wss.clients.forEach(function(client) {
+        const isTarget = (client.userIdentity === targetKey);
+        if (client.readyState === WebSocket.OPEN && isTarget) {
+            try {
+                client.send(rawPacket);
+                if (!client.isAway) deliveredActive = true;
+            } catch (e) {}
+        }
+    });
+
+    if (msg.type === 'call_offer' && !deliveredActive) {
+        const pushTxt = '📞 Входящий аудиозвонок от ' +
+            fromUser + '! Откройте МСБ-55115';
+        sendChatBackgroundPushOnly(fromUser, targetKey, pushTxt);
+    }
+    return;
+}
+
 
 
                         if (msg.type === 'get_room_history' && msg.room) {

@@ -1431,9 +1431,17 @@ function initApp() {
     }
     fetchMapsFromServer(false);
     connectWS(false);
-    if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
-        window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
-    }
+if (
+    window.MsbNative &&
+    typeof window.MsbNative.setIdentity === 'function'
+) {
+    window.MsbNative.setIdentity(
+        currentUser || '',
+        currentCallsign || '',
+        API_ORIGIN
+    );
+}
+
     if (typeof initNativeFcmPush === 'function') {
         initNativeFcmPush();
     }
@@ -1574,9 +1582,17 @@ function completeLoginSuccess(unitName, callsign, color) {
             }));
         } catch (e) {}
     }
-    if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
-        window.MsbNative.setIdentity(currentUser || '', currentCallsign || '', location.origin);
-    }
+if (
+    window.MsbNative &&
+    typeof window.MsbNative.setIdentity === 'function'
+) {
+    window.MsbNative.setIdentity(
+        currentUser || '',
+        currentCallsign || '',
+        API_ORIGIN
+    );
+}
+
     if (typeof sendFcmTokenToServer === 'function') sendFcmTokenToServer();
     if (typeof checkPinOnAppEntry === 'function') checkPinOnAppEntry();
 }
@@ -2705,7 +2721,17 @@ function backToPinKeypad() {
 }
 
 (function syncNativeIdentityOnce() {
-    if (window.MsbNative && typeof window.MsbNative.setIdentity === 'function') {
+   if (
+    window.MsbNative &&
+    typeof window.MsbNative.setIdentity === 'function'
+) {
+    window.MsbNative.setIdentity(
+        currentUser || '',
+        currentCallsign || '',
+        API_ORIGIN
+    );
+}
+
         var u = currentUser || localStorage.getItem('journal_user') || '';
         var c = currentCallsign || localStorage.getItem('journal_callsign') || '';
         if (u || c) {
@@ -2813,7 +2839,7 @@ async function downloadMsbApkDirect() {
             return;
         }
 
-        var apkUrl = location.origin + '/api/app/download.apk?t=' + Date.now();
+        var apkUrl = API_ORIGIN + '/api/app/download.apk?t=' + Date.now();
         var fileName = 'MSB55115.apk';
 
         // 1. Внутри Android APK: скачиваем напрямую в кэш приложения и сразу открываем установщик
@@ -2975,13 +3001,41 @@ var msbCall = {
     iceQueue: []
 };
 
+var msbCall = {
+    pc: null,
+    stream: null,
+    partner: '',
+    state: 'idle',
+    muted: false,
+    speaker: true,
+    timer: null,
+    ringTimer: null,
+    waitTimer: null,
+    startTs: 0,
+    offer: null,
+    callId: '',
+    iceQueue: []
+};
+
 var MSB_RTC_CFG = {
+    iceCandidatePoolSize: 4,
     iceServers: [
         { urls: 'stun:://google.com' },
         { urls: 'stun:://google.com' },
-        { urls: 'stun:://cloudflare.com' }
+        { urls: 'stun:://cloudflare.com' },
+        {
+            urls: [
+                'turn:openrelay.metered.ca:80',
+                'turn:openrelay.metered.ca:443',
+                'turn:openrelay.metered.ca:443?transport=tcp'
+            ],
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        }
     ]
 };
+
+
 
 
 function getMsbCallerName() {
@@ -3082,8 +3136,11 @@ function ensureMsbCallModal() {
     var aud = document.createElement('audio');
     aud.id = 'msb-remote-call-audio';
     aud.autoplay = true;
-    aud.setAttribute('playsinline', '');
-    aud.style.display = 'none';
+    aud.setAttribute('playsinline', 'true');
+    aud.style.cssText =
+        'width:1px;height:1px;opacity:0.01;' +
+        'position:absolute;pointer-events:none;';
+
 
     box.appendChild(badge);
     box.appendChild(av);
@@ -3185,21 +3242,46 @@ function createMsbPeer(partnerName) {
     var me = getMsbCallerName();
     var pc = new RTCPeerConnection(MSB_RTC_CFG);
     msbCall.pc = pc;
-    msbCall.iceQueue = [];
 
     pc.onicecandidate = function(ev) {
         if (ev.candidate) {
-            sendMsbCallWS({ type: 'call_ice', from: me, to: partnerName, candidate: ev.candidate });
+            sendMsbCallWS({
+                type: 'call_ice',
+                from: me,
+                to: partnerName,
+                candidate: ev.candidate
+            });
         }
     };
 
     pc.ontrack = function(ev) {
         var a = document.getElementById('msb-remote-call-audio');
-        if (a && ev.streams && ev.streams[0]) {
-            a.srcObject = ev.streams[0];
-            a.muted = false;
-            a.volume = 1.0;
-            a.play().catch(function() {});
+        if (!a) return;
+        var remStream = (ev.streams && ev.streams[0])
+            ? ev.streams[0]
+            : new MediaStream([ev.track]);
+        a.srcObject = remStream;
+        a.muted = false;
+        a.volume = 1.0;
+        var p = a.play();
+        if (p && typeof p.catch === 'function') {
+            p.catch(function() {
+                setTimeout(function() {
+                    a.play().catch(function() {});
+                }, 350);
+            });
+        }
+    };
+
+    pc.oniceconnectionstatechange = function() {
+        if (!msbCall.pc) return;
+        var ice = msbCall.pc.iceConnectionState;
+        if (ice === 'connected' || ice === 'completed') {
+            onMsbCallConnected();
+        } else if (ice === 'failed') {
+            if (msbCall.state !== 'idle') {
+                window.endMsbAudioCall(true, 'network_fail');
+            }
         }
     };
 
@@ -3208,12 +3290,15 @@ function createMsbPeer(partnerName) {
         var st = msbCall.pc.connectionState;
         if (st === 'connected') {
             onMsbCallConnected();
-        } else if (st === 'failed' || st === 'disconnected' || st === 'closed') {
-            if (msbCall.state !== 'idle') window.endMsbAudioCall(false);
+        } else if (st === 'failed' || st === 'closed') {
+            if (msbCall.state !== 'idle') {
+                window.endMsbAudioCall(false);
+            }
         }
     };
     return pc;
 }
+
 
 function onMsbCallConnected() {
     if (msbCall.state === 'connected') return;
@@ -3238,106 +3323,186 @@ function onMsbCallConnected() {
 
 // === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 3/3 - ИСПРАВЛЕННАЯ ДЛЯ APK) ===
 async function getMsbMicStream() {
-    if (window.MsbNative && typeof window.MsbNative.ensureMicPermission === 'function') {
-        var alreadyGranted = false;
-        try { alreadyGranted = Boolean(window.MsbNative.ensureMicPermission()); } catch (e) {}
-        if (!alreadyGranted) {
-            // Ждём, пока пользователь нажмёт «Разрешить» в системном окне Android
-            for (var i = 0; i < 20; i++) {
-                await new Promise(function(r) { setTimeout(r, 400); });
+    var hasNat = window.MsbNative &&
+        typeof window.MsbNative.ensureMicPermission === 'function';
+    if (hasNat) {
+        var granted = false;
+        try {
+            granted = Boolean(window.MsbNative.ensureMicPermission());
+        } catch (e) {}
+        if (!granted) {
+            for (var i = 0; i < 25; i++) {
+                await new Promise(function(r) {
+                    setTimeout(r, 400);
+                });
                 try {
                     if (window.MsbNative.ensureMicPermission()) {
-                        alreadyGranted = true;
+                        granted = true;
                         break;
                     }
                 } catch (e2) {}
             }
         }
     }
+    if (
+        window.MsbNative &&
+        typeof window.MsbNative.setSpeakerphone === 'function'
+    ) {
+        try {
+            window.MsbNative.setSpeakerphone(msbCall.speaker);
+        } catch (e) {}
+    }
     try {
         return await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
             video: false
         });
     } catch (e1) {
-        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        return await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: false
+        });
     }
 }
-
-
 window.startMsbAudioCall = async function(targetName) {
     var me = getMsbCallerName();
     if (!me) return alert('Сначала войдите под своим позывным!');
     if (msbCall.state !== 'idle') return;
 
     var partner = String(targetName || '').trim();
-    if (!partner && typeof isCurrentGroup !== 'undefined' && !isCurrentGroup && typeof currentPartner !== 'undefined' && currentPartner) {
+    var canUseCur = !partner &&
+        typeof isCurrentGroup !== 'undefined' && !isCurrentGroup &&
+        typeof currentPartner !== 'undefined' && currentPartner;
+    if (canUseCur) {
         partner = currentPartner;
     }
-    if (!partner || (typeof isCurrentGroup !== 'undefined' && isCurrentGroup && !targetName)) {
+    var needPicker = !partner || (
+        typeof isCurrentGroup !== 'undefined' &&
+        isCurrentGroup && !targetName
+    );
+    if (needPicker) {
         openMsbCallContactPicker();
         return;
     }
     partner = partner.replace(/^👥\s*/, '').trim();
-    if (partner.toLowerCase() === me.toLowerCase()) return alert('Нельзя позвонить самому себе!');
+    if (partner.toLowerCase() === me.toLowerCase()) {
+        return alert('Нельзя позвонить самому себе!');
+    }
 
     unlockMobileFeatures();
-    if (typeof stopActiveMsbAudio === 'function') stopActiveMsbAudio();
+    if (typeof stopActiveMsbAudio === 'function') {
+        stopActiveMsbAudio();
+    }
     msbCall.partner = partner;
     msbCall.state = 'calling';
     msbCall.muted = false;
     msbCall.speaker = true;
+    msbCall.callId = 'call_' + Date.now();
+    msbCall.iceQueue = [];
     syncMsbCallControls();
     showMsbCallModal(partner, '📡 Вызов абонента...', false);
     startMsbRing(false);
 
+    var micStream = null;
     try {
-        msbCall.stream = await getMsbMicStream();
+        micStream = await getMsbMicStream();
+    } catch (micErr) {
+        alert('❌ Нет доступа к микрофону в настройках Android!');
+        window.endMsbAudioCall(false);
+        return;
+    }
+
+    try {
+        msbCall.stream = micStream;
         var pc = createMsbPeer(partner);
-        msbCall.stream.getTracks().forEach(function(t) { pc.addTrack(t, msbCall.stream); });
-        var offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: false });
+        msbCall.stream.getTracks().forEach(function(t) {
+            pc.addTrack(t, msbCall.stream);
+        });
+        var offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false
+        });
         await pc.setLocalDescription(offer);
-        sendMsbCallWS({ type: 'call_offer', from: me, to: partner, sdp: pc.localDescription });
+        sendMsbCallWS({
+            type: 'call_offer',
+            callId: msbCall.callId,
+            from: me,
+            to: partner,
+            sdp: pc.localDescription
+        });
 
         msbCall.waitTimer = setTimeout(function() {
-            if (msbCall.state === 'calling') window.endMsbAudioCall(true, 'timeout');
+            if (msbCall.state === 'calling') {
+                window.endMsbAudioCall(true, 'timeout');
+            }
         }, 45000);
-    } catch (e) {
-        alert('❌ Нет доступа к микрофону! Проверьте разрешение Микрофон в настройках Android.');
-        window.endMsbAudioCall(false);
+    } catch (rtcErr) {
+        var msg = (rtcErr && rtcErr.message) ? rtcErr.message : 'сбой';
+        alert('❌ Ошибка установки аудиоканала: ' + msg);
+        window.endMsbAudioCall(true, 'error');
     }
 };
-
 window.acceptMsbAudioCall = async function() {
     if (msbCall.state !== 'incoming' || !msbCall.offer) return;
     var me = getMsbCallerName();
     unlockMobileFeatures();
-    if (typeof stopActiveMsbAudio === 'function') stopActiveMsbAudio();
+    if (typeof stopActiveMsbAudio === 'function') {
+        stopActiveMsbAudio();
+    }
     stopMsbRing();
-    showMsbCallModal(msbCall.partner, '🔄 Подключение...', false);
+    showMsbCallModal(msbCall.partner, '🔄 Соединение...', false);
+
+    var audEl = document.getElementById('msb-remote-call-audio');
+    if (audEl) {
+        audEl.muted = false;
+        audEl.play().catch(function() {});
+    }
+
+    var micStream = null;
+    try {
+        micStream = await getMsbMicStream();
+    } catch (micErr) {
+        alert('❌ Не удалось включить микрофон!');
+        window.endMsbAudioCall(true, 'error');
+        return;
+    }
 
     try {
-        msbCall.stream = await getMsbMicStream();
+        msbCall.stream = micStream;
         var pc = createMsbPeer(msbCall.partner);
-        msbCall.stream.getTracks().forEach(function(t) { pc.addTrack(t, msbCall.stream); });
+        msbCall.stream.getTracks().forEach(function(t) {
+            pc.addTrack(t, msbCall.stream);
+        });
 
-        await pc.setRemoteDescription(new RTCSessionDescription(msbCall.offer));
+        var desc = new RTCSessionDescription(msbCall.offer);
+        await pc.setRemoteDescription(desc);
         msbCall.offer = null;
 
         while (msbCall.iceQueue.length > 0) {
             var c = msbCall.iceQueue.shift();
-            try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch (e) {}
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(c));
+            } catch (e) {}
         }
 
         var answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        sendMsbCallWS({ type: 'call_answer', from: me, to: msbCall.partner, sdp: pc.localDescription });
-        onMsbCallConnected();
-    } catch (e) {
-        alert('❌ Не удалось включить микрофон.');
+        sendMsbCallWS({
+            type: 'call_answer',
+            from: me,
+            to: msbCall.partner,
+            sdp: pc.localDescription
+        });
+    } catch (rtcErr) {
+        alert('❌ Сбой при ответе на звонок.');
         window.endMsbAudioCall(true, 'error');
     }
 };
+
 function syncMsbCallControls() {
     ensureMsbCallModal();
     var mBtn = document.getElementById('msb-btn-mute-call');
@@ -3351,19 +3516,25 @@ function syncMsbCallControls() {
         sBtn.classList.toggle('active-spk', msbCall.speaker);
     }
 }
-
 window.toggleMsbCallMute = function() {
     msbCall.muted = !msbCall.muted;
     if (msbCall.stream) {
-        msbCall.stream.getAudioTracks().forEach(function(t) { t.enabled = !msbCall.muted; });
+        msbCall.stream.getAudioTracks().forEach(function(t) {
+            t.enabled = !msbCall.muted;
+        });
     }
     syncMsbCallControls();
 };
 
 window.toggleMsbCallSpeaker = function() {
     msbCall.speaker = !msbCall.speaker;
-    if (window.MsbNative && typeof window.MsbNative.setSpeakerphone === 'function') {
-        try { window.MsbNative.setSpeakerphone(msbCall.speaker); } catch (e) {}
+    if (
+        window.MsbNative &&
+        typeof window.MsbNative.setSpeakerphone === 'function'
+    ) {
+        try {
+            window.MsbNative.setSpeakerphone(msbCall.speaker);
+        } catch (e) {}
     }
     syncMsbCallControls();
 };
@@ -3372,45 +3543,80 @@ window.endMsbAudioCall = function(notifyRemote, reason) {
     var me = getMsbCallerName();
     var prevPartner = msbCall.partner;
     stopMsbRing();
-    if (msbCall.timer) { clearInterval(msbCall.timer); msbCall.timer = null; }
-    if (msbCall.waitTimer) { clearTimeout(msbCall.waitTimer); msbCall.waitTimer = null; }
+    if (msbCall.timer) {
+        clearInterval(msbCall.timer);
+        msbCall.timer = null;
+    }
+    if (msbCall.waitTimer) {
+        clearTimeout(msbCall.waitTimer);
+        msbCall.waitTimer = null;
+    }
     if (notifyRemote && prevPartner && me) {
-        sendMsbCallWS({ type: 'call_end', from: me, to: prevPartner, reason: reason || 'hangup' });
+        sendMsbCallWS({
+            type: 'call_end',
+            from: me,
+            to: prevPartner,
+            reason: reason || 'hangup'
+        });
     }
     if (msbCall.stream) {
-        msbCall.stream.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
+        msbCall.stream.getTracks().forEach(function(t) {
+            try { t.stop(); } catch (e) {}
+        });
         msbCall.stream = null;
     }
     if (msbCall.pc) {
-        try { msbCall.pc.onconnectionstatechange = null; msbCall.pc.close(); } catch (e) {}
+        try {
+            msbCall.pc.oniceconnectionstatechange = null;
+            msbCall.pc.onconnectionstatechange = null;
+            msbCall.pc.close();
+        } catch (e) {}
         msbCall.pc = null;
     }
     var a = document.getElementById('msb-remote-call-audio');
-    if (a) { try { a.pause(); a.srcObject = null; } catch (e) {} }
-    if (window.MsbNative && typeof window.MsbNative.resetAudioMode === 'function') {
+    if (a) {
+        try { a.pause(); a.srcObject = null; } catch (e) {}
+    }
+    if (
+        window.MsbNative &&
+        typeof window.MsbNative.resetAudioMode === 'function'
+    ) {
         try { window.MsbNative.resetAudioMode(); } catch (e) {}
     }
     msbCall.state = 'idle';
     msbCall.partner = '';
     msbCall.offer = null;
+    msbCall.callId = '';
     msbCall.iceQueue = [];
     var modal = document.getElementById('msb-audio-call-modal');
     if (modal) modal.style.display = 'none';
 };
-
 window.handleMsbAudioCallWS = async function(msg) {
     if (!msg || !msg.from) return;
     var me = getMsbCallerName();
     if (!me) return;
 
     if (msg.type === 'call_offer') {
+        var isSameCall = (
+            msbCall.state === 'incoming' &&
+            msbCall.callId &&
+            msg.callId === msbCall.callId
+        );
+        if (isSameCall) return;
+
         if (msbCall.state !== 'idle') {
-            sendMsbCallWS({ type: 'call_end', from: me, to: msg.from, reason: 'busy' });
+            sendMsbCallWS({
+                type: 'call_end',
+                from: me,
+                to: msg.from,
+                reason: 'busy'
+            });
             return;
         }
         msbCall.partner = msg.from;
         msbCall.state = 'incoming';
         msbCall.offer = msg.sdp;
+        msbCall.callId = msg.callId || '';
         msbCall.iceQueue = [];
         msbCall.muted = false;
         msbCall.speaker = true;
@@ -3422,22 +3628,35 @@ window.handleMsbAudioCallWS = async function(msg) {
 
     if (msg.type === 'call_answer' && msbCall.state === 'calling') {
         stopMsbRing();
+        var stWait = document.getElementById('msb-call-status');
+        if (stWait) stWait.textContent = '🔄 Установка канала...';
         if (msbCall.pc && msg.sdp) {
             try {
-                await msbCall.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                var ans = new RTCSessionDescription(msg.sdp);
+                await msbCall.pc.setRemoteDescription(ans);
                 while (msbCall.iceQueue.length > 0) {
                     var ic = msbCall.iceQueue.shift();
-                    try { await msbCall.pc.addIceCandidate(new RTCIceCandidate(ic)); } catch (e) {}
+                    try {
+                        await msbCall.pc.addIceCandidate(
+                            new RTCIceCandidate(ic)
+                        );
+                    } catch (e) {}
                 }
-                onMsbCallConnected();
             } catch (e) {}
         }
         return;
     }
 
     if (msg.type === 'call_ice' && msg.candidate) {
-        if (msbCall.pc && msbCall.pc.remoteDescription && msbCall.pc.remoteDescription.type) {
-            try { await msbCall.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)); } catch (e) {}
+        var hasRem = msbCall.pc &&
+            msbCall.pc.remoteDescription &&
+            msbCall.pc.remoteDescription.type;
+        if (hasRem) {
+            try {
+                await msbCall.pc.addIceCandidate(
+                    new RTCIceCandidate(msg.candidate)
+                );
+            } catch (e) {}
         } else {
             msbCall.iceQueue.push(msg.candidate);
         }
@@ -3445,14 +3664,24 @@ window.handleMsbAudioCallWS = async function(msg) {
     }
 
     if (msg.type === 'call_end') {
-        if (msbCall.state !== 'idle' && (!msbCall.partner || msbCall.partner.toLowerCase() === String(msg.from).toLowerCase())) {
+        var fromLow = String(msg.from).toLowerCase();
+        var isCurPartner = !msbCall.partner ||
+            msbCall.partner.toLowerCase() === fromLow;
+        if (msbCall.state !== 'idle' && isCurPartner) {
             var stEl = document.getElementById('msb-call-status');
             if (stEl) {
-                stEl.textContent = (msg.reason === 'busy') ? '⛔ Абонент занят' :
-                                   (msg.reason === 'declined') ? '❌ Вызов отклонён' : '☎️ Звонок завершён';
+                if (msg.reason === 'busy') {
+                    stEl.textContent = '⛔ Абонент занят';
+                } else if (msg.reason === 'declined') {
+                    stEl.textContent = '❌ Вызов отклонён';
+                } else {
+                    stEl.textContent = '☎️ Звонок завершён';
+                }
             }
             stopMsbRing();
-            setTimeout(function() { window.endMsbAudioCall(false); }, 900);
+            setTimeout(function() {
+                window.endMsbAudioCall(false);
+            }, 900);
         }
     }
 };
