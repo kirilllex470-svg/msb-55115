@@ -2729,7 +2729,6 @@ function buildMsbVoicePlayerHTML(audioUrl, msgId) {
         barsHTML += '<span class="msb-eq-bar" style="height:' + h + '%; --bar-i:' + i + ';"></span>';
     }
 
-
     return [
         '<div class="msb-voice-card" data-audio-url="' + escapeEdgeHtml(audioUrl) + '" data-preset-sec="' + presetSec + '" id="voice-card-' + escapeEdgeHtml(msgId) + '">',
         '  <button type="button" class="msb-voice-play-btn" onclick="toggleMsbVoicePlay(this)">▶</button>',
@@ -2764,6 +2763,17 @@ function stopActiveMsbAudio() {
     activeMsbAudioCard = null;
 }
 
+function getReliableVoiceDuration(card, audio) {
+    var preset = Number(card.getAttribute('data-preset-sec') || 0);
+    var realDur = Number(card.getAttribute('data-real-dur') || 0);
+    if (realDur > 0) return realDur;
+    if (preset > 0) return preset;
+    if (audio && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 3600) {
+        return audio.duration;
+    }
+    return 0;
+}
+
 function toggleMsbVoicePlay(btnEl) {
     var card = btnEl.closest('.msb-voice-card');
     if (!card) return;
@@ -2789,31 +2799,22 @@ function toggleMsbVoicePlay(btnEl) {
     card.classList.add('is-playing');
     btnEl.textContent = '⏸';
 
-    if (!isFinite(audio.duration) || isNaN(audio.duration) || audio.duration === 0) {
-        audio.currentTime = 1e101;
-        audio.ontimeupdate = function() {
-            this.ontimeupdate = null;
-            audio.currentTime = 0;
-            audio.play().catch(function() {});
-        };
-    } else {
-        audio.play().catch(function() {});
-    }
-
     function updateProgressLoop() {
         if (!audio || audio.paused || audio.ended) return;
-        var preset = Number(card.getAttribute('data-preset-sec') || 0);
-        var totalDur = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : preset;
         var cur = audio.currentTime || 0;
+        var totalDur = getReliableVoiceDuration(card, audio);
+        if (cur > totalDur) totalDur = cur;
 
         if (timerEl) {
-            timerEl.textContent = formatVoiceSec(cur) + (totalDur > 0 ? (' / ' + formatVoiceSec(totalDur)) : '');
+            timerEl.textContent = totalDur > 0
+                ? (formatVoiceSec(cur) + ' / ' + formatVoiceSec(totalDur))
+                : formatVoiceSec(cur);
         }
 
-        var ratio = totalDur > 0 ? Math.min(1, cur / totalDur) : 0;
-        var activeCount = Math.floor(ratio * bars.length);
+        var ratio = totalDur > 0 ? Math.min(1, Math.max(0, cur / totalDur)) : 0;
+        var playedBars = Math.round(ratio * bars.length);
         bars.forEach(function(b, idx) {
-            b.classList.toggle('played', idx <= activeCount);
+            b.classList.toggle('played', idx < playedBars);
         });
 
         msbAudioRaf = requestAnimationFrame(updateProgressLoop);
@@ -2825,24 +2826,50 @@ function toggleMsbVoicePlay(btnEl) {
     };
 
     audio.onended = function() {
+        if (msbAudioRaf) cancelAnimationFrame(msbAudioRaf);
         card.classList.remove('is-playing');
         btnEl.textContent = '▶';
-        var preset = Number(card.getAttribute('data-preset-sec') || 0);
-        var finDur = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : preset;
-        if (timerEl && finDur > 0) timerEl.textContent = formatVoiceSec(finDur);
-        bars.forEach(function(b) { b.classList.remove('played'); });
-        if (msbAudioRaf) cancelAnimationFrame(msbAudioRaf);
+
+        var actualEnd = audio.currentTime > 0 ? audio.currentTime : 0;
+        if (actualEnd > 0) {
+            card.setAttribute('data-real-dur', String(actualEnd));
+        }
+        var finalDur = getReliableVoiceDuration(card, audio);
+        if (timerEl) {
+            timerEl.textContent = formatVoiceSec(finalDur);
+        }
+
+        bars.forEach(function(b) { b.classList.add('played'); });
+        setTimeout(function() {
+            if (audio.paused) {
+                bars.forEach(function(b) { b.classList.remove('played'); });
+            }
+        }, 350);
     };
+
+    audio.play().catch(function() {});
 }
 
 function seekMsbVoice(event, trackEl) {
     var card = trackEl.closest('.msb-voice-card');
     if (!card) return;
     var audio = card.querySelector('audio.msb-hidden-audio');
-    if (!audio || !isFinite(audio.duration) || audio.duration <= 0) return;
+    if (!audio) return;
+    var totalDur = getReliableVoiceDuration(card, audio);
+    if (totalDur <= 0) return;
+
     var rect = trackEl.getBoundingClientRect();
     var clickX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
-    audio.currentTime = (clickX / rect.width) * audio.duration;
+    var ratio = clickX / rect.width;
+    try {
+        audio.currentTime = ratio * totalDur;
+    } catch (e) {}
+
+    var bars = card.querySelectorAll('.msb-eq-bar');
+    var playedBars = Math.round(ratio * bars.length);
+    bars.forEach(function(b, idx) {
+        b.classList.toggle('played', idx < playedBars);
+    });
 }
 
 document.addEventListener('loadedmetadata', function(e) {
@@ -2850,8 +2877,10 @@ document.addEventListener('loadedmetadata', function(e) {
     if (target && target.classList && target.classList.contains('msb-hidden-audio')) {
         var card = target.closest('.msb-voice-card');
         if (!card) return;
+        var preset = Number(card.getAttribute('data-preset-sec') || 0);
+        if (preset > 0) return;
         var timerEl = card.querySelector('.msb-voice-timer');
-        if (isFinite(target.duration) && target.duration > 0 && timerEl) {
+        if (isFinite(target.duration) && target.duration > 0 && target.duration < 3600 && timerEl) {
             timerEl.textContent = formatVoiceSec(target.duration);
         }
     }
@@ -2859,6 +2888,7 @@ document.addEventListener('loadedmetadata', function(e) {
 
 window.toggleMsbVoicePlay = toggleMsbVoicePlay;
 window.seekMsbVoice = seekMsbVoice;
+
 
 function downloadChatAttachment(e, filePath, fileName) {
     var fullUrl = filePath.indexOf('http') === 0 ? filePath : (location.origin + filePath);
