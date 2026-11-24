@@ -3238,9 +3238,21 @@ function onMsbCallConnected() {
 
 // === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 3/3 - ИСПРАВЛЕННАЯ ДЛЯ APK) ===
 async function getMsbMicStream() {
-
     if (window.MsbNative && typeof window.MsbNative.ensureMicPermission === 'function') {
-        try { window.MsbNative.ensureMicPermission(); } catch (e) {}
+        var alreadyGranted = false;
+        try { alreadyGranted = Boolean(window.MsbNative.ensureMicPermission()); } catch (e) {}
+        if (!alreadyGranted) {
+            // Ждём, пока пользователь нажмёт «Разрешить» в системном окне Android
+            for (var i = 0; i < 20; i++) {
+                await new Promise(function(r) { setTimeout(r, 400); });
+                try {
+                    if (window.MsbNative.ensureMicPermission()) {
+                        alreadyGranted = true;
+                        break;
+                    }
+                } catch (e2) {}
+            }
+        }
     }
     try {
         return await navigator.mediaDevices.getUserMedia({
@@ -3251,6 +3263,7 @@ async function getMsbMicStream() {
         return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     }
 }
+
 
 window.startMsbAudioCall = async function(targetName) {
     var me = getMsbCallerName();
