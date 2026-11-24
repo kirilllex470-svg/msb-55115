@@ -951,6 +951,20 @@ jobs:
 
 
                   @JavascriptInterface
+                  public void resetAudioMode() {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  am.setSpeakerphoneOn(false);
+                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
+                              }
+                          } catch (Exception ignored) {}
+                      });
+                  }
+
+
+                  @JavascriptInterface
                   public void setSpeakerphone(final boolean on) {
                       runOnUiThread(() -> {
                           try {
