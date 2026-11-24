@@ -1858,15 +1858,78 @@ function sendMessage() {
     });
     textInput.focus();
 }
+var voiceRecTimer = null;
+var voiceRecStartTs = 0;
+var voiceRecDurationSec = 0;
+var voiceRecCanceled = false;
+
+function formatVoiceSec(sec) {
+    var total = Math.max(0, Math.round(Number(sec) || 0));
+    var m = Math.floor(total / 60);
+    var s = total % 60;
+    return m + ':' + String(s).padStart(2, '0');
+}
+
+function showVoiceRecordBar(show) {
+    var inputContainer = document.querySelector('#messenger-modal .input-container');
+    if (!inputContainer) return;
+    var bar = document.getElementById('msb-voice-rec-bar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'msb-voice-rec-bar';
+        bar.className = 'msb-voice-rec-bar';
+        bar.innerHTML = [
+            '<div class="voice-rec-left">',
+            '  <span class="voice-rec-dot"></span>',
+            '  <span id="voice-rec-clock" class="voice-rec-clock">0:00</span>',
+            '  <span class="voice-rec-label">Запись голоса...</span>',
+            '</div>',
+            '<div class="voice-rec-actions">',
+            '  <button type="button" class="voice-rec-cancel-btn" onclick="cancelVoiceRecord()">🗑️ Отмена</button>',
+            '  <button type="button" class="voice-rec-send-btn" onclick="toggleVoiceRecord()">➤ Отправить</button>',
+            '</div>'
+        ].join('');
+        inputContainer.insertBefore(bar, inputContainer.firstChild);
+    }
+    bar.style.display = show ? 'flex' : 'none';
+}
+
+function cancelVoiceRecord() {
+    voiceRecCanceled = true;
+    if (voiceRecTimer) {
+        clearInterval(voiceRecTimer);
+        voiceRecTimer = null;
+    }
+    showVoiceRecordBar(false);
+    var btn = document.getElementById('voice-btn');
+    if (btn) {
+        btn.classList.remove('recording');
+        btn.textContent = '🎙️';
+    }
+    if (audioRecorder && audioRecorder.state === 'recording') {
+        try { audioRecorder.stop(); } catch (e) {}
+    }
+}
+
 function toggleVoiceRecord() {
     chatUser = getActiveChatIdentity();
-    if (!currentRoomId) return alert("Сначала выберите чат слева!");
+    if (!currentRoomId) return alert('Сначала выберите чат слева!');
     var btn = document.getElementById('voice-btn');
-    if (audioRecorder && audioRecorder.state === "recording") {
+
+    if (audioRecorder && audioRecorder.state === 'recording') {
+        voiceRecDurationSec = Math.max(1, Math.round((Date.now() - voiceRecStartTs) / 1000));
+        if (voiceRecTimer) {
+            clearInterval(voiceRecTimer);
+            voiceRecTimer = null;
+        }
+        showVoiceRecordBar(false);
         audioRecorder.stop();
-        btn.classList.remove('recording');
-        btn.textContent = "🎙️";
+        if (btn) {
+            btn.classList.remove('recording');
+            btn.textContent = '🎙️';
+        }
     } else {
+        voiceRecCanceled = false;
         navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 16000 }
         }).then(function(stream) {
@@ -1874,29 +1937,63 @@ function toggleVoiceRecord() {
             var options = { audioBitsPerSecond: 18000 };
             if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) options.mimeType = 'audio/webm;codecs=opus';
             else if (MediaRecorder.isTypeSupported('audio/mp4')) options.mimeType = 'audio/mp4';
+
             audioRecorder = new MediaRecorder(stream, options);
             audioRecorder.ondataavailable = function(e) {
                 if (e.data && e.data.size > 0) audioChunks.push(e.data);
             };
             audioRecorder.onstop = function() {
+                stream.getTracks().forEach(function(track) { track.stop(); });
+                if (voiceRecCanceled) {
+                    voiceRecCanceled = false;
+                    audioChunks = new Array();
+                    return;
+                }
                 var mimeUsed = audioRecorder.mimeType || 'audio/webm';
                 var ext = mimeUsed.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
                 var blob = new Blob(audioChunks, { type: mimeUsed });
                 var qId = quotedMessageId || null, qTxt = quotedMessageText || null, qSnd = quotedMessageSender || null;
                 cancelReply();
+
                 enqueueChatPayload({
-                    sender: chatUser, room: currentRoomId, type: 'audio',
-                    blob: blob, fileName: 'voice.' + ext,
-                    quoteId: qId, quoteText: qTxt, quoteSender: qSnd
+                    sender: chatUser,
+                    room: currentRoomId,
+                    type: 'audio',
+                    blob: blob,
+                    fileName: 'voice_' + voiceRecDurationSec + 's.' + ext,
+                    duration: voiceRecDurationSec,
+                    quoteId: qId,
+                    quoteText: qTxt,
+                    quoteSender: qSnd
                 });
-                stream.getTracks().forEach(function(track) { track.stop(); });
             };
+
+            voiceRecStartTs = Date.now();
+            voiceRecDurationSec = 0;
+            showVoiceRecordBar(true);
+            var clockEl = document.getElementById('voice-rec-clock');
+            if (clockEl) clockEl.textContent = '0:00';
+
+            if (voiceRecTimer) clearInterval(voiceRecTimer);
+            voiceRecTimer = setInterval(function() {
+                var sec = Math.floor((Date.now() - voiceRecStartTs) / 1000);
+                voiceRecDurationSec = sec;
+                var cEl = document.getElementById('voice-rec-clock');
+                if (cEl) cEl.textContent = formatVoiceSec(sec);
+            }, 250);
+
             audioRecorder.start(400);
-            btn.classList.add('recording');
-            btn.textContent = "🛑";
-        }).catch(function() { alert("Нет доступа к микрофону!"); });
+            if (btn) {
+                btn.classList.add('recording');
+                btn.textContent = '🛑';
+            }
+        }).catch(function() {
+            alert('Нет доступа к микрофону!');
+        });
     }
 }
+window.cancelVoiceRecord = cancelVoiceRecord;
+
 
 var roundCamFacing = 'user';
 var roundRecCanvas = null;
@@ -2575,8 +2672,9 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
     var delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
     var contentHTML = '';
     if (msg.type === 'audio') {
-        contentHTML = '<audio class="audio-player" src="' + msg.text + '" controls preload="none" style="display:block; max-width:100%;"></audio>';
+        contentHTML = buildMsbVoicePlayerHTML(msg.text, msg.id);
     } else if (msg.type === 'video') {
+
         bubble.classList.add('video-bubble-clean');
         contentHTML = '<div class="video-round-wrap"><video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" onclick="playVideoWithSound(this)"></video></div>';
     } else if (msg.type === 'gif') {
@@ -2611,6 +2709,155 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
     setupSwipe(row, msg.id, msg.text, msg.type, msg.sender);
     attachLongPressActions(row, msg, isMy);
 }
+var activeMsbAudio = null;
+var activeMsbAudioCard = null;
+var msbAudioRaf = null;
+
+function extractVoiceSecondsFromUrl(url) {
+    var m = String(url || '').match(/voice_(\d+)s/i);
+    return m ? Number(m[1]) : 0;
+}
+
+function buildMsbVoicePlayerHTML(audioUrl, msgId) {
+    var presetSec = extractVoiceSecondsFromUrl(audioUrl);
+    var initialLabel = presetSec > 0 ? formatVoiceSec(presetSec) : '0:00';
+    var barsCount = 24;
+    var heights =;
+    var barsHTML = '';
+    for (var i = 0; i < barsCount; i++) {
+        var h = heights[i % heights.length];
+        barsHTML += '<span class="msb-eq-bar" style="height:' + h + '%; --bar-i:' + i + ';"></span>';
+    }
+
+    return [
+        '<div class="msb-voice-card" data-audio-url="' + escapeEdgeHtml(audioUrl) + '" data-preset-sec="' + presetSec + '" id="voice-card-' + escapeEdgeHtml(msgId) + '">',
+        '  <button type="button" class="msb-voice-play-btn" onclick="toggleMsbVoicePlay(this)">▶</button>',
+        '  <div class="msb-voice-body">',
+        '    <div class="msb-voice-eq-track" onclick="seekMsbVoice(event, this)">',
+        '      <div class="msb-voice-eq-bars">' + barsHTML + '</div>',
+        '    </div>',
+        '    <div class="msb-voice-meta">',
+        '      <span class="msb-voice-timer">' + initialLabel + '</span>',
+        '      <span class="msb-voice-badge">🎙️ Голосовое</span>',
+        '    </div>',
+        '  </div>',
+        '  <audio class="msb-hidden-audio" src="' + escapeEdgeHtml(audioUrl) + '" preload="metadata"></audio>',
+        '</div>'
+    ].join('');
+}
+
+function stopActiveMsbAudio() {
+    if (msbAudioRaf) {
+        cancelAnimationFrame(msbAudioRaf);
+        msbAudioRaf = null;
+    }
+    if (activeMsbAudio) {
+        try { activeMsbAudio.pause(); } catch (e) {}
+    }
+    if (activeMsbAudioCard) {
+        activeMsbAudioCard.classList.remove('is-playing');
+        var btn = activeMsbAudioCard.querySelector('.msb-voice-play-btn');
+        if (btn) btn.textContent = '▶';
+    }
+    activeMsbAudio = null;
+    activeMsbAudioCard = null;
+}
+
+function toggleMsbVoicePlay(btnEl) {
+    var card = btnEl.closest('.msb-voice-card');
+    if (!card) return;
+    var audio = card.querySelector('audio.msb-hidden-audio');
+    var timerEl = card.querySelector('.msb-voice-timer');
+    var bars = card.querySelectorAll('.msb-eq-bar');
+    if (!audio) return;
+
+    if (activeMsbAudio && activeMsbAudio !== audio) {
+        stopActiveMsbAudio();
+    }
+
+    if (!audio.paused) {
+        audio.pause();
+        card.classList.remove('is-playing');
+        btnEl.textContent = '▶';
+        if (msbAudioRaf) cancelAnimationFrame(msbAudioRaf);
+        return;
+    }
+
+    activeMsbAudio = audio;
+    activeMsbAudioCard = card;
+    card.classList.add('is-playing');
+    btnEl.textContent = '⏸';
+
+    if (!isFinite(audio.duration) || isNaN(audio.duration) || audio.duration === 0) {
+        audio.currentTime = 1e101;
+        audio.ontimeupdate = function() {
+            this.ontimeupdate = null;
+            audio.currentTime = 0;
+            audio.play().catch(function() {});
+        };
+    } else {
+        audio.play().catch(function() {});
+    }
+
+    function updateProgressLoop() {
+        if (!audio || audio.paused || audio.ended) return;
+        var preset = Number(card.getAttribute('data-preset-sec') || 0);
+        var totalDur = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : preset;
+        var cur = audio.currentTime || 0;
+
+        if (timerEl) {
+            timerEl.textContent = formatVoiceSec(cur) + (totalDur > 0 ? (' / ' + formatVoiceSec(totalDur)) : '');
+        }
+
+        var ratio = totalDur > 0 ? Math.min(1, cur / totalDur) : 0;
+        var activeCount = Math.floor(ratio * bars.length);
+        bars.forEach(function(b, idx) {
+            b.classList.toggle('played', idx <= activeCount);
+        });
+
+        msbAudioRaf = requestAnimationFrame(updateProgressLoop);
+    }
+
+    audio.onplay = function() {
+        if (msbAudioRaf) cancelAnimationFrame(msbAudioRaf);
+        msbAudioRaf = requestAnimationFrame(updateProgressLoop);
+    };
+
+    audio.onended = function() {
+        card.classList.remove('is-playing');
+        btnEl.textContent = '▶';
+        var preset = Number(card.getAttribute('data-preset-sec') || 0);
+        var finDur = (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : preset;
+        if (timerEl && finDur > 0) timerEl.textContent = formatVoiceSec(finDur);
+        bars.forEach(function(b) { b.classList.remove('played'); });
+        if (msbAudioRaf) cancelAnimationFrame(msbAudioRaf);
+    };
+}
+
+function seekMsbVoice(event, trackEl) {
+    var card = trackEl.closest('.msb-voice-card');
+    if (!card) return;
+    var audio = card.querySelector('audio.msb-hidden-audio');
+    if (!audio || !isFinite(audio.duration) || audio.duration <= 0) return;
+    var rect = trackEl.getBoundingClientRect();
+    var clickX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    audio.currentTime = (clickX / rect.width) * audio.duration;
+}
+
+document.addEventListener('loadedmetadata', function(e) {
+    var target = e.target;
+    if (target && target.classList && target.classList.contains('msb-hidden-audio')) {
+        var card = target.closest('.msb-voice-card');
+        if (!card) return;
+        var timerEl = card.querySelector('.msb-voice-timer');
+        if (isFinite(target.duration) && target.duration > 0 && timerEl) {
+            timerEl.textContent = formatVoiceSec(target.duration);
+        }
+    }
+}, true);
+
+window.toggleMsbVoicePlay = toggleMsbVoicePlay;
+window.seekMsbVoice = seekMsbVoice;
 
 function downloadChatAttachment(e, filePath, fileName) {
     var fullUrl = filePath.indexOf('http') === 0 ? filePath : (location.origin + filePath);

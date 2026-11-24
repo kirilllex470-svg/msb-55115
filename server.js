@@ -1564,12 +1564,16 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req
 
     let finalContent = fields.text || '';
     if ((type === 'audio' || type === 'video' || type === 'file') && fileBuffer && fileBuffer.length > 0) {
-        const fileName = type + '_' + crypto.randomBytes(8).toString('hex') + '.' + fileExt;
+        const durMatch = String(originalFileName || '').match(/voice_(\d+)s/i);
+        const durTag = (type === 'audio' && durMatch) ? ('_voice_' + durMatch[1] + 's') : '';
+        const fileName = type + durTag + '_' + crypto.randomBytes(6).toString('hex') + '.' + fileExt;
         fs.writeFileSync(path.join(UPLOADS_DIR, fileName), fileBuffer);
         finalContent = (type === 'file')
             ? JSON.stringify({ path: '/uploads/' + fileName, name: originalFileName })
             : ('/uploads/' + fileName);
     }
+
+
     const timeStr = getServerDateTime();
     const newMsgObj = {
         id: crypto.randomBytes(8).toString('hex'),
