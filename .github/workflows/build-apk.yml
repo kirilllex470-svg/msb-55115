@@ -43,7 +43,12 @@ jobs:
 
           cfg["appId"] = pkg
           cfg["webDir"] = "www"
-          cfg["server"] = {"androidScheme": "https", "cleartext": True}
+          cfg["server"] = {
+              "androidScheme": "https",
+              "hostname": "msb55115.local",
+              "cleartext": True
+          }
+
           cfg.setdefault("plugins", {})["PushNotifications"] = {
               "presentationOptions": ["badge", "sound", "alert"]
           }
@@ -844,11 +849,15 @@ jobs:
                           @Override
                           public void onPermissionRequest(final android.webkit.PermissionRequest request) {
                               runOnUiThread(() -> {
-                                  if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                                      pendingWebRtcPerm = request;
-                                      ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 102);
-                                  } else {
-                                      request.grant(request.getResources());
+                                  try {
+                                      if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                          pendingWebRtcPerm = request;
+                                          ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA}, 102);
+                                      } else {
+                                          request.grant(request.getResources());
+                                      }
+                                  } catch (Exception e) {
+                                      try { request.grant(new String[]{android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE}); } catch (Exception ignored) {}
                                   }
                               });
                           }
