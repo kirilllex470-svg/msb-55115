@@ -914,7 +914,17 @@ jobs:
                       enqueueSystemDownload(url, fileName);
                   }
 
+                  @JavascriptInterface
+                  public boolean ensureMicPermission() {
+                      if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                          return true;
+                      }
+                      ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
+                      return false;
+                  }
 
+                  @JavascriptInterface
+                  public void setSpeakerphone(final boolean on) {
                       runOnUiThread(() -> {
                           try {
                               android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
@@ -952,6 +962,7 @@ jobs:
 
                   @JavascriptInterface
                   public void setIdentity(String u, String c, String o) {
+
 
                       try {
                           getSharedPreferences("msb_prefs", MODE_PRIVATE).edit()
