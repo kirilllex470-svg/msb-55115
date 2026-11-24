@@ -2957,11 +2957,9 @@ async function adminUploadApkForAll(inputEl) {
 window.downloadMsbApkDirect = downloadMsbApkDirect;
 window.manualCheckApkUpdate = downloadMsbApkDirect;
 window.adminUploadApkForAll = adminUploadApkForAll;
-window.downloadMsbApkDirect = downloadMsbApkDirect;
-window.manualCheckApkUpdate = downloadMsbApkDirect;
-window.adminUploadApkForAll = adminUploadApkForAll;
 
 // === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 1/3) ===
+
 var msbCall = {
     pc: null,
     stream: null,
@@ -2984,6 +2982,7 @@ var MSB_RTC_CFG = {
         { urls: 'stun:://cloudflare.com' }
     ]
 };
+
 
 function getMsbCallerName() {
     if (typeof getActiveChatIdentity === 'function') return getActiveChatIdentity();
@@ -3227,6 +3226,7 @@ function onMsbCallConnected() {
     msbCall.startTs = Date.now();
     document.getElementById('msb-call-status').textContent = '🟢 На связи • 00:00';
     if (msbCall.timer) clearInterval(msbCall.timer);
+
     msbCall.timer = setInterval(function() {
         var sec = Math.floor((Date.now() - msbCall.startTs) / 1000);
         var mm = String(Math.floor(sec / 60)).padStart(2, '0');
@@ -3235,36 +3235,10 @@ function onMsbCallConnected() {
         if (el) el.textContent = '🟢 На связи • ' + mm + ':' + ss;
     }, 1000);
 }
-// === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 3/3) ===
-window.startMsbAudioCall = async function(targetName) {
-    var me = getMsbCallerName();
-    if (!me) return alert('Сначала войдите под своим позывным!');
-    if (msbCall.state !== 'idle') return;
 
-    var partner = String(targetName || '').trim();
-    if (!partner && typeof isCurrentGroup !== 'undefined' && !isCurrentGroup && typeof currentPartner !== 'undefined' && currentPartner) {
-        partner = currentPartner;
-    }
-    if (!partner || (typeof isCurrentGroup !== 'undefined' && isCurrentGroup && !targetName)) {
-        openMsbCallContactPicker();
-        return;
-    }
-    partner = partner.replace(/^👥\s*/, '').trim();
-    if (partner.toLowerCase() === me.toLowerCase()) return alert('Нельзя позвонить самому себе!');
-
-    unlockMobileFeatures();
-    if (typeof stopActiveMsbAudio === 'function') stopActiveMsbAudio();
-    msbCall.partner = partner;
-    msbCall.state = 'calling';
-    msbCall.muted = false;
-    msbCall.speaker = true;
-    syncMsbCallControls();
-    showMsbCallModal(partner, '📡 Вызов абонента...', false);
-    startMsbRing(false);
-
-    try {
 // === МОДУЛЬ АУДИОЗВОНКОВ МСБ-55115 (ЧАСТЬ 3/3 - ИСПРАВЛЕННАЯ ДЛЯ APK) ===
 async function getMsbMicStream() {
+
     if (window.MsbNative && typeof window.MsbNative.ensureMicPermission === 'function') {
         try { window.MsbNative.ensureMicPermission(); } catch (e) {}
     }
