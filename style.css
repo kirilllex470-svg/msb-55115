@@ -2505,3 +2505,77 @@ body.theme-cosmic .msb-voice-card.is-playing .msb-eq-bar.played {
     opacity: 0.75;
     font-size: 10px;
 }
+.msb-voice-badge {
+    opacity: 0.75;
+    font-size: 10px;
+}
+
+/* === ОКНО АУДИОЗВОНКА ПОД ТЕМУ === */
+.msb-call-card {
+    max-width: 340px !important;
+    padding: 24px 20px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.msb-call-badge {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--t-main, #22c55e);
+    color: var(--t-main, #22c55e);
+    margin-bottom: 14px;
+}
+.msb-call-av {
+    width: 84px !important;
+    height: 84px !important;
+    border-radius: 50% !important;
+    font-size: 26px !important;
+    margin-bottom: 12px;
+}
+.msb-call-status-txt {
+    font-size: 14px;
+    font-weight: 700;
+    color: #facc15;
+    margin-bottom: 20px;
+    font-family: monospace;
+}
+.msb-call-btn-row {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.msb-call-btn {
+    flex: 1 1 auto;
+    min-width: 92px;
+    padding: 12px 10px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    cursor: pointer;
+}
+.msb-call-btn.accept {
+    background: linear-gradient(135deg, #16a34a, #15803d) !important;
+    border: 1px solid #4ade80 !important;
+}
+.msb-call-btn.hangup {
+    background: linear-gradient(135deg, #dc2626, #991b1b) !important;
+    border: 1px solid #f87171 !important;
+}
+.msb-call-btn.ctrl {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+.msb-call-btn.ctrl.muted {
+    background: rgba(239, 68, 68, 0.28) !important;
+    border-color: #f87171 !important;
+}
+.msb-call-btn.ctrl.active-spk {
+    border-color: #38bdf8 !important;
+    color: #38bdf8 !important;
+}

@@ -2001,6 +2001,29 @@ wss.on('connection', function(ws) {
                 return;
             }
 
+            if (msg.type && msg.type.indexOf('call_') === 0) {
+                const targetKey = String(msg.to || '').trim().toLowerCase();
+                const fromUser = String(msg.from || '').trim();
+                if (!targetKey || !fromUser) return;
+                markUserOnline(fromUser, ws);
+
+                let deliveredActive = false;
+                const rawPacket = JSON.stringify(msg);
+                wss.clients.forEach(function(client) {
+                    if (client.readyState === WebSocket.OPEN && client.userIdentity === targetKey) {
+                        try {
+                            client.send(rawPacket);
+                            if (!client.isAway) deliveredActive = true;
+                        } catch (e) {}
+                    }
+                });
+
+                if (msg.type === 'call_offer' && !deliveredActive) {
+                    sendChatBackgroundPushOnly(fromUser, targetKey, '📞 Входящий аудиозвонок! Откройте МСБ-55115');
+                }
+                return;
+            }
+
 
                         if (msg.type === 'get_room_history' && msg.room) {
                 const rKey = String(msg.room).trim().toLowerCase();
