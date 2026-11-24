@@ -39,11 +39,15 @@ jobs:
           if os.path.exists(p):
               cfg = json.load(open(p, encoding="utf-8"))
           else:
+          else:
               cfg = {"appName": "МСБ-55115", "webDir": "www"}
           cfg["appId"] = pkg
+          cfg["webDir"] = "www"
+          cfg["server"] = {"androidScheme": "https", "cleartext": True}
           cfg.setdefault("plugins", {})["PushNotifications"] = {
               "presentationOptions": ["badge", "sound", "alert"]
           }
+
           json.dump(cfg, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
           print("Установлен appId:", pkg)
           '
@@ -52,9 +56,10 @@ jobs:
         run: |
           if [ ! -f package.json ]; then npm init -y; fi
           mkdir -p www
-          if [ ! -f www/index.html ]; then
-            echo "<html><body></body></html>" > www/index.html
-          fi
+          cp -f index.html style.css journal.js messenger.js www/ 2>/dev/null || true
+          for img in logo.jpg logo.jpeg logo.png; do
+            if [ -f "$img" ]; then cp -f "$img" www/; fi
+          done
           npm install --save \
             @capacitor/core@8 \
             @capacitor/cli@8 \
