@@ -343,7 +343,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v26';",
+    "const SHELL_CACHE = 'msb55115-shell-v27';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -478,7 +478,15 @@ function readBodyJSON(req, cb) {
     });
 }
 const server = http.createServer(function(req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-update-secret, x-chunk-index, x-total-chunks, x-version-code, x-version-name');
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        return res.end();
+    }
     const urlPath = (req.url || '/').split('?').at(0);
+
 
     if (urlPath === '/sw.js') {
         res.writeHead(200, {

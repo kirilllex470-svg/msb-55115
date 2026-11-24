@@ -2671,28 +2671,28 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
     var authorHTML = (isCurrentGroup && !isMy) ? ('<div class="msg-author">' + escapeEdgeHtml(msg.sender) + '</div>') : '';
     var delBtnHTML = '<button class="msg-del-inline-btn" onclick="inlineDeleteMessage(\'' + msg.id + '\')">&times;</button>';
     var contentHTML = '';
+    var mediaSrc = window.resolveMsbMediaUrl ? window.resolveMsbMediaUrl(msg.text) : msg.text;
     if (msg.type === 'audio') {
-        contentHTML = buildMsbVoicePlayerHTML(msg.text, msg.id);
+        contentHTML = buildMsbVoicePlayerHTML(mediaSrc, msg.id);
     } else if (msg.type === 'video') {
-
         bubble.classList.add('video-bubble-clean');
-        contentHTML = '<div class="video-round-wrap"><video class="video-round" src="' + msg.text + '#t=0.001" playsinline muted loop preload="metadata" onclick="playVideoWithSound(this)"></video></div>';
+        contentHTML = '<div class="video-round-wrap"><video class="video-round" src="' + mediaSrc + '#t=0.001" playsinline muted loop preload="metadata" onclick="playVideoWithSound(this)"></video></div>';
     } else if (msg.type === 'gif') {
-
-        contentHTML = '<img class="chat-image" src="' + msg.text + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF\')">';
+        contentHTML = '<img class="chat-image" src="' + mediaSrc + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'🎬 GIF\')">';
     } else if (msg.type === 'file') {
         try {
             var fileObj = JSON.parse(msg.text);
+            var fullPath = window.resolveMsbMediaUrl ? window.resolveMsbMediaUrl(fileObj.path) : fileObj.path;
             var ext = fileObj.name.split('.').pop().toLowerCase();
             if (Array.of('jpg', 'jpeg', 'png', 'gif', 'webp').includes(ext)) {
-                contentHTML = '<img class="chat-image" src="' + fileObj.path + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото\')">';
+                contentHTML = '<img class="chat-image" src="' + fullPath + '" loading="lazy" onclick="openMsgPhotoViewer(this.src, \'📷 Фото\')">';
             } else {
-                var safeUrl = String(fileObj.path || '').replace(/'/g, "\\'");
+                var safeUrl = String(fullPath || '').replace(/'/g, "\\'");
                 var safeFn = String(fileObj.name || 'file').replace(/'/g, "\\'");
-                contentHTML = '<a href="' + fileObj.path + '" download="' + escapeEdgeHtml(fileObj.name) + '" onclick="return downloadChatAttachment(event, \'' + safeUrl + '\', \'' + safeFn + '\')" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + escapeEdgeHtml(fileObj.name) + '</span><span class="chat-file-action">📥 Скачать файл</span></div></a>';
+                contentHTML = '<a href="' + fullPath + '" download="' + escapeEdgeHtml(fileObj.name) + '" onclick="return downloadChatAttachment(event, \'' + safeUrl + '\', \'' + safeFn + '\')" class="chat-file-card"><span class="chat-file-icon">📄</span><div class="chat-file-info"><span class="chat-file-name">' + escapeEdgeHtml(fileObj.name) + '</span><span class="chat-file-action">📥 Скачать файл</span></div></a>';
             }
-
         } catch (e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
+
     } else {
         contentHTML = '<div class="msg-text">' + renderMessageTextWithLiveEmojis(msg.text) + '</div>';
     }
@@ -2899,7 +2899,8 @@ window.seekMsbVoice = seekMsbVoice;
 
 
 function downloadChatAttachment(e, filePath, fileName) {
-    var fullUrl = filePath.indexOf('http') === 0 ? filePath : (location.origin + filePath);
+    var baseOrig = window.API_ORIGIN || location.origin;
+    var fullUrl = filePath.indexOf('http') === 0 ? filePath : (baseOrig + filePath);
     var dlUrl = fullUrl + (fullUrl.indexOf('?') === -1 ? '?' : '&') + 'dl=1&name=' + encodeURIComponent(fileName || 'file');
     if (window.MsbNative && typeof window.MsbNative.downloadFile === 'function') {
         if (e) e.preventDefault();

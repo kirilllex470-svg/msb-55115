@@ -1,3 +1,26 @@
+const MSB_SERVER_ORIGIN = localStorage.getItem('msb_server_url') || 'https://msb-55115-kirill000000007.mia0.amvera.tech';
+const IS_LOCAL_APK = (location.hostname === 'localhost' || location.protocol === 'capacitor:');
+const API_ORIGIN = IS_LOCAL_APK ? MSB_SERVER_ORIGIN : location.origin;
+
+window.API_ORIGIN = API_ORIGIN;
+window.resolveMsbMediaUrl = function(u) {
+    if (!u) return '';
+    if (typeof u === 'string' && u.startsWith('/') && !u.startsWith('//')) {
+        return API_ORIGIN + u;
+    }
+    return u;
+};
+
+if (IS_LOCAL_APK) {
+    const origFetch = window.fetch.bind(window);
+    window.fetch = function(input, init) {
+        if (typeof input === 'string' && input.startsWith('/')) {
+            input = API_ORIGIN + input;
+        }
+        return origFetch(input, init);
+    };
+}
+
 const USERS_CONFIG = Array.of(
     { name: "ШР", pass: "551151111", color: "#3b82f6" },
     { name: "РОТА-1", pass: "551152222", color: "#a855f7" },
@@ -828,7 +851,8 @@ function getAlertsQueue(target) {
 }
 
 function checkServerVersionChange(bootId, bootTime) {
-    if (!bootId) return;
+    if (!bootId || IS_LOCAL_APK) return;
+
     if (!knownServerBootId) {
         knownServerBootId = bootId;
         sessionStorage.setItem('msb_server_boot_id', bootId);
@@ -884,7 +908,7 @@ function connectWS(forceReconnect) {
     }
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     try {
-        ws = new WebSocket(location.origin.replace(/^http/, 'ws'));
+        ws = new WebSocket(API_ORIGIN.replace(/^http/, 'ws'));
     } catch (e) {
         wsReconnectTimer = setTimeout(function() { connectWS(false); }, 2000);
         return;
@@ -1761,7 +1785,7 @@ function createCleanBigAvatarIcon(senderName, themeName, callback) {
         img.crossOrigin = 'anonymous';
         img.onload = function() { renderCanvas(img); };
         img.onerror = function() { renderCanvas(null); };
-        img.src = '/api/avatar-img/' + encodeURIComponent(cleanKey) + '.jpg?v=' + Date.now();
+        img.src = API_ORIGIN + '/api/avatar-img/' + encodeURIComponent(cleanKey) + '.jpg?v=' + Date.now();
     }
 }
 
