@@ -4,6 +4,7 @@
   "webDir": "www",
   "server": {
     "androidScheme": "https",
+    "hostname": "msb55115.local",
     "cleartext": true,
     "allowNavigation": [
       "*.amvera.tech",
@@ -11,17 +12,6 @@
       "salutejazz.ru"
     ]
   },
-  "android": {
-    "allowMixedContent": true,
-    "captureInput": true,
-    "webContentsDebuggingEnabled": false
-  },
-  "plugins": {
-    "PushNotifications": {
-      "presentationOptions": ["badge", "sound", "alert"]
-    }
-  }
-}
   "android": {
     "allowMixedContent": true,
     "captureInput": true,
