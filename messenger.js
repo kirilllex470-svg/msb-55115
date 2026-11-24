@@ -2722,12 +2722,13 @@ function buildMsbVoicePlayerHTML(audioUrl, msgId) {
     var presetSec = extractVoiceSecondsFromUrl(audioUrl);
     var initialLabel = presetSec > 0 ? formatVoiceSec(presetSec) : '0:00';
     var barsCount = 24;
-    var heights =;
+    var heights = Array.of(32, 65, 90, 48, 82, 55, 100, 72, 40, 88, 60, 95, 45, 76, 52, 92, 68, 38, 84, 58, 96, 50, 74, 42);
     var barsHTML = '';
     for (var i = 0; i < barsCount; i++) {
-        var h = heights[i % heights.length];
+        var h = heights.at(i % heights.length);
         barsHTML += '<span class="msb-eq-bar" style="height:' + h + '%; --bar-i:' + i + ';"></span>';
     }
+
 
     return [
         '<div class="msb-voice-card" data-audio-url="' + escapeEdgeHtml(audioUrl) + '" data-preset-sec="' + presetSec + '" id="voice-card-' + escapeEdgeHtml(msgId) + '">',
