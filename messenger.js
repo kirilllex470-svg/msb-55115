@@ -2715,12 +2715,12 @@ var msbAudioRaf = null;
 
 function extractVoiceSecondsFromUrl(url) {
     var m = String(url || '').match(/voice_(\d+)s/i);
-    return m ? Number(m[1]) : 0;
+    return m ? Number(m.at(1)) : 0;
 }
 
 function buildMsbVoicePlayerHTML(audioUrl, msgId) {
     var presetSec = extractVoiceSecondsFromUrl(audioUrl);
-    var initialLabel = presetSec > 0 ? formatVoiceSec(presetSec) : '0:00';
+    var initialLabel = presetSec > 0 ? formatVoiceSec(presetSec) : '0:01';
     var barsCount = 24;
     var heights = Array.of(32, 65, 90, 48, 82, 55, 100, 72, 40, 88, 60, 95, 45, 76, 52, 92, 68, 38, 84, 58, 96, 50, 74, 42);
     var barsHTML = '';
@@ -2729,8 +2729,8 @@ function buildMsbVoicePlayerHTML(audioUrl, msgId) {
         barsHTML += '<span class="msb-eq-bar" style="height:' + h + '%; --bar-i:' + i + ';"></span>';
     }
 
-    return [
-        '<div class="msb-voice-card" data-audio-url="' + escapeEdgeHtml(audioUrl) + '" data-preset-sec="' + presetSec + '" id="voice-card-' + escapeEdgeHtml(msgId) + '">',
+    return Array.of(
+        '<div class="msb-voice-card" data-audio-url="' + escapeEdgeHtml(audioUrl) + '" data-fixed-sec="' + presetSec + '" id="voice-card-' + escapeEdgeHtml(msgId) + '">',
         '  <button type="button" class="msb-voice-play-btn" onclick="toggleMsbVoicePlay(this)">▶</button>',
         '  <div class="msb-voice-body">',
         '    <div class="msb-voice-eq-track" onclick="seekMsbVoice(event, this)">',
@@ -2741,9 +2741,9 @@ function buildMsbVoicePlayerHTML(audioUrl, msgId) {
         '      <span class="msb-voice-badge">🎙️ Голосовое</span>',
         '    </div>',
         '  </div>',
-        '  <audio class="msb-hidden-audio" src="' + escapeEdgeHtml(audioUrl) + '" preload="metadata"></audio>',
+        '  <audio class="msb-hidden-audio" src="' + escapeEdgeHtml(audioUrl) + '" preload="none"></audio>',
         '</div>'
-    ].join('');
+    ).join('');
 }
 
 function stopActiveMsbAudio() {
@@ -2752,26 +2752,26 @@ function stopActiveMsbAudio() {
         msbAudioRaf = null;
     }
     if (activeMsbAudio) {
-        try { activeMsbAudio.pause(); } catch (e) {}
+        try {
+            activeMsbAudio.pause();
+            activeMsbAudio.currentTime = 0;
+        } catch (e) {}
     }
     if (activeMsbAudioCard) {
         activeMsbAudioCard.classList.remove('is-playing');
         var btn = activeMsbAudioCard.querySelector('.msb-voice-play-btn');
         if (btn) btn.textContent = '▶';
+        var timerEl = activeMsbAudioCard.querySelector('.msb-voice-timer');
+        var fixedSec = Number(activeMsbAudioCard.getAttribute('data-fixed-sec') || 0);
+        if (timerEl && fixedSec > 0) {
+            timerEl.textContent = formatVoiceSec(fixedSec);
+        }
+        activeMsbAudioCard.querySelectorAll('.msb-eq-bar').forEach(function(b) {
+            b.classList.remove('played');
+        });
     }
     activeMsbAudio = null;
     activeMsbAudioCard = null;
-}
-
-function getReliableVoiceDuration(card, audio) {
-    var preset = Number(card.getAttribute('data-preset-sec') || 0);
-    var realDur = Number(card.getAttribute('data-real-dur') || 0);
-    if (realDur > 0) return realDur;
-    if (preset > 0) return preset;
-    if (audio && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 3600) {
-        return audio.duration;
-    }
-    return 0;
 }
 
 function toggleMsbVoicePlay(btnEl) {
@@ -2799,16 +2799,24 @@ function toggleMsbVoicePlay(btnEl) {
     card.classList.add('is-playing');
     btnEl.textContent = '⏸';
 
+    var playWallStart = Date.now() - Math.round((audio.currentTime || 0) * 1000);
+
     function updateProgressLoop() {
         if (!audio || audio.paused || audio.ended) return;
-        var cur = audio.currentTime || 0;
-        var totalDur = getReliableVoiceDuration(card, audio);
-        if (cur > totalDur) totalDur = cur;
+
+        var fixedSec = Number(card.getAttribute('data-fixed-sec') || 0);
+        var wallElapsed = (Date.now() - playWallStart) / 1000;
+        var cur = (isFinite(audio.currentTime) && audio.currentTime > 0) ? audio.currentTime : wallElapsed;
+
+        // Никогда не берём сломанный audio.duration у WebM, если известна точная запись в секундах!
+        var totalDur = fixedSec > 0
+            ? fixedSec
+            : ((isFinite(audio.duration) && audio.duration > 0 && audio.duration < 600) ? audio.duration : Math.max(1, Math.ceil(cur)));
+
+        if (cur > totalDur) cur = totalDur;
 
         if (timerEl) {
-            timerEl.textContent = totalDur > 0
-                ? (formatVoiceSec(cur) + ' / ' + formatVoiceSec(totalDur))
-                : formatVoiceSec(cur);
+            timerEl.textContent = formatVoiceSec(Math.floor(cur)) + ' / ' + formatVoiceSec(totalDur);
         }
 
         var ratio = totalDur > 0 ? Math.min(1, Math.max(0, cur / totalDur)) : 0;
@@ -2821,6 +2829,7 @@ function toggleMsbVoicePlay(btnEl) {
     }
 
     audio.onplay = function() {
+        playWallStart = Date.now() - Math.round((audio.currentTime || 0) * 1000);
         if (msbAudioRaf) cancelAnimationFrame(msbAudioRaf);
         msbAudioRaf = requestAnimationFrame(updateProgressLoop);
     };
@@ -2830,24 +2839,30 @@ function toggleMsbVoicePlay(btnEl) {
         card.classList.remove('is-playing');
         btnEl.textContent = '▶';
 
-        var actualEnd = audio.currentTime > 0 ? audio.currentTime : 0;
-        if (actualEnd > 0) {
-            card.setAttribute('data-real-dur', String(actualEnd));
-        }
-        var finalDur = getReliableVoiceDuration(card, audio);
-        if (timerEl) {
-            timerEl.textContent = formatVoiceSec(finalDur);
+        var fixedSec = Number(card.getAttribute('data-fixed-sec') || 0);
+        if (fixedSec <= 0) {
+            var realElapsed = Math.max(1, Math.round((Date.now() - playWallStart) / 1000));
+            fixedSec = realElapsed;
+            card.setAttribute('data-fixed-sec', String(fixedSec));
         }
 
+        try { audio.currentTime = 0; } catch (e) {}
+
+        // Показываем 100% зелёную шкалу в момент окончания и через 0.25 сек чисто сбрасываем в начало
         bars.forEach(function(b) { b.classList.add('played'); });
+        if (timerEl) timerEl.textContent = formatVoiceSec(fixedSec);
+
         setTimeout(function() {
             if (audio.paused) {
                 bars.forEach(function(b) { b.classList.remove('played'); });
             }
-        }, 350);
+        }, 250);
     };
 
-    audio.play().catch(function() {});
+    audio.play().catch(function() {
+        card.classList.remove('is-playing');
+        btnEl.textContent = '▶';
+    });
 }
 
 function seekMsbVoice(event, trackEl) {
@@ -2855,15 +2870,21 @@ function seekMsbVoice(event, trackEl) {
     if (!card) return;
     var audio = card.querySelector('audio.msb-hidden-audio');
     if (!audio) return;
-    var totalDur = getReliableVoiceDuration(card, audio);
-    if (totalDur <= 0) return;
+    var fixedSec = Number(card.getAttribute('data-fixed-sec') || 0);
+    if (fixedSec <= 0) return;
 
     var rect = trackEl.getBoundingClientRect();
     var clickX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
     var ratio = clickX / rect.width;
+    var targetTime = ratio * fixedSec;
     try {
-        audio.currentTime = ratio * totalDur;
+        audio.currentTime = targetTime;
     } catch (e) {}
+
+    var timerEl = card.querySelector('.msb-voice-timer');
+    if (timerEl) {
+        timerEl.textContent = formatVoiceSec(Math.floor(targetTime)) + ' / ' + formatVoiceSec(fixedSec);
+    }
 
     var bars = card.querySelectorAll('.msb-eq-bar');
     var playedBars = Math.round(ratio * bars.length);
@@ -2872,22 +2893,9 @@ function seekMsbVoice(event, trackEl) {
     });
 }
 
-document.addEventListener('loadedmetadata', function(e) {
-    var target = e.target;
-    if (target && target.classList && target.classList.contains('msb-hidden-audio')) {
-        var card = target.closest('.msb-voice-card');
-        if (!card) return;
-        var preset = Number(card.getAttribute('data-preset-sec') || 0);
-        if (preset > 0) return;
-        var timerEl = card.querySelector('.msb-voice-timer');
-        if (isFinite(target.duration) && target.duration > 0 && target.duration < 3600 && timerEl) {
-            timerEl.textContent = formatVoiceSec(target.duration);
-        }
-    }
-}, true);
-
 window.toggleMsbVoicePlay = toggleMsbVoicePlay;
 window.seekMsbVoice = seekMsbVoice;
+
 
 
 function downloadChatAttachment(e, filePath, fileName) {
