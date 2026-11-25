@@ -2867,21 +2867,21 @@ var msbCall = {
 var MSB_RTC_CFG = {
     iceCandidatePoolSize: 4,
     iceServers: [
-        { urls: 'stun' + ':' + '://google.com' },
-        { urls: 'stun' + ':' + '://google.com' },
-        { urls: 'stun' + ':' + '://cloudflare.com' },
+        { urls: 'stun:' + ['stun', 'l', 'google', 'com'].join('.') + ':19302' },
+        { urls: 'stun:' + ['stun1', 'l', 'google', 'com'].join('.') + ':19302' },
+        { urls: 'stun:' + ['stun', 'cloudflare', 'com'].join('.') + ':3478' },
         {
             urls: [
-                'turn' + ':' + 'openrelay.metered.ca:80',
-                'turn' + ':' + 'openrelay.metered.ca:443',
-                'turn' + ':' + 'openrelay.metered.ca:443?transport=tcp'
+                'turn:' + ['openrelay', 'metered', 'ca'].join('.') + ':80',
+                'turn:' + ['openrelay', 'metered', 'ca'].join('.') + ':443',
+                'turn:' + ['openrelay', 'metered', 'ca'].join('.') + ':443?transport=tcp'
             ],
             username: 'openrelayproject',
             credential: 'openrelayproject'
         }
     ]
 };
-А
+
 function getMsbCallerName() {
     if (typeof getActiveChatIdentity === 'function') return getActiveChatIdentity();
     return currentCallsign || currentUser || localStorage.getItem('journal_callsign') || '';
