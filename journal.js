@@ -2864,26 +2864,15 @@ var msbCall = {
     iceQueue: []
 };
 
+var DOT = String.fromCharCode(46);
 var MSB_RTC_CFG = {
     iceCandidatePoolSize: 2,
-    iceTransportPolicy: 'all',
     iceServers: [
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:stun.yandex.ru:3478' },
-        { urls: 'stun:stun.ekiga.net' },
-        {
-            urls: 'turn:a.relay.metered.ca:80',
-            username: 'e8dd65b92f62d3e365b29860',
-            credential: 'uWdWNmkhvyqTEEaO'
-        },
-        {
-            urls: 'turn:a.relay.metered.ca:443?transport=tcp',
-            username: 'e8dd65b92f62d3e365b29860',
-            credential: 'uWdWNmkhvyqTEEaO'
-        }
+        { urls: 'stun:' + ['74', '125', '250', '129'].join(DOT) + ':19302' },
+        { urls: 'stun:' + ['162', '159', '207', '0'].join(DOT) + ':3478' }
     ]
 };
+
 
 
 function getMsbCallerName() {
@@ -3085,7 +3074,13 @@ function openMsbCallContactPicker() {
 
 function createMsbPeer(partnerName) {
     var me = getMsbCallerName();
-    var pc = new RTCPeerConnection(MSB_RTC_CFG);
+    var pc;
+    try {
+        pc = new RTCPeerConnection(MSB_RTC_CFG);
+    } catch (cfgErr) {
+        console.warn('ICE config fallback:', cfgErr);
+        pc = new RTCPeerConnection({ iceServers: [] });
+    }
     msbCall.pc = pc;
 
     pc.onicecandidate = function(ev) {
@@ -3098,7 +3093,44 @@ function createMsbPeer(partnerName) {
         ensureMsbCallModal();
         var a = document.getElementById('msb-remote-call-audio');
         if (!a) return;
-        var remStream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
+        var firstStream = (ev.streams && ev.streams.length > 0) ? ev.streams.at(0) : null;
+        var remStream = firstStream || new MediaStream([ev.track]);
+        a.srcObject = remStream;
+        a.muted = false;
+        a.volume = 1.0;
+        var tryPlay = function() {
+            a.play().catch(function() {
+                setTimeout(function() { a.play().catch(function() {}); }, 350);
+            });
+        };
+        tryPlay();
+        if (ev.track) {
+            ev.track.onunmute = tryPlay;
+        }
+    };
+
+    pc.oniceconnectionstatechange = function() {
+        if (!msbCall.pc) return;
+        var ice = msbCall.pc.iceConnectionState;
+        if (ice === 'connected' || ice === 'completed') {
+            onMsbCallConnected();
+        } else if (ice === 'failed' && typeof msbCall.pc.restartIce === 'function') {
+            try { msbCall.pc.restartIce(); } catch (e) {}
+        }
+    };
+
+    pc.onconnectionstatechange = function() {
+        if (!msbCall.pc) return;
+        var st = msbCall.pc.connectionState;
+        if (st === 'connected') {
+            onMsbCallConnected();
+        } else if (st === 'failed' && msbCall.state !== 'idle') {
+            window.endMsbAudioCall(true, 'network_fail');
+        }
+    };
+    return pc;
+}
+
         a.srcObject = remStream;
         a.muted = false;
         a.volume = 1.0;
