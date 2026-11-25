@@ -2032,10 +2032,15 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
     let targetKey = String(msg.to || '').trim().toLowerCase();
     if (targetKey === 'админ') targetKey = 'муравей';
 
-    const fromUser = String(msg.from || '').trim();
+    let fromUser = String(msg.from || '').trim();
+    if (fromUser.toLowerCase() === 'админ') fromUser = 'муравей';
     const fromKey = fromUser.toLowerCase();
     if (!targetKey || !fromUser) return;
+
+    msg.from = fromUser;
+    msg.to = targetKey;
     markUserOnline(fromUser, ws);
+
 
     if (msg.type === 'call_offer') {
         pendingCalls[targetKey] = {
