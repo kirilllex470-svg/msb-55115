@@ -3135,45 +3135,8 @@ function createMsbPeer(partnerName) {
     return pc;
 }
 
-
-        a.srcObject = remStream;
-        a.muted = false;
-        a.volume = 1.0;
-        var tryPlay = function() {
-            a.play().catch(function() {
-                setTimeout(function() { a.play().catch(function() {}); }, 350);
-            });
-        };
-        tryPlay();
-        if (ev.track) {
-            ev.track.onunmute = tryPlay;
-        }
-    };
-
-    pc.oniceconnectionstatechange = function() {
-        if (!msbCall.pc) return;
-        var ice = msbCall.pc.iceConnectionState;
-        if (ice === 'connected' || ice === 'completed') {
-            onMsbCallConnected();
-        } else if (ice === 'failed' && typeof msbCall.pc.restartIce === 'function') {
-            try { msbCall.pc.restartIce(); } catch (e) {}
-        }
-    };
-
-
-    pc.onconnectionstatechange = function() {
-        if (!msbCall.pc) return;
-        var st = msbCall.pc.connectionState;
-        if (st === 'connected') {
-            onMsbCallConnected();
-        } else if ((st === 'failed' || st === 'closed') && msbCall.state !== 'idle') {
-            window.endMsbAudioCall(true, 'network_fail');
-        }
-    };
-    return pc;
-}
-
 function onMsbCallConnected() {
+
     if (msbCall.state === 'connected') return;
     msbCall.state = 'connected';
     stopMsbRing();
