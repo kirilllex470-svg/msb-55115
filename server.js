@@ -2116,7 +2116,7 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
         sendCancelCallFcm(targetKey, fromUser);
     }
     return;
-
+}
 
 
 
