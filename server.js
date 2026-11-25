@@ -343,7 +343,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v32';",
+    "const SHELL_CACHE = 'msb55115-shell-v33';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1741,7 +1741,7 @@ function sendIncomingCallFcm(fromUser, targetKey, callId) {
         if (!item || !item.token) return;
         const uLow = String(item.user || '').trim().toLowerCase();
         const cLow = String(item.callsign || '').trim().toLowerCase();
-        if (cLow === tLow || (!cLow && uLow === tLow)) {
+        if (cLow === tLow || uLow === tLow) {
             fcmAdmin.messaging().send({
                 token: item.token,
                 data: {
@@ -2109,13 +2109,14 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
         }
     });
 
-    if (msg.type === 'call_offer' && !deliveredActive) {
+    if (msg.type === 'call_offer') {
         sendIncomingCallFcm(fromUser, targetKey, msg.callId || '');
-    } else if (msg.type === 'call_end') {
+    } else if (msg.type === 'call_end' || msg.type === 'call_answer') {
         sendCancelCallFcm(fromUser, targetKey);
+        sendCancelCallFcm(targetKey, fromUser);
     }
     return;
-}
+
 
 
 
