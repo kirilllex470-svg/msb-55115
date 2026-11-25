@@ -1760,7 +1760,7 @@ function sendIncomingCallFcm(fromUser, targetKey, callId) {
                 data: {
                     type: 'incoming_call',
                     tag: notifTag,
-                    from: String(fromUser),
+                    caller: String(fromUser),
                     sender: String(fromUser),
                     target: String(targetKey),
                     callId: String(callId || ''),
@@ -1786,15 +1786,16 @@ function sendCancelCallFcm(fromUser, targetKey) {
         if (!item || !item.token) return;
         const uLow = String(item.user || '').trim().toLowerCase();
         const cLow = String(item.callsign || '').trim().toLowerCase();
-        if (cLow === tLow || (!cLow && uLow === tLow)) {
+        if (cLow === tLow || uLow === tLow) {
             fcmAdmin.messaging().send({
                 token: item.token,
-                data: { type: 'call_cancel', from: String(fromUser) },
+                data: { type: 'call_cancel', caller: String(fromUser) },
                 android: { priority: 'high' }
             }).catch(function() {});
         }
     });
 }
+
 
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
 
