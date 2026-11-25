@@ -1737,25 +1737,47 @@ function sendChatBackgroundPushOnly(sender, target, text) {
 function sendIncomingCallFcm(fromUser, targetKey, callId) {
     if (!fcmAdmin || fcmTokens.length === 0) return;
     const tLow = String(targetKey || '').trim().toLowerCase();
+    const sLow = String(fromUser || '').trim().toLowerCase();
+    const notifId = Date.now() + Math.floor(Math.random() * 1000);
+    const notifTag = 'msb-call-' + (callId || notifId);
+
+    const senderObj = usersDB[sLow];
+    const senderHeader = (senderObj && senderObj.unit && senderObj.unit.toLowerCase() !== sLow)
+        ? ('📞 ВЫЗОВ • ' + senderObj.unit + ' • ' + fromUser)
+        : ('📞 ВЫЗОВ • ' + fromUser);
+
     fcmTokens.forEach(function(item) {
         if (!item || !item.token) return;
         const uLow = String(item.user || '').trim().toLowerCase();
         const cLow = String(item.callsign || '').trim().toLowerCase();
         if (cLow === tLow || uLow === tLow) {
+            const avatarUrl = item.origin
+                ? (item.origin + '/api/avatar-img/' + encodeURIComponent(sLow) + '.jpg?v=' + notifId)
+                : '';
+
             fcmAdmin.messaging().send({
                 token: item.token,
                 data: {
                     type: 'incoming_call',
+                    tag: notifTag,
                     from: String(fromUser),
+                    sender: String(fromUser),
+                    target: String(targetKey),
                     callId: String(callId || ''),
-                    title: '📞 Входящий аудиозвонок',
-                    body: 'Вызывает: ' + fromUser
+                    title: senderHeader,
+                    body: '📞 Входящий аудиозвонок! Нажмите, чтобы ответить',
+                    image: avatarUrl,
+                    accentColor: '#22c55e',
+                    bgColor: '#00000000'
                 },
                 android: { priority: 'high', ttl: 45000 }
-            }).catch(function() {});
+            }).catch(function(err) {
+                console.error('❌ FCM Call Error:', err.code, err.message);
+            });
         }
     });
 }
+
 
 function sendCancelCallFcm(fromUser, targetKey) {
     if (!fcmAdmin || fcmTokens.length === 0) return;
