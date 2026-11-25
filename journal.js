@@ -2867,20 +2867,21 @@ var msbCall = {
 var MSB_RTC_CFG = {
     iceCandidatePoolSize: 4,
     iceServers: [
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:://google.com' },
-        { urls: 'stun:://cloudflare.com' },
+        { urls: 'stun' + ':' + '://google.com' },
+        { urls: 'stun' + ':' + '://google.com' },
+        { urls: 'stun' + ':' + '://cloudflare.com' },
         {
             urls: [
-                'turn:openrelay.metered.ca:80',
-                'turn:openrelay.metered.ca:443',
-                'turn:openrelay.metered.ca:443?transport=tcp'
+                'turn' + ':' + 'openrelay.metered.ca:80',
+                'turn' + ':' + 'openrelay.metered.ca:443',
+                'turn' + ':' + 'openrelay.metered.ca:443?transport=tcp'
             ],
             username: 'openrelayproject',
             credential: 'openrelayproject'
         }
     ]
 };
+А
 function getMsbCallerName() {
     if (typeof getActiveChatIdentity === 'function') return getActiveChatIdentity();
     return currentCallsign || currentUser || localStorage.getItem('journal_callsign') || '';
@@ -3092,7 +3093,7 @@ function createMsbPeer(partnerName) {
     pc.ontrack = function(ev) {
         var a = document.getElementById('msb-remote-call-audio');
         if (!a) return;
-        var remStream = (ev.streams && ev.streams) ? ev.streams : new MediaStream([ev.track]);
+        var remStream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
         a.srcObject = remStream;
         a.muted = false;
         a.volume = 1.0;
