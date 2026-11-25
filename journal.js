@@ -3083,7 +3083,6 @@ function createMsbPeer(partnerName) {
     try {
         pc = new RTCPeerConnection(MSB_RTC_CFG);
     } catch (cfgErr) {
-        console.warn('ICE config fallback:', cfgErr);
         pc = new RTCPeerConnection({ iceServers: [] });
     }
     msbCall.pc = pc;
@@ -3129,12 +3128,13 @@ function createMsbPeer(partnerName) {
         var st = msbCall.pc.connectionState;
         if (st === 'connected') {
             onMsbCallConnected();
-        } else if (st === 'failed' && msbCall.state !== 'idle') {
+        } else if ((st === 'failed' || st === 'closed') && msbCall.state !== 'idle') {
             window.endMsbAudioCall(true, 'network_fail');
         }
     };
     return pc;
 }
+
 
         a.srcObject = remStream;
         a.muted = false;
