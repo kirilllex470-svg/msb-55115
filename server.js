@@ -1425,16 +1425,46 @@ const server = http.createServer(function(req, res) {
     }
     // ⬆️ КОНЕЦ ВСТАВКИ ⬆️
 
-    if (req.method === 'POST' && urlPath === '/api/admin/clear-all-chats') {
-        roomsDB = {};
-        db.lastRead = {};
-        writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
-        writeJSON(READS_FILE, db.lastRead, true);
-        broadcastWS({ type: 'all_chats_cleared' });
-        return sendJsonCompressed(req, res, 200, { ok: true }, 'no-store');
-    }
+  if (req.method === 'POST' && urlPath === '/api/admin/clear-all-chats') {
+      roomsDB = {};
+      db.lastRead = {};
+      writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+      writeJSON(READS_FILE, db.lastRead, true);
+      broadcastWS({ type: 'all_chats_cleared' });
+      return sendJsonCompressed(req, res, 200, { ok: true }, 'no-store');
+  }
 
-    fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
+  if (req.method === 'POST' && urlPath === '/api/call/end') {
+      return readBodyJSON(req, function(err, data) {
+          if (!err && data && data.to) {
+              let targetKey = String(data.to).trim().toLowerCase();
+              if (targetKey === 'админ') targetKey = 'муравей';
+              let fromUser = String(data.from || '').trim();
+              if (fromUser.toLowerCase() === 'админ') fromUser = 'муравей';
+              const fromKey = fromUser.toLowerCase();
+
+              delete pendingCalls[targetKey];
+              if (fromKey) delete pendingCalls[fromKey];
+
+              const rawPacket = JSON.stringify({
+                  type: 'call_end',
+                  from: fromUser || targetKey,
+                  to: targetKey,
+                  reason: data.reason || 'declined'
+              });
+              wss.clients.forEach(function(client) {
+                  if (client.readyState === WebSocket.OPEN && client.userIdentity === targetKey) {
+                      try { client.send(rawPacket); } catch (e) {}
+                  }
+              });
+              sendCancelCallFcm(fromUser, targetKey);
+          }
+          return sendJsonCompressed(req, res, 200, { ok: true });
+      });
+  }
+
+  fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
+
         if (err) {
 
             res.writeHead(500);

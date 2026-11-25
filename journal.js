@@ -3315,9 +3315,17 @@ window.endMsbAudioCall = function(notifyRemote, reason) {
     stopMsbRing();
     if (msbCall.timer) { clearInterval(msbCall.timer); msbCall.timer = null; }
     if (msbCall.waitTimer) { clearTimeout(msbCall.waitTimer); msbCall.waitTimer = null; }
-    if (notifyRemote && prevPartner && me) {
-        sendMsbCallWS({ type: 'call_end', from: me, to: prevPartner, reason: reason || 'hangup' });
-    }
+  if (notifyRemote && prevPartner && me) {
+      var endObj = { type: 'call_end', from: me, to: prevPartner, reason: reason || 'hangup' };
+      sendMsbCallWS(endObj);
+      fetch('/api/call/end', {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(endObj)
+      }).catch(function() {});
+  }
+
     if (msbCall.stream) {
         msbCall.stream.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
         msbCall.stream = null;
@@ -3393,8 +3401,10 @@ window.handleMsbAudioCallWS = async function(msg) {
         return;
     }
 
-    if (msg.type === 'call_end') {
-        if (msbCall.state !== 'idle' && (!msbCall.partner || msbCall.partner.toLowerCase() === String(msg.from).toLowerCase())) {
+  if (msg.type === 'call_end') {
+      var fromLow = String(msg.from || '').trim().toLowerCase();
+      var partLow = String(msbCall.partner || '').trim().toLowerCase();
+      if (msbCall.state !== 'idle' && (!partLow || !fromLow || partLow === fromLow)) {
             var stEl = document.getElementById('msb-call-status');
             if (stEl) {
                 stEl.textContent = (msg.reason === 'busy') ? '⛔ Абонент занят' :
