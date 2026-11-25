@@ -2876,9 +2876,14 @@ var MSB_RTC_CFG = {
 
 
 function getMsbCallerName() {
-    if (typeof getActiveChatIdentity === 'function') return getActiveChatIdentity();
-    return currentCallsign || currentUser || localStorage.getItem('journal_callsign') || '';
+    var name = '';
+    if (typeof getActiveChatIdentity === 'function') name = getActiveChatIdentity();
+    else name = currentCallsign || currentUser || localStorage.getItem('journal_callsign') || '';
+    name = String(name || '').trim();
+    if (name.toLowerCase() === 'админ') return 'муравей';
+    return name;
 }
+
 
 function sendMsbCallWS(obj) {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -3159,8 +3164,11 @@ function createMsbPeer(partnerName) {
     pc.onconnectionstatechange = function() {
         if (!msbCall.pc) return;
         var st = msbCall.pc.connectionState;
-        if (st === 'connected') onMsbCallConnected();
-        else if ((st === 'failed' || st === 'closed') && msbCall.state !== 'idle') window.endMsbAudioCall(false);
+        if (st === 'connected') {
+            onMsbCallConnected();
+        } else if ((st === 'failed' || st === 'closed') && msbCall.state !== 'idle') {
+            window.endMsbAudioCall(true, 'network_fail');
+        }
     };
     return pc;
 }
