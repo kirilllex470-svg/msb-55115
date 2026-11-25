@@ -3418,27 +3418,64 @@ window.handleMsbAudioCallWS = async function(msg) {
 
 window.onNativeCallIntent = function(callerName, action) {
     if (!callerName) return;
+    var me = getMsbCallerName();
     if (typeof openMessengerWindow === 'function') {
         openMessengerWindow(callerName);
     }
     if (action === 'decline') {
-        sendMsbCallWS({ type: 'call_end', from: getMsbCallerName(), to: callerName, reason: 'declined' });
-        window.endMsbAudioCall(false);
+        window.endMsbAudioCall(true, 'declined');
         return;
     }
+
+    connectWS(true);
+
     if (msbCall.state === 'idle') {
         msbCall.partner = callerName;
         msbCall.state = 'incoming';
-        showMsbCallModal(callerName, '📲 Входящий аудиозвонок...', true);
+        showMsbCallModal(callerName, action === 'accept' ? '🔄 Соединение...' : '📲 Входящий аудиозвонок...', action !== 'accept');
     }
-    if (action === 'accept') {
-        var waitOfferAndAccept = setInterval(function() {
-            if (msbCall.offer) {
-                clearInterval(waitOfferAndAccept);
+
+    var pullAndConnect = function() {
+        if (msbCall.offer) {
+            if (action === 'accept' && msbCall.state === 'incoming') {
                 window.acceptMsbAudioCall();
             }
-        }, 200);
-        setTimeout(function() { clearInterval(waitOfferAndAccept); }, 8000);
-    }
+            return;
+        }
+        if (!me) return;
+        fetch('/api/call/pending?user=' + encodeURIComponent(me) + '&t=' + Date.now())
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d && d.ok && d.offerMsg && d.offerMsg.sdp) {
+                    msbCall.partner = d.offerMsg.from || callerName;
+                    msbCall.offer = d.offerMsg.sdp;
+                    msbCall.callId = d.offerMsg.callId || '';
+                    if (Array.isArray(d.iceList)) {
+                        d.iceList.forEach(function(icMsg) {
+                            if (icMsg && icMsg.candidate) msbCall.iceQueue.push(icMsg.candidate);
+                        });
+                    }
+                    if (action === 'accept') {
+                        window.acceptMsbAudioCall();
+                    }
+                }
+            })
+            .catch(function() {});
+    };
+
+    pullAndConnect();
+    var fastPoll = setInterval(function() {
+        if (msbCall.state === 'connected' || msbCall.state === 'idle') {
+            clearInterval(fastPoll);
+            return;
+        }
+        if (msbCall.offer && action === 'accept') {
+            clearInterval(fastPoll);
+            window.acceptMsbAudioCall();
+            return;
+        }
+        pullAndConnect();
+    }, 300);
+    setTimeout(function() { clearInterval(fastPoll); }, 10000);
 };
 

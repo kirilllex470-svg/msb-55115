@@ -1457,13 +1457,29 @@ const server = http.createServer(function(req, res) {
                       try { client.send(rawPacket); } catch (e) {}
                   }
               });
-              sendCancelCallFcm(fromUser, targetKey);
-          }
-          return sendJsonCompressed(req, res, 200, { ok: true });
-      });
-  }
+                sendCancelCallFcm(fromUser, targetKey);
+            }
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
 
-  fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
+    if (req.method === 'GET' && urlPath === '/api/call/pending') {
+        const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        let uKey = String(myUrl.searchParams.get('user') || '').trim().toLowerCase();
+        if (uKey === 'админ') uKey = 'муравей';
+        const pc = uKey ? pendingCalls[uKey] : null;
+        if (pc && (Date.now() - pc.ts < 45000)) {
+            return sendJsonCompressed(req, res, 200, {
+                ok: true,
+                offerMsg: pc.offerMsg,
+                iceList: pc.iceList || []
+            }, 'no-store');
+        }
+        return sendJsonCompressed(req, res, 200, { ok: false }, 'no-store');
+    }
+
+    fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
+
 
         if (err) {
 
@@ -2139,9 +2155,12 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
     if (msg.type === 'call_offer') {
         pendingCalls[targetKey] = {
             offerMsg: msg,
+            iceList: [],
             fromKey: fromKey,
             ts: Date.now()
         };
+    } else if (msg.type === 'call_ice' && pendingCalls[targetKey]) {
+        pendingCalls[targetKey].iceList.push(msg);
     } else if (
         msg.type === 'call_answer' ||
         msg.type === 'call_end'
@@ -2149,6 +2168,7 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
         delete pendingCalls[targetKey];
         delete pendingCalls[fromKey];
     }
+
 
     let deliveredActive = false;
     const rawPacket = JSON.stringify(msg);
