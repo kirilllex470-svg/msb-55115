@@ -3008,6 +3008,9 @@ function stopMsbRing() {
         clearInterval(msbCall.ringTimer);
         msbCall.ringTimer = null;
     }
+    if (window.MsbNative && typeof window.MsbNative.stopNativeRingtone === 'function') {
+        try { window.MsbNative.stopNativeRingtone(); } catch (e) {}
+    }
 }
 
 function showMsbCallModal(peerName, statusTxt, incomingWait) {
@@ -3397,8 +3400,35 @@ window.handleMsbAudioCallWS = async function(msg) {
                 stEl.textContent = (msg.reason === 'busy') ? '⛔ Абонент занят' :
                                    (msg.reason === 'declined') ? '❌ Вызов отклонён' : '☎️ Звонок завершён';
             }
-            stopMsbRing();
+             stopMsbRing();
             setTimeout(function() { window.endMsbAudioCall(false); }, 900);
         }
     }
 };
+
+window.onNativeCallIntent = function(callerName, action) {
+    if (!callerName) return;
+    if (typeof openMessengerWindow === 'function') {
+        openMessengerWindow(callerName);
+    }
+    if (action === 'decline') {
+        sendMsbCallWS({ type: 'call_end', from: getMsbCallerName(), to: callerName, reason: 'declined' });
+        window.endMsbAudioCall(false);
+        return;
+    }
+    if (msbCall.state === 'idle') {
+        msbCall.partner = callerName;
+        msbCall.state = 'incoming';
+        showMsbCallModal(callerName, '📲 Входящий аудиозвонок...', true);
+    }
+    if (action === 'accept') {
+        var waitOfferAndAccept = setInterval(function() {
+            if (msbCall.offer) {
+                clearInterval(waitOfferAndAccept);
+                window.acceptMsbAudioCall();
+            }
+        }, 200);
+        setTimeout(function() { clearInterval(waitOfferAndAccept); }, 8000);
+    }
+};
+

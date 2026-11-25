@@ -343,7 +343,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v31';",
+    "const SHELL_CACHE = 'msb55115-shell-v32';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1734,7 +1734,48 @@ function sendChatBackgroundPushOnly(sender, target, text) {
 }
 
 
+function sendIncomingCallFcm(fromUser, targetKey, callId) {
+    if (!fcmAdmin || fcmTokens.length === 0) return;
+    const tLow = String(targetKey || '').trim().toLowerCase();
+    fcmTokens.forEach(function(item) {
+        if (!item || !item.token) return;
+        const uLow = String(item.user || '').trim().toLowerCase();
+        const cLow = String(item.callsign || '').trim().toLowerCase();
+        if (cLow === tLow || (!cLow && uLow === tLow)) {
+            fcmAdmin.messaging().send({
+                token: item.token,
+                data: {
+                    type: 'incoming_call',
+                    from: String(fromUser),
+                    callId: String(callId || ''),
+                    title: '📞 Входящий аудиозвонок',
+                    body: 'Вызывает: ' + fromUser
+                },
+                android: { priority: 'high', ttl: 45000 }
+            }).catch(function() {});
+        }
+    });
+}
+
+function sendCancelCallFcm(fromUser, targetKey) {
+    if (!fcmAdmin || fcmTokens.length === 0) return;
+    const tLow = String(targetKey || '').trim().toLowerCase();
+    fcmTokens.forEach(function(item) {
+        if (!item || !item.token) return;
+        const uLow = String(item.user || '').trim().toLowerCase();
+        const cLow = String(item.callsign || '').trim().toLowerCase();
+        if (cLow === tLow || (!cLow && uLow === tLow)) {
+            fcmAdmin.messaging().send({
+                token: item.token,
+                data: { type: 'call_cancel', from: String(fromUser) },
+                android: { priority: 'high' }
+            }).catch(function() {});
+        }
+    });
+}
+
 const wss = new WebSocket.Server({ server: server, maxPayload: 20 * 1024 * 1024 });
+
 
 function broadcastWS(obj) {
     const str = JSON.stringify(obj);
@@ -2069,12 +2110,13 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
     });
 
     if (msg.type === 'call_offer' && !deliveredActive) {
-        const pushTxt = '📞 Входящий аудиозвонок от ' +
-            fromUser + '! Откройте МСБ-55115';
-        sendChatBackgroundPushOnly(fromUser, targetKey, pushTxt);
+        sendIncomingCallFcm(fromUser, targetKey, msg.callId || '');
+    } else if (msg.type === 'call_end') {
+        sendCancelCallFcm(fromUser, targetKey);
     }
     return;
 }
+
 
 
 
