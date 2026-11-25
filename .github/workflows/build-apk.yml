@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
-  
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
@@ -155,7 +155,7 @@ jobs:
               "WAKE_LOCK", "RECEIVE_BOOT_COMPLETED", "FOREGROUND_SERVICE",
               "FOREGROUND_SERVICE_DATA_SYNC",
               "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
-              "REQUEST_INSTALL_PACKAGES"
+              "REQUEST_INSTALL_PACKAGES", "USE_FULL_SCREEN_INTENT"
           ]
           tag = "<uses-permission android:name=\"android.permission.{}\" />"
           perms = "\n    ".join([tag.format(n) for n in names])
@@ -170,9 +170,9 @@ jobs:
               s = s.replace("<application", ct, 1)
 
           if "windowSoftInputMode" in s:
-              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:windowSoftInputMode=\"adjustResize\"")
+              s = s.replace("android:windowSoftInputMode=\"adjustPan\"", "android:showWhenLocked=\"true\" android:turnScreenOn=\"true\" android:windowSoftInputMode=\"adjustResize\"")
           else:
-              s = s.replace("<activity", "<activity android:windowSoftInputMode=\"adjustResize\"", 1)
+              s = s.replace("<activity", "<activity android:showWhenLocked=\"true\" android:turnScreenOn=\"true\" android:windowSoftInputMode=\"adjustResize\"", 1)
           svc = "\n".join([
               "        <meta-data",
               "            android:name=\"com.google.firebase.messaging.default_notification_channel_id\"",
@@ -618,6 +618,8 @@ jobs:
           echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
           cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
 
+          import android.app.Notification;
+          import android.app.NotificationChannel;
           import android.app.NotificationManager;
           import android.app.PendingIntent;
           import android.content.Context;
@@ -625,7 +627,12 @@ jobs:
           import android.graphics.Bitmap;
           import android.graphics.BitmapFactory;
           import android.graphics.Color;
+          import android.media.AudioAttributes;
+          import android.media.Ringtone;
+          import android.media.RingtoneManager;
+          import android.net.Uri;
           import android.os.Build;
+          import androidx.core.app.NotificationCompat;
           import com.google.firebase.messaging.FirebaseMessagingService;
           import com.google.firebase.messaging.RemoteMessage;
           import java.io.InputStream;
@@ -634,10 +641,111 @@ jobs:
           import java.util.Map;
 
           public class MsbFcmService extends FirebaseMessagingService {
+              public static Ringtone activeCallRingtone = null;
+              public static final int CALL_NOTIF_ID = 55119;
+              public static final String CALL_CH = "msb_calls_ring_v1";
+
+              public static void stopCallRingtone(Context ctx) {
+                  try {
+                      if (activeCallRingtone != null && activeCallRingtone.isPlaying()) {
+                          activeCallRingtone.stop();
+                      }
+                      activeCallRingtone = null;
+                  } catch (Exception ignored) {}
+                  try {
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm != null) nm.cancel(CALL_NOTIF_ID);
+                  } catch (Exception ignored) {}
+              }
+
+              private void showIncomingCallInShade(String callerName) {
+                  NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm == null) return;
+
+                  Uri ringUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+                  if (ringUri == null) ringUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationChannel ch = new NotificationChannel(
+                          CALL_CH, "Входящие звонки МСБ-55115", NotificationManager.IMPORTANCE_HIGH
+                      );
+                      ch.enableVibration(true);
+                      ch.setVibrationPattern(new long[]{0, 800, 400, 800, 400});
+                      AudioAttributes aa = new AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                          .build();
+                      ch.setSound(ringUri, aa);
+                      ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                      nm.createNotificationChannel(ch);
+                  }
+
+                  stopCallRingtone(this);
+                  try {
+                      activeCallRingtone = RingtoneManager.getRingtone(getApplicationContext(), ringUri);
+                      if (activeCallRingtone != null) {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) activeCallRingtone.setLooping(true);
+                          activeCallRingtone.play();
+                      }
+                  } catch (Exception ignored) {}
+
+                  int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+
+                  Intent openIntent = new Intent(this, MainActivity.class);
+                  openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  openIntent.putExtra("incoming_call_from", callerName);
+                  openIntent.putExtra("incoming_call_action", "open");
+                  PendingIntent fullScreenPi = PendingIntent.getActivity(this, 10, openIntent, flags);
+
+                  Intent acceptIntent = new Intent(this, MainActivity.class);
+                  acceptIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  acceptIntent.putExtra("incoming_call_from", callerName);
+                  acceptIntent.putExtra("incoming_call_action", "accept");
+                  PendingIntent acceptPi = PendingIntent.getActivity(this, 11, acceptIntent, flags);
+
+                  Intent declineIntent = new Intent(this, MainActivity.class);
+                  declineIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  declineIntent.putExtra("incoming_call_from", callerName);
+                  declineIntent.putExtra("incoming_call_action", "decline");
+                  PendingIntent declinePi = PendingIntent.getActivity(this, 12, declineIntent, flags);
+
+                  int smallIcon = getResources().getIdentifier("ic_msb_logo", "drawable", getPackageName());
+                  if (smallIcon == 0) smallIcon = android.R.drawable.sym_call_incoming;
+
+                  Notification notif = new NotificationCompat.Builder(this, CALL_CH)
+                      .setSmallIcon(smallIcon)
+                      .setContentTitle("📞 Входящий вызов МСБ-55115")
+                      .setContentText("Вызывает: " + callerName)
+                      .setPriority(NotificationCompat.PRIORITY_MAX)
+                      .setCategory(NotificationCompat.CATEGORY_CALL)
+                      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                      .setOngoing(true)
+                      .setAutoCancel(false)
+                      .setFullScreenIntent(fullScreenPi, true)
+                      .setContentIntent(fullScreenPi)
+                      .addAction(android.R.drawable.ic_menu_call, "📞 Ответить", acceptPi)
+                      .addAction(android.R.drawable.ic_menu_close_clear_cancel, "✖ Отклонить", declinePi)
+                      .build();
+
+                  nm.notify(CALL_NOTIF_ID, notif);
+              }
+
               @Override
               public void onMessageReceived(RemoteMessage msg) {
                   Map<String, String> data = msg.getData();
+                  String msgType = data.get("type");
+                  if ("incoming_call".equals(msgType)) {
+                      String from = data.get("from");
+                      if (from == null || from.isEmpty()) from = "Абонент МСБ";
+                      showIncomingCallInShade(from);
+                      return;
+                  }
+                  if ("call_cancel".equals(msgType)) {
+                      stopCallRingtone(this);
+                      return;
+                  }
                   String title = data.get("title");
+
                   String body = data.get("body");
                   if (title == null && msg.getNotification() != null) title = msg.getNotification().getTitle();
                   if (body == null && msg.getNotification() != null) body = msg.getNotification().getBody();
@@ -867,8 +975,30 @@ jobs:
                           String fn = URLUtil.guessFileName(url, contentDisposition, mimeType);
                           enqueueSystemDownload(url, fn);
                       });
+                      wv.postDelayed(() -> handleCallIntent(getIntent()), 900);
                   }
               }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  handleCallIntent(intent);
+              }
+
+              private void handleCallIntent(Intent intent) {
+                  if (intent == null) return;
+                  final String caller = intent.getStringExtra("incoming_call_from");
+                  final String action = intent.getStringExtra("incoming_call_action");
+                  if (caller != null && !caller.isEmpty()) {
+                      MsbFcmService.stopCallRingtone(this);
+                      intent.removeExtra("incoming_call_from");
+                      String safeCaller = caller.replace("'", "\\'");
+                      String safeAct = (action != null ? action : "open");
+                      evalJs("if(window.onNativeCallIntent)window.onNativeCallIntent('" + safeCaller + "','" + safeAct + "');");
+                  }
+              }
+
 
               private void applyNativeBarTheme() {
               }
@@ -956,6 +1086,11 @@ jobs:
                               }
                           } catch (Exception ignored) {}
                       });
+                  }
+
+                  @JavascriptInterface
+                  public void stopNativeRingtone() {
+                      MsbFcmService.stopCallRingtone(MainActivity.this);
                   }
 
                   @JavascriptInterface
