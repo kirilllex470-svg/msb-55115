@@ -2715,10 +2715,11 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
     }
     lastMessagesCount = Math.max(lastMessagesCount, data.length);
     renderPendingBubbles();
-
-
+    if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) markChatAsRead(currentRoomId);
+}
 
 function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
+
     if (msg.clientMsgId) {
         var mDivReal = getMessagesDiv();
         if (mDivReal) {

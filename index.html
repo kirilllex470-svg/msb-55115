@@ -380,15 +380,20 @@
     var cachedJrn = localStorage.getItem('msb_ota_journal');
     var cachedMsg = localStorage.getItem('msb_ota_messenger');
 
-    function injectScriptCode(codeStr) {
-        var s = document.createElement('script');
-        s.textContent = codeStr;
-        document.body.appendChild(s);
+    function injectScriptCode(codeStr, fallbackSrc) {
+        try {
+            var s = document.createElement('script');
+            s.textContent = codeStr;
+            document.body.appendChild(s);
+        } catch (e) {
+            localStorage.removeItem('msb_ota_version');
+            document.write('<script src="' + fallbackSrc + '"><\/script>');
+        }
     }
 
     if (cachedJrn && cachedMsg) {
-        injectScriptCode(cachedJrn);
-        injectScriptCode(cachedMsg);
+        injectScriptCode(cachedJrn, 'journal.js');
+        injectScriptCode(cachedMsg, 'messenger.js');
     } else {
         document.write('<script src="journal.js"><\/script>');
         document.write('<script src="messenger.js"><\/script>');
