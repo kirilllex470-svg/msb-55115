@@ -992,14 +992,52 @@ jobs:
                       return false;
                   }
 
+                  private void applySpeakerRoute(android.media.AudioManager am, boolean on) {
+                      if (am == null) return;
+                      am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                          if (on) {
+                              for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
+                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                                      am.setCommunicationDevice(dev);
+                                      break;
+                                  }
+                              }
+                          } else {
+                              am.clearCommunicationDevice();
+                          }
+                      }
+                      am.setSpeakerphoneOn(on);
+                  }
+
                   @JavascriptInterface
                   public void setSpeakerphone(final boolean on) {
                       runOnUiThread(() -> {
                           try {
                               android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
                               if (am != null) {
-                                  am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
-                                  am.setSpeakerphoneOn(on);
+                                  am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+                                  applySpeakerRoute(am, on);
+                                  getWindow().getDecorView().postDelayed(() -> {
+                                      try { applySpeakerRoute(am, on); } catch (Exception ignored) {}
+                                  }, 300);
+                              }
+                          } catch (Exception ignored) {}
+                      });
+                  }
+
+                  @JavascriptInterface
+                  public void resetAudioMode() {
+                      runOnUiThread(() -> {
+                          try {
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am != null) {
+                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                      am.clearCommunicationDevice();
+                                  }
+                                  am.setSpeakerphoneOn(false);
+                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
+                                  am.abandonAudioFocus(null);
                               }
                           } catch (Exception ignored) {}
                       });
