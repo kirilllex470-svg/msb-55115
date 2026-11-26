@@ -2439,11 +2439,12 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     var container = rowElement.querySelector('.swipe-container');
     var leftIndicator = rowElement.querySelector('.left-indicator');
     var rightIndicator = rowElement.querySelector('.right-indicator');
-    var startX = 0, startY = 0, currentX = 0, isSwiping = false, isHorizontal = false;
+    var startX = 0, startY = 0, currentX = 0, isSwiping = false, isHorizontal = false, swipeLockedVertical = false;
     var displayStr = rawText;
     if (msgType === 'audio') displayStr = "🎙️ Голосовое сообщение";
     if (msgType === 'video') displayStr = "🎥 Видео-кружок";
     if (msgType === 'gif') displayStr = "🎬 GIF-анимация";
+    if (msgType === 'contact') displayStr = "👤 Контакт";
     if (msgType === 'file') {
         try { displayStr = '📎 Файл: ' + JSON.parse(rawText).name; } catch (e) {}
     }
@@ -2451,35 +2452,47 @@ function setupSwipe(rowElement, msgId, rawText, msgType, sender) {
     container.addEventListener('touchstart', function(e) {
         var touch = e.touches.item(0);
         startX = touch.clientX; startY = touch.clientY;
-        isSwiping = true; isHorizontal = false;
+        isSwiping = true; isHorizontal = false; swipeLockedVertical = false;
         container.style.transition = 'none';
     }, { passive: true });
 
     container.addEventListener('touchmove', function(e) {
-        if (!isSwiping) return;
+        if (!isSwiping || swipeLockedVertical) return;
         var touch = e.touches.item(0);
         var diffX = touch.clientX - startX;
         var diffY = touch.clientY - startY;
-        if (!isHorizontal && Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 8) isHorizontal = true;
-        if (isHorizontal) {
-            if (e.cancelable) e.preventDefault();
-            currentX = Math.max(-80, Math.min(80, diffX * 0.6));
-            container.style.transform = 'translateX(' + currentX + 'px)';
-            leftIndicator.style.opacity = (currentX > 35) ? '1' : '0';
-            rightIndicator.style.opacity = (currentX < -35) ? '1' : '0';
+        if (!isHorizontal) {
+            if (Math.abs(diffY) > 10 && Math.abs(diffY) >= Math.abs(diffX)) {
+                swipeLockedVertical = true;
+                return;
+            }
+            if (Math.abs(diffX) > 14 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+                isHorizontal = true;
+            } else {
+                return;
+            }
         }
-    }, { passive: false });
+        currentX = Math.max(-80, Math.min(80, diffX * 0.6));
+        container.style.transform = 'translate3d(' + currentX + 'px, 0, 0)';
+        leftIndicator.style.opacity = (currentX > 35) ? '1' : '0';
+        rightIndicator.style.opacity = (currentX < -35) ? '1' : '0';
+    }, { passive: true });
 
     container.addEventListener('touchend', function() {
         isSwiping = false;
-        container.style.transition = 'transform 0.2s cubic-bezier(0.1, 0.8, 0.3, 1)';
-        container.style.transform = 'translateX(0px)';
-        leftIndicator.style.opacity = '0'; rightIndicator.style.opacity = '0';
-        if (currentX > 50) handleQuoteTrigger(msgId, displayStr, sender);
-        else if (currentX < -50) handleForwardTrigger(msgId, rawText, msgType, sender);
-        currentX = 0;
-    });
+        swipeLockedVertical = false;
+        if (currentX !== 0) {
+            container.style.transition = 'transform 0.2s cubic-bezier(0.1, 0.8, 0.3, 1)';
+            container.style.transform = 'translate3d(0px, 0, 0)';
+            leftIndicator.style.opacity = '0';
+            rightIndicator.style.opacity = '0';
+            if (currentX > 50) handleQuoteTrigger(msgId, displayStr, sender);
+            else if (currentX < -50) handleForwardTrigger(msgId, rawText, msgType, sender);
+            currentX = 0;
+        }
+    }, { passive: true });
 }
+
 
 function handleQuoteTrigger(id, text, sender) {
     quotedMessageId = id; quotedMessageText = text; quotedMessageSender = sender;
@@ -3899,9 +3912,32 @@ function openSharedContactChat(targetName) {
                 body: JSON.stringify({ from: chatUser, to: targetName })
             }).catch(function() {});
         }
-        selectChat({ name: targetName, isGroup: false, avatar: '', online: true });
+             selectChat({ name: targetName, isGroup: false, avatar: '', online: true });
     }
 }
 
 window.openShareContactModal = openShareContactModal;
 window.openSharedContactChat = openSharedContactChat;
+
+(function initSmoothChatScrollBoost() {
+    var scrollTimer = null;
+    function bindScroll() {
+        var mDiv = document.getElementById('messages');
+        if (!mDiv || mDiv.getAttribute('data-smooth-bound') === '1') return;
+        mDiv.setAttribute('data-smooth-bound', '1');
+        mDiv.addEventListener('scroll', function() {
+            if (!mDiv.classList.contains('is-scrolling')) {
+                mDiv.classList.add('is-scrolling');
+            }
+            if (scrollTimer) clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(function() {
+                mDiv.classList.remove('is-scrolling');
+            }, 180);
+        }, { passive: true });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindScroll);
+    } else {
+        bindScroll();
+    }
+})();

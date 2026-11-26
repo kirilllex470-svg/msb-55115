@@ -2885,7 +2885,8 @@ body.theme-cosmic #messenger-modal .friend-item .friend-call-mini:first-of-type,
     align-items: center;
     justify-content: center;
 }
-/* === УСКОРЕНИЕ GPU-РЕНДЕРА ДЛЯ ANDROID APK (БЕЗ ПОТЕРИ АНИМАЦИЙ) === */
+
+/* === УСКОРЕНИЕ GPU-РЕНДЕРА И ПЛАВНЫЙ СКРОЛЛ ЧАТА В ANDROID APK === */
 @keyframes msbGreenPhonePulse {
     0%, 100% { transform: translate3d(0,0,0) scale(1) rotate(0deg); }
     20%      { transform: translate3d(0,0,0) scale(1.08) rotate(-8deg); }
@@ -2901,47 +2902,54 @@ body.theme-cosmic #messenger-modal .friend-item .friend-call-mini:first-of-type,
     will-change: transform;
 }
 
+/* 1. Убираем тяжелые отдельные GPU-текстуры с каждого пузыря и смайла */
+.bubble {
+    transform: none !important;
+    will-change: auto !important;
+}
+.msb-live-emoji {
+    will-change: auto !important;
+}
+
+/* 2. Прямой аппаратный вертикальный скролл без блокировки пальца */
 #messages, .friends-list {
     contain: none !important;
     will-change: auto !important;
     -webkit-overflow-scrolling: touch;
 }
 
+#messenger-modal #messages {
+    overflow-y: auto !important;
+    touch-action: pan-y !important;
+    overscroll-behavior-y: contain;
+    background-attachment: scroll !important;
+}
+
+.swipe-container {
+    touch-action: pan-y !important;
+    will-change: auto !important;
+}
+
 .msg-ticker-wrap {
     contain: layout style !important;
 }
-/* === ФИНАЛЬНЫЙ БУСТ 60+ FPS ДЛЯ ANDROID WEBVIEW === */
 
-/* Не тратим видеопамять на сообщения и карточки друзей за пределами экрана */
-#messages .message-row {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 62px;
+/* 3. Быстрый фон чата по темам (без мелкой 28px сетки, тормозящей скролл) */
+body.theme-military #messages {
+    background: radial-gradient(circle at 50% 40%, #0d2818 0%, #05110a 100%) !important;
+}
+body.theme-rocket #messages {
+    background: radial-gradient(circle at 50% 40%, #2b110b 0%, #110604 100%) !important;
+}
+body.theme-cosmic #messages {
+    background: radial-gradient(circle at 50% 40%, #181038 0%, #060412 100%) !important;
 }
 
-#messenger-modal .friend-item {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 64px;
-    transition: none !important;
-}
-
-/* Отключаем просчёт 300 смайликов, пока панель закрыта */
-.tg-emoji-drawer[style*="none"] .tg-emoji-item.live-preview {
-    animation: none !important;
-}
-.tg-emoji-grid {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 180px;
-}
-
-/* Пауза всех бесконечных анимаций списка друзей, когда на телефоне открыт сам чат (.sidebar.hidden) */
+/* 4. Умная пауза фоновых анимаций во время скролла и в скрытых панелях */
+.tg-emoji-drawer[style*="none"] .tg-emoji-item.live-preview,
+#messages.is-scrolling .msb-live-emoji,
 .sidebar.hidden .friend-avatar-online,
 .sidebar.hidden .friend-call-mini,
 .sidebar.hidden .friend-typing-green {
     animation-play-state: paused !important;
 }
-
-/* Облегчаем градиентный фон чата от тяжёлой перерисовки сетки при скролле */
-#messenger-modal #messages {
-    background-attachment: local !important;
-}
-
