@@ -550,9 +550,8 @@ jobs:
                   PendingIntent openPi = PendingIntent.getActivity(this, 22, openAppIntent, pFlags);
 
                   int icon = getResources().getIdentifier("ic_msb_logo", "drawable", getPackageName());
-                  if (icon == 0) icon = android.R.drawable.sym_call_ongoing;
-
-                  return new NotificationCompat.Builder(this, ACTIVE_CALL_CH)
+                  if (icon == 0) icon = android.R.drawable.ic_menu_call;
+                   return new NotificationCompat.Builder(this, ACTIVE_CALL_CH)
                       .setSmallIcon(icon)
                       .setContentTitle("🟢 Разговор МСБ-55115")
                       .setContentText("На связи: " + caller)
@@ -836,6 +835,188 @@ jobs:
 
               @Override public void onDestroy() { super.onDestroy(); }
               @Override public IBinder onBind(Intent intent) { return null; }
+          }
+          EOF
+          echo "$PKG_LINE" > "$JAVA_DIR/MsbFcmService.java"
+          cat << 'EOF' >> "$JAVA_DIR/MsbFcmService.java"
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.graphics.Bitmap;
+          import android.graphics.BitmapFactory;
+          import android.graphics.Color;
+          import android.media.AudioAttributes;
+          import android.media.Ringtone;
+          import android.media.RingtoneManager;
+          import android.net.Uri;
+          import android.os.Build;
+          import androidx.core.app.NotificationCompat;
+          import com.google.firebase.messaging.FirebaseMessagingService;
+          import com.google.firebase.messaging.RemoteMessage;
+          import java.io.InputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.util.Map;
+
+          public class MsbFcmService extends FirebaseMessagingService {
+              public static Ringtone activeCallRingtone = null;
+              public static final int CALL_NOTIF_ID = 55119;
+              public static final String CALL_CH = "msb_calls_ring_v3";
+
+              public static void stopCallRingtone(Context ctx) {
+                  try {
+                      if (activeCallRingtone != null && activeCallRingtone.isPlaying()) {
+                          activeCallRingtone.stop();
+                      }
+                      activeCallRingtone = null;
+                  } catch (Exception ignored) {}
+                  try {
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm != null) nm.cancel(CALL_NOTIF_ID);
+                  } catch (Exception ignored) {}
+              }
+
+              private void showIncomingCallInShade(String callerName) {
+                  NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm == null) return;
+
+                  Uri ringUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+                  if (ringUri == null) ringUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationChannel ch = new NotificationChannel(
+                          CALL_CH, "Входящие звонки МСБ-55115", NotificationManager.IMPORTANCE_HIGH
+                      );
+                      ch.enableVibration(true);
+                      ch.setVibrationPattern(new long[]{0, 800, 400, 800, 400});
+                      AudioAttributes aa = new AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                          .build();
+                      ch.setSound(ringUri, aa);
+                      ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+                      nm.createNotificationChannel(ch);
+                  }
+
+                  stopCallRingtone(this);
+                  try {
+                      activeCallRingtone = RingtoneManager.getRingtone(getApplicationContext(), ringUri);
+                      if (activeCallRingtone != null) {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) activeCallRingtone.setLooping(true);
+                          activeCallRingtone.play();
+                      }
+                  } catch (Exception ignored) {}
+                  int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+
+                  Intent openIntent = new Intent(this, MainActivity.class);
+                  openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  openIntent.putExtra("incoming_call_from", callerName);
+                  openIntent.putExtra("incoming_call_action", "open");
+                  PendingIntent fullScreenPi = PendingIntent.getActivity(this, 10, openIntent, flags);
+
+                  Intent acceptIntent = new Intent(this, MainActivity.class);
+                  acceptIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  acceptIntent.putExtra("incoming_call_from", callerName);
+                  acceptIntent.putExtra("incoming_call_action", "accept");
+                  PendingIntent acceptPi = PendingIntent.getActivity(this, 11, acceptIntent, flags);
+
+                  Intent declineIntent = new Intent(this, MsbCallDeclineReceiver.class);
+                  declineIntent.putExtra("incoming_call_from", callerName);
+                  PendingIntent declinePi = PendingIntent.getBroadcast(this, 12, declineIntent, flags);
+
+                  int smallIcon = getResources().getIdentifier("ic_msb_logo", "drawable", getPackageName());
+                  if (smallIcon == 0) smallIcon = android.R.drawable.sym_call_incoming;
+
+                  Notification notif = new NotificationCompat.Builder(this, CALL_CH)
+                      .setSmallIcon(smallIcon)
+                      .setContentTitle("📞 Входящий вызов МСБ-55115")
+                      .setContentText("Вызывает: " + callerName)
+                      .setSound(ringUri)
+                      .setVibrate(new long[]{0, 800, 400, 800, 400})
+                      .setPriority(NotificationCompat.PRIORITY_MAX)
+                      .setCategory(NotificationCompat.CATEGORY_CALL)
+                      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                      .setOngoing(true)
+                      .setAutoCancel(false)
+                      .setFullScreenIntent(fullScreenPi, true)
+                      .setContentIntent(fullScreenPi)
+                      .addAction(android.R.drawable.ic_menu_call, "📞 Ответить", acceptPi)
+                      .addAction(android.R.drawable.ic_menu_close_clear_cancel, "✖ Отклонить", declinePi)
+                      .build();
+
+                  notif.flags |= Notification.FLAG_INSISTENT;
+                  nm.notify(CALL_NOTIF_ID, notif);
+              }
+
+              @Override
+              public void onMessageReceived(RemoteMessage msg) {
+                  Map<String, String> data = msg.getData();
+                  String msgType = data.get("type");
+                  if ("incoming_call".equals(msgType)) {
+                      String caller = data.get("caller");
+                      if (caller == null || caller.isEmpty()) caller = data.get("sender");
+                      if (caller == null || caller.isEmpty()) caller = "Абонент МСБ";
+                      showIncomingCallInShade(caller);
+                      return;
+                  }
+                  if ("call_cancel".equals(msgType)) {
+                      stopCallRingtone(this);
+                      return;
+                  }
+
+                  String title = data.get("title");
+                  String body = data.get("body");
+                  if (title == null && msg.getNotification() != null) title = msg.getNotification().getTitle();
+                  if (body == null && msg.getNotification() != null) body = msg.getNotification().getBody();
+                  if (title == null) title = "МСБ-55115";
+                  if (body == null) body = "Новое оповещение";
+
+                  int bgCol = MsbKeepAliveService.resolveThemeBgColor(this);
+                  int accCol = MsbKeepAliveService.resolveThemeAccentColor(this);
+                  String bgHex = data.get("bgColor");
+                  String accHex = data.get("accentColor");
+                  if (bgHex != null && bgHex.startsWith("#")) {
+                      try { bgCol = Color.parseColor(bgHex); } catch (Exception ignored) {}
+                  }
+                  if (accHex != null && accHex.startsWith("#")) {
+                      try { accCol = Color.parseColor(accHex); } catch (Exception ignored) {}
+                  }
+
+                  Bitmap avatarBmp = null;
+                  String imgUrl = data.get("image");
+                  if (imgUrl != null && imgUrl.startsWith("http")) {
+                      try {
+                          HttpURLConnection conn = (HttpURLConnection) new URL(imgUrl).openConnection();
+                          conn.setConnectTimeout(3000);
+                          conn.setReadTimeout(3000);
+                          conn.connect();
+                          InputStream is = conn.getInputStream();
+                          avatarBmp = BitmapFactory.decodeStream(is);
+                          is.close();
+                      } catch (Exception ignored) {}
+                  }
+                  NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm == null) return;
+                  MsbKeepAliveService.ensureHighPriorityChannel(nm);
+
+                  Intent openIntent = new Intent(this, MainActivity.class);
+                  openIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                  int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                  PendingIntent pi = PendingIntent.getActivity(this, 2, openIntent, piFlags);
+
+                  String notifTag = data.get("tag");
+                  if (notifTag == null || notifTag.isEmpty()) notifTag = "msb_alert_" + (title + "_" + body).hashCode();
+                  int notifId = notifTag.hashCode() & 0x7fffffff;
+                  nm.notify(notifTag, notifId, MsbKeepAliveService.buildThemedAlertNotification(
+                      this, MsbKeepAliveService.ALERT_CH, title, body,
+                      bgCol, accCol, avatarBmp, pi, false, data.get("sender"), notifTag, notifId
+                  ));
+              }
           }
           EOF
 
