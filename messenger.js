@@ -790,8 +790,74 @@ function adminClearAllChatsEverywhere() {
 }
 window.adminClearAllChatsEverywhere = adminClearAllChatsEverywhere;
 
+async function adminUploadApkForAll(inputEl) {
+    if (!inputEl || !inputEl.files || inputEl.files.length === 0) return;
+    var file = inputEl.files[0];
+    var statusEl = document.getElementById('msb-admin-apk-status');
+    var btnEl = document.getElementById('msb-admin-upload-apk-btn');
+
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#facc15';
+        statusEl.textContent = '⏳ Подготовка файла: ' + file.name + '...';
+    }
+    if (btnEl) btnEl.disabled = true;
+
+    try {
+        var chunkSize = 1024 * 1024;
+        var totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+        var verCode = Math.floor(Date.now() / 1000);
+        var verName = '1.0.' + new Date().toLocaleDateString('ru-RU');
+
+        for (var idx = 0; idx < totalChunks; idx++) {
+            var start = idx * chunkSize;
+            var end = Math.min(file.size, start + chunkSize);
+            var chunkBlob = file.slice(start, end);
+
+            var pct = Math.round(((idx + 1) / totalChunks) * 100);
+            if (statusEl) {
+                statusEl.textContent = '📤 Загрузка APK на сервер: ' + pct + '% (' + (idx + 1) + '/' + totalChunks + ')';
+            }
+
+            var res = await fetch('/api/app/upload-apk-chunk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                    'x-update-secret': 'msb55115_ota_key',
+                    'x-chunk-index': String(idx),
+                    'x-total-chunks': String(totalChunks),
+                    'x-version-code': String(verCode),
+                    'x-version-name': encodeURIComponent(verName)
+                },
+                body: chunkBlob
+            });
+
+            if (!res.ok) {
+                throw new Error('Ошибка сервера: HTTP ' + res.status);
+            }
+        }
+
+        if (statusEl) {
+            statusEl.style.color = '#4ade80';
+            statusEl.textContent = '✅ APK успешно загружен для всех!';
+        }
+        alert('✅ Новый APK-файл успешно загружен на сервер и доступен для скачивания всем пользователям!');
+    } catch (err) {
+        if (statusEl) {
+            statusEl.style.color = '#ef4444';
+            statusEl.textContent = '❌ Ошибка: ' + (err && err.message ? err.message : 'сбой сети');
+        }
+        alert('❌ Не удалось загрузить APK: ' + (err && err.message ? err.message : 'ошибка связи'));
+    } finally {
+        inputEl.value = '';
+        if (btnEl) btnEl.disabled = false;
+    }
+}
+window.adminUploadApkForAll = adminUploadApkForAll;
+
 
 function updateTopBackButtonVisibility() {
+
     var topbar = document.getElementById('msb-unified-topbar');
     var backBtn = document.getElementById('msb-top-back-btn');
     var sb = document.getElementById('app-sidebar');
