@@ -2885,4 +2885,29 @@ body.theme-cosmic #messenger-modal .friend-item .friend-call-mini:first-of-type,
     align-items: center;
     justify-content: center;
 }
+/* === УСКОРЕНИЕ GPU-РЕНДЕРА ДЛЯ ANDROID APK (БЕЗ ПОТЕРИ АНИМАЦИЙ) === */
+@keyframes msbGreenPhonePulse {
+    0%, 100% { transform: translate3d(0,0,0) scale(1) rotate(0deg); }
+    20%      { transform: translate3d(0,0,0) scale(1.08) rotate(-8deg); }
+    40%      { transform: translate3d(0,0,0) scale(1.08) rotate(8deg); }
+    60%      { transform: translate3d(0,0,0) scale(1.03) rotate(-4deg); }
+}
+
+.call-action-chip.audio,
+#messenger-modal .chat-header .call-header-btn.audio,
+#messenger-modal .friend-item .friend-call-mini:first-of-type,
+.call-live-green {
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.6) !important;
+    will-change: transform;
+}
+
+#messages, .friends-list {
+    contain: none !important;
+    will-change: auto !important;
+    -webkit-overflow-scrolling: touch;
+}
+
+.msg-ticker-wrap {
+    contain: layout style !important;
+}
 

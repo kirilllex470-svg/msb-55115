@@ -1360,17 +1360,23 @@ document.addEventListener('DOMContentLoaded', function() {
             syncTextareaHeight();
         });
 
+        var taResizeRaf = null;
         function syncTextareaHeight() {
             if (tInput.value.length === 0) {
                 if (tInput.style.height !== '36px') tInput.style.height = '36px';
                 return;
             }
-            var sh = tInput.scrollHeight;
-            var targetPx = Math.min(110, Math.max(36, sh));
-            if (Math.abs(tInput.clientHeight - targetPx) > 4) {
-                tInput.style.height = targetPx + 'px';
-            }
+            if (taResizeRaf) return;
+            taResizeRaf = requestAnimationFrame(function() {
+                taResizeRaf = null;
+                var sh = tInput.scrollHeight;
+                var targetPx = Math.min(110, Math.max(36, sh));
+                if (Math.abs(tInput.clientHeight - targetPx) > 4) {
+                    tInput.style.height = targetPx + 'px';
+                }
+            });
         }
+
 
         tInput.addEventListener('keydown', function(e) {
             var isMobileScreen = window.innerWidth <= 768 || ('ontouchstart' in window);
@@ -1755,10 +1761,13 @@ function selectChat(itemObj) {
     updateTotalUnreadBadge();
     renderFriends();
 
-    renderPendingBubbles();
-    fetchMessages();
-    markChatAsRead(currentRoomId);
+    requestAnimationFrame(function() {
+        renderPendingBubbles();
+        fetchMessages();
+        markChatAsRead(currentRoomId);
+    });
 }
+
 
 
 function closeChatMobile() {
