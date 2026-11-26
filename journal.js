@@ -2996,12 +2996,30 @@ function ensureMsbCallModal() {
 function startMsbRing(isIncoming) {
     stopMsbRing();
     var beep = function() {
+        if (msbCall.state !== 'calling' && msbCall.state !== 'incoming') {
+            stopMsbRing();
+            return;
+        }
         if (isIncoming) playSoundById('nice1', true);
         else playToneNotes([{ f: 425, t: 0, d: 0.8, v: 0.2, type: 'sine' }]);
+
+        // Проверяем по HTTP, не сброшен ли уже звонок при плохом интернете
+        var checkTarget = isIncoming ? getMsbCallerName() : msbCall.partner;
+        if (checkTarget) {
+            fetch('/api/call/status?target=' + encodeURIComponent(checkTarget) + '&callId=' + encodeURIComponent(msbCall.callId || '') + '&t=' + Date.now())
+                .then(function(r) { return r.json(); })
+                .then(function(st) {
+                    if (st && st.ok && st.ringing === false && (msbCall.state === 'calling' || msbCall.state === 'incoming')) {
+                        window.endMsbAudioCall(false, 'ended');
+                    }
+                })
+                .catch(function() {});
+        }
     };
     beep();
     msbCall.ringTimer = setInterval(beep, 2600);
 }
+
 
 function stopMsbRing() {
     if (msbCall.ringTimer) {
@@ -3120,11 +3138,20 @@ function createMsbPeer(partnerName) {
         if (!msbCall.pc) return;
         var ice = msbCall.pc.iceConnectionState;
         if (ice === 'connected' || ice === 'completed') {
+            if (msbCall.discTimer) { clearTimeout(msbCall.discTimer); msbCall.discTimer = null; }
             onMsbCallConnected();
-        } else if (ice === 'failed' && typeof msbCall.pc.restartIce === 'function') {
-            try { msbCall.pc.restartIce(); } catch (e) {}
+        } else if (ice === 'disconnected') {
+            if (msbCall.discTimer) clearTimeout(msbCall.discTimer);
+            msbCall.discTimer = setTimeout(function() {
+                if (msbCall.pc && (msbCall.pc.iceConnectionState === 'disconnected' || msbCall.pc.iceConnectionState === 'failed')) {
+                    window.endMsbAudioCall(true, 'network_fail');
+                }
+            }, 6000);
+        } else if (ice === 'failed') {
+            window.endMsbAudioCall(true, 'network_fail');
         }
     };
+
 
     pc.onconnectionstatechange = function() {
         if (!msbCall.pc) return;
@@ -3397,8 +3424,17 @@ window.handleMsbAudioCallWS = async function(msg) {
         msbCall.speaker = true;
         syncMsbCallControls();
         showMsbCallModal(msg.from, '📲 Входящий аудиозвонок...', true);
-        startMsbRing(true);
+        var isHiddenApk = Boolean(window.MsbNative) && document.visibilityState !== 'visible';
+        if (!isHiddenApk) {
+            startMsbRing(true);
+            // Гасим дублирующий системный звонок FCM, если мы уже видим экран вызова в открытом APK
+            if (window.MsbNative && typeof window.MsbNative.stopNativeRingtone === 'function') {
+                setTimeout(function() { if (msbCall.state === 'incoming') try { window.MsbNative.stopNativeRingtone(); } catch (e) {} }, 500);
+                setTimeout(function() { if (msbCall.state === 'incoming') try { window.MsbNative.stopNativeRingtone(); } catch (e) {} }, 1400);
+            }
+        }
         return;
+
     }
 
     if (msg.type === 'call_answer' && msbCall.state === 'calling') {

@@ -343,7 +343,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v41';",
+    "const SHELL_CACHE = 'msb55115-shell-v42';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1497,6 +1497,17 @@ const server = http.createServer(function(req, res) {
         return sendJsonCompressed(req, res, 200, { ok: false }, 'no-store');
     }
 
+    if (req.method === 'GET' && urlPath === '/api/call/status') {
+        const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        let targetKey = String(myUrl.searchParams.get('target') || '').trim().toLowerCase();
+        if (targetKey === 'админ') targetKey = 'муравей';
+        const callId = String(myUrl.searchParams.get('callId') || '');
+        const pc = targetKey ? pendingCalls[targetKey] : null;
+        const stillRinging = Boolean(pc && (Date.now() - pc.ts < 45000) && (!callId || pc.offerMsg.callId === callId));
+        return sendJsonCompressed(req, res, 200, { ok: true, ringing: stillRinging }, 'no-store');
+    }
+
+
     fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
 
 
@@ -2083,6 +2094,24 @@ wss.on('connection', function(ws) {
     ws.on('close', function() {
         if (ws.userIdentity) {
             const key = ws.userIdentity;
+            // Если звонящий потерял интернет во время набора — через 4 сек гасим вечный дозвон у получателя
+            setTimeout(function() {
+                if (!hasActiveWsForUser(key)) {
+                    Object.keys(pendingCalls).forEach(function(tKey) {
+                        if (pendingCalls[tKey] && pendingCalls[tKey].fromKey === key) {
+                            delete pendingCalls[tKey];
+                            sendCancelCallFcm(key, tKey);
+                            const cancelPkt = JSON.stringify({ type: 'call_end', from: key, to: tKey, reason: 'network_fail' });
+                            wss.clients.forEach(function(cl) {
+                                if (cl.readyState === WebSocket.OPEN && cl.userIdentity === tKey) {
+                                    try { cl.send(cancelPkt); } catch (e) {}
+                                }
+                            });
+                        }
+                    });
+                }
+            }, 4000);
+
             setTimeout(function() {
                 if (!hasActiveVisibleWsForUser(key)) {
                     const seenStr = formatTimestampRu(Date.now());
@@ -2094,6 +2123,7 @@ wss.on('connection', function(ws) {
             }, 300);
         }
     });
+
 
 
     ws.send(JSON.stringify({
@@ -2193,29 +2223,29 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
     }
 
 
-    let deliveredActive = false;
     const rawPacket = JSON.stringify(msg);
     wss.clients.forEach(function(client) {
         const isTarget = (client.userIdentity === targetKey);
         if (client.readyState === WebSocket.OPEN && isTarget) {
+            try { client.send(rawPacket); } catch (e) {}
+        }
+        // Если ответили или сбросили на одном устройстве (например ПК) — гасим звонок на втором (телефоне)
+        if ((msg.type === 'call_answer' || msg.type === 'call_end') && client !== ws && client.readyState === WebSocket.OPEN && client.userIdentity === fromKey) {
             try {
-                client.send(rawPacket);
-                if (!client.isAway) deliveredActive = true;
+                client.send(JSON.stringify({ type: 'call_end', from: targetKey, to: fromKey, reason: 'answered_elsewhere' }));
             } catch (e) {}
         }
     });
 
     if (msg.type === 'call_offer') {
-        if (!deliveredActive) {
-            sendIncomingCallFcm(fromUser, targetKey, msg.callId || '');
-        }
+        // Всегда шлём FCM, чтобы свёрнутый APK звонил нативно даже если сокет ещё не успел закрыться!
+        sendIncomingCallFcm(fromUser, targetKey, msg.callId || '');
     } else if (msg.type === 'call_end' || msg.type === 'call_answer') {
-
         sendCancelCallFcm(fromUser, targetKey);
         sendCancelCallFcm(targetKey, fromUser);
     }
     return;
-}
+
 
 
 
