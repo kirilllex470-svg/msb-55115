@@ -892,7 +892,8 @@ function enqueueChatPayload(payload) {
     if (!payload.lid) {
         payload.lid = 'c_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
     }
-    if (!payload.blob && (!payload.type || payload.type === 'text' || payload.type === 'gif') && payload.room) {
+        if (!payload.blob && (!payload.type || payload.type === 'text' || payload.type === 'gif' || payload.type === 'contact') && payload.room) {
+
         try {
             var nowD = new Date();
             var tStr = String(nowD.getDate()).padStart(2, '0') + '.' +
@@ -988,8 +989,9 @@ function flushOutboxQueue() {
     if (msbOutboxQueue.length === 0) return;
 
     var textItems = msbOutboxQueue.filter(function(it) {
-        return it && !it.blob && (!it.type || it.type === 'text' || it.type === 'gif');
+        return it && !it.blob && (!it.type || it.type === 'text' || it.type === 'gif' || it.type === 'contact');
     });
+
 
     textItems.forEach(function(item) {
         if (item._inFlight && (Date.now() - item._inFlight < 15000)) return;
@@ -2787,9 +2789,32 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
                 '</div>' +
                 '<button type="button" class="msb-missed-callback-btn">📞 Позвонить</button>' +
             '</div>';
+    } else if (msg.type === 'contact') {
+        var cObj = { name: msg.text || 'Боец', unit: '' };
+        try {
+            var parsedC = JSON.parse(msg.text);
+            if (parsedC && parsedC.name) cObj = parsedC;
+        } catch (e) {}
+        var safeCName = String(cObj.name || '').replace(/'/g, "\\'");
+        var cUnitBadge = cObj.unit ? (' <span class="friend-unit-pill">' + escapeEdgeHtml(cObj.unit) + '</span>') : '';
+        contentHTML =
+            '<div class="msb-shared-contact-card">' +
+                '<div class="msb-shared-contact-top">' +
+                    '<div class="msb-shared-contact-ico">👤</div>' +
+                    '<div class="msb-shared-contact-meta">' +
+                        '<div class="msb-shared-contact-label">Контакт МСБ-55115</div>' +
+                        '<div class="msb-shared-contact-name">' + escapeEdgeHtml(cObj.name) + cUnitBadge + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="msb-shared-contact-actions">' +
+                    '<button type="button" class="msb-contact-act-btn chat" onclick="openSharedContactChat(\'' + safeCName + '\')">💬 Написать</button>' +
+                    '<button type="button" class="msb-contact-act-btn call call-live-green" onclick="triggerCallInDev(\'Аудиозвонок\', \'' + safeCName + '\')">📞</button>' +
+                '</div>' +
+            '</div>';
     } else {
         contentHTML = '<div class="msg-text">' + renderMessageTextWithLiveEmojis(msg.text) + '</div>';
     }
+
 
 
     var editedBadge = msg.edited
@@ -3464,10 +3489,11 @@ function buildTelegramComposerLayout() {
             '</div>' +
             '<button type="button" id="msb-center-toggle-btn" class="media-btn msb-center-plus-btn" onclick="toggleMsbRadialToolbar(false)" title="Свернуть панель">✖</button>' +
             '<div class="msb-wing msb-wing-right" id="msb-wing-right">' +
-                '<button type="button" class="media-btn" onclick="triggerCallInDev(\'Аудиозвонок\', currentPartner || \'\')" title="Аудиозвонок">📞</button>' +
+                '<button type="button" class="media-btn" onclick="openShareContactModal()" title="Поделиться контактом">👤</button>' +
                 '<button type="button" class="media-btn" onclick="openThemeSettingsModal()" title="Темы и Гифки">🎨</button>' +
                 '<button type="button" id="msb-plus-menu-btn" class="media-btn" onclick="event.stopPropagation(); toggleMsbPlusDropdown()" title="Разделы МСБ-55115">➕</button>' +
             '</div>';
+
 
 
         if (fileInput) {
@@ -3765,3 +3791,90 @@ window.toggleMsbRadialToolbar = toggleMsbRadialToolbar;
 window.openMsbDevTab = openMsbDevTab;
 window.closeMsbDevTab = closeMsbDevTab;
 window.toggleMsbPlusDropdown = toggleMsbPlusDropdown;
+
+function openShareContactModal() {
+    chatUser = getActiveChatIdentity();
+    if (!currentRoomId || !chatUser) {
+        alert('Сначала откройте чат, куда хотите отправить контакт!');
+        return;
+    }
+    toggleMsbRadialToolbar(false);
+
+    var modal = document.getElementById('msb-share-contact-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'msb-share-contact-modal';
+        modal.className = 'modal-overlay';
+        modal.style.zIndex = '235000';
+        modal.innerHTML =
+            '<div class="modal-box msb-themed-card">' +
+                '<h3 class="msb-themed-title"><span>👤 Поделиться контактом</span>' +
+                '<button type="button" class="modal-close" onclick="document.getElementById(\'msb-share-contact-modal\').style.display=\'none\'">&times;</button></h3>' +
+                '<div id="msb-share-contact-list" class="modal-list"></div>' +
+            '</div>';
+        modal.onclick = function(e) {
+            if (e.target === modal) modal.style.display = 'none';
+        };
+        document.body.appendChild(modal);
+    }
+
+    var listEl = document.getElementById('msb-share-contact-list');
+    listEl.innerHTML = '';
+    var contacts = friendsList.filter(function(f) { return f && !f.isGroup; });
+
+    if (contacts.length === 0) {
+        listEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:14px;">В вашем списке пока нет друзей</div>';
+    } else {
+        contacts.forEach(function(c) {
+            var row = document.createElement('div');
+            row.className = 'modal-item';
+            var unitTxt = c.unit ? (' (' + escapeEdgeHtml(c.unit) + ')') : '';
+            row.innerHTML =
+                '<span>👤 <b>' + escapeEdgeHtml(c.name) + '</b>' + unitTxt + '</span>' +
+                '<span style="color:#4ade80;font-weight:800;">Отправить ➤</span>';
+            row.onclick = function() {
+                modal.style.display = 'none';
+                var qId = quotedMessageId || null, qTxt = quotedMessageText || null, qSnd = quotedMessageSender || null;
+                cancelReply();
+                enqueueChatPayload({
+                    sender: chatUser,
+                    room: currentRoomId,
+                    type: 'contact',
+                    text: JSON.stringify({ name: c.name, unit: c.unit || '' }),
+                    quoteId: qId,
+                    quoteText: qTxt,
+                    quoteSender: qSnd
+                });
+            };
+            listEl.appendChild(row);
+        });
+    }
+    modal.style.display = 'flex';
+}
+
+function openSharedContactChat(targetName) {
+    chatUser = getActiveChatIdentity();
+    if (!targetName || !chatUser) return;
+    if (targetName.toLowerCase() === chatUser.toLowerCase()) {
+        alert('Это ваш собственный контакт!');
+        return;
+    }
+    var existing = friendsList.find(function(f) {
+        return f && !f.isGroup && String(f.name || '').toLowerCase() === targetName.toLowerCase();
+    });
+    if (existing) {
+        selectChat(existing);
+    } else {
+        if (confirm('Добавить бойца «' + targetName + '» в друзья и открыть чат?')) {
+            fetch('/api/friends/request/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from: chatUser, to: targetName })
+            }).catch(function() {});
+        }
+        selectChat({ name: targetName, isGroup: false, avatar: '', online: true });
+    }
+}
+
+window.openShareContactModal = openShareContactModal;
+window.openSharedContactChat = openSharedContactChat;

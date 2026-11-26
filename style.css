@@ -2789,4 +2789,100 @@ body.theme-cosmic #messenger-modal .friend-call-mini {
     border-color: rgba(192, 132, 252, 0.55) !important;
     color: #d8b4fe !important;
 }
+/* === ЖИВАЯ ЗЕЛЁНАЯ ТРУБКА АУДИОДОЗВОНА ВЕЗДЕ (ВИДЕОЗВОНОК ОСТАЁТСЯ КАК ЕСТЬ) === */
+@keyframes msbGreenPhonePulse {
+    0%, 100% {
+        transform: scale(1) rotate(0deg);
+        box-shadow: 0 0 8px rgba(34, 197, 94, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    }
+    20% {
+        transform: scale(1.09) rotate(-8deg);
+        box-shadow: 0 0 16px rgba(74, 222, 128, 0.9), inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    }
+    40% {
+        transform: scale(1.09) rotate(8deg);
+    }
+    60% {
+        transform: scale(1.04) rotate(-4deg);
+    }
+}
+
+.call-action-chip.audio,
+#messenger-modal .chat-header .call-header-btn.audio,
+body.theme-military #messenger-modal .chat-header .call-header-btn.audio,
+body.theme-rocket #messenger-modal .chat-header .call-header-btn.audio,
+body.theme-cosmic #messenger-modal .chat-header .call-header-btn.audio,
+#messenger-modal .friend-item .friend-call-mini:first-of-type,
+body.theme-military #messenger-modal .friend-item .friend-call-mini:first-of-type,
+body.theme-rocket #messenger-modal .friend-item .friend-call-mini:first-of-type,
+body.theme-cosmic #messenger-modal .friend-item .friend-call-mini:first-of-type,
+.call-live-green {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 55%, #15803d 100%) !important;
+    border: 1.5px solid #86efac !important;
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    animation: msbGreenPhonePulse 2.4s ease-in-out infinite !important;
+}
+
+/* === КАРТОЧКА «ПОДЕЛИТЬСЯ КОНТАКТОМ» В ЧАТЕ === */
+.msb-shared-contact-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 215px;
+    padding: 4px 2px;
+}
+.msb-shared-contact-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.msb-shared-contact-ico {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(56, 189, 248, 0.2);
+    border: 1.5px solid #38bdf8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+.msb-shared-contact-label {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 700;
+}
+.msb-shared-contact-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #f8fafc;
+}
+.msb-shared-contact-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+.msb-contact-act-btn {
+    padding: 7px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.msb-contact-act-btn.chat {
+    flex: 1;
+    background: linear-gradient(135deg, #0284c7, #1d4ed8);
+    border-color: #7dd3fc;
+}
+.msb-contact-act-btn.call {
+    width: 42px;
+    padding: 7px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 

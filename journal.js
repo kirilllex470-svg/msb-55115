@@ -3006,14 +3006,12 @@ function startMsbRing(isIncoming) {
         if (isIncoming) {
             playSoundById('nice1', true);
         } else {
-            // Громкий серьезный двухтональный сигнал спецсвязи при наборе
+            // Классический чистый телефонный гудок (425 Гц, 1 секунда)
             playToneNotes([
-                { f: 440, t: 0.00, d: 0.42, v: 0.85, type: 'triangle' },
-                { f: 480, t: 0.00, d: 0.42, v: 0.65, type: 'sawtooth' },
-                { f: 440, t: 0.52, d: 0.55, v: 0.85, type: 'triangle' },
-                { f: 480, t: 0.52, d: 0.55, v: 0.65, type: 'sawtooth' }
+                { f: 425, t: 0.00, d: 1.0, v: 0.55, type: 'sine' }
             ]);
         }
+
 
 
         // Начинаем проверять статус на сервере только через 5 секунд после старта набора (когда call_offer точно ушёл)

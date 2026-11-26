@@ -1542,7 +1542,10 @@ function buildChatPreviewItem(name, roomId, myLowerName, myLastReadTime, isGroup
         else if (lastMsg.type === 'video') lastMsgText = "🎥 " + prefix + "Кружок";
         else if (lastMsg.type === 'file') lastMsgText = "📎 " + prefix + "Файл";
         else if (lastMsg.type === 'gif') lastMsgText = "🎬 " + prefix + "GIF";
+        else if (lastMsg.type === 'missed_call') lastMsgText = "📵 Пропущенный вызов";
+        else if (lastMsg.type === 'contact') lastMsgText = "👤 " + prefix + "Контакт";
         else lastMsgText = prefix + (lastMsg.text || "");
+
         lastMsgTime = lastMsg.time || "";
         roomMessages.forEach(function(msg) {
             if (String(msg.sender || '').trim().toLowerCase() !== myLowerName && (msg.timestamp || 0) > myLastReadTime) {
@@ -1701,7 +1704,9 @@ function notifyJournalFromMessenger(room, sender, rawContent, type, timeStr) {
     else if (type === 'video') cleanText = prefix + '🎥 Видео-кружок';
     else if (type === 'file') cleanText = prefix + '📎 Файл';
     else if (type === 'gif') cleanText = prefix + '🎬 GIF-анимация';
+    else if (type === 'contact') cleanText = prefix + '👤 Поделился контактом';
     else cleanText = prefix + cleanText;
+
 
 
     let targets = new Array();
