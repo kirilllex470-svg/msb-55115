@@ -2579,3 +2579,28 @@ body.theme-cosmic .msb-voice-card.is-playing .msb-eq-bar.played {
     border-color: #38bdf8 !important;
     color: #38bdf8 !important;
 }
+/* === МАКСИМАЛЬНЫЙ FPS ДЛЯ ANDROID APK WEBVIEW === */
+.bubble,
+body.theme-military .my-msg .bubble,
+body.theme-military .other-msg .bubble,
+body.theme-rocket .my-msg .bubble,
+body.theme-rocket .other-msg .bubble,
+body.theme-cosmic .my-msg .bubble,
+body.theme-cosmic .other-msg .bubble {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32) !important;
+    transition: none !important;
+}
+
+.msb-live-emoji.anim-fire {
+    filter: none !important;
+}
+
+.friend-avatar-online {
+    animation: none !important;
+    will-change: auto !important;
+}
+
+.msb-typing-active,
+.friend-typing-green {
+    text-shadow: none !important;
+}
