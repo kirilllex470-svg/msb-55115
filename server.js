@@ -343,7 +343,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v40';",
+    "const SHELL_CACHE = 'msb55115-shell-v41';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1811,12 +1811,16 @@ function sendIncomingCallFcm(fromUser, targetKey, callId) {
         ? ('📞 ВЫЗОВ • ' + senderObj.unit + ' • ' + fromUser)
         : ('📞 ВЫЗОВ • ' + fromUser);
 
+    const sentTokens = new Set();
     fcmTokens.forEach(function(item) {
-        if (!item || !item.token) return;
+        if (!item || !item.token || sentTokens.has(item.token)) return;
         const uLow = String(item.user || '').trim().toLowerCase();
         const cLow = String(item.callsign || '').trim().toLowerCase();
-        if (cLow === tLow || uLow === tLow) {
+        const isMatch = cLow ? (cLow === tLow) : (uLow === tLow || (tLow === 'муравей' && uLow === 'админ'));
+        if (isMatch) {
+            sentTokens.add(item.token);
             const avatarUrl = item.origin
+
                 ? (item.origin + '/api/avatar-img/' + encodeURIComponent(sLow) + '.jpg?v=' + notifId)
                 : '';
 
@@ -2202,8 +2206,11 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
     });
 
     if (msg.type === 'call_offer') {
-        sendIncomingCallFcm(fromUser, targetKey, msg.callId || '');
+        if (!deliveredActive) {
+            sendIncomingCallFcm(fromUser, targetKey, msg.callId || '');
+        }
     } else if (msg.type === 'call_end' || msg.type === 'call_answer') {
+
         sendCancelCallFcm(fromUser, targetKey);
         sendCancelCallFcm(targetKey, fromUser);
     }

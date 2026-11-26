@@ -3245,6 +3245,10 @@ window.startMsbAudioCall = async function(targetName) {
 
 window.acceptMsbAudioCall = async function() {
     if (msbCall.state !== 'incoming' || !msbCall.offer) return;
+    var remoteOffer = msbCall.offer;
+    msbCall.offer = null;
+    msbCall.state = 'connecting';
+
     var me = getMsbCallerName();
     unlockMobileFeatures();
     if (typeof stopActiveMsbAudio === 'function') stopActiveMsbAudio();
@@ -3264,12 +3268,16 @@ window.acceptMsbAudioCall = async function() {
     }
 
     try {
+        if (msbCall.state === 'idle') {
+            micStream.getTracks().forEach(function(t) { t.stop(); });
+            return;
+        }
         msbCall.stream = micStream;
         var pc = createMsbPeer(msbCall.partner);
         msbCall.stream.getTracks().forEach(function(t) { pc.addTrack(t, msbCall.stream); });
 
-        await pc.setRemoteDescription(new RTCSessionDescription(msbCall.offer));
-        msbCall.offer = null;
+        await pc.setRemoteDescription(new RTCSessionDescription(remoteOffer));
+
 
         while (msbCall.iceQueue.length > 0) {
             var c = msbCall.iceQueue.shift();
@@ -3371,8 +3379,12 @@ window.handleMsbAudioCallWS = async function(msg) {
     if (!me) return;
 
     if (msg.type === 'call_offer') {
-        if (msbCall.state === 'incoming' && msbCall.callId && msg.callId === msbCall.callId) return;
+        if ((msbCall.state === 'incoming' || msbCall.state === 'connecting') && (!msbCall.callId || msg.callId === msbCall.callId || msbCall.partner.toLowerCase() === String(msg.from || '').toLowerCase())) {
+            if (!msbCall.offer && msbCall.state === 'incoming') msbCall.offer = msg.sdp;
+            return;
+        }
         if (msbCall.state !== 'idle') {
+
             sendMsbCallWS({ type: 'call_end', from: me, to: msg.from, reason: 'busy' });
             return;
         }
