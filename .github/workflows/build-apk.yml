@@ -1026,22 +1026,7 @@ jobs:
                       });
                   }
 
-                  @JavascriptInterface
-                  public void resetAudioMode() {
-                      runOnUiThread(() -> {
-                          try {
-                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                              if (am != null) {
-                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                      am.clearCommunicationDevice();
-                                  }
-                                  am.setSpeakerphoneOn(false);
-                                  am.setMode(android.media.AudioManager.MODE_NORMAL);
-                                  am.abandonAudioFocus(null);
-                              }
-                          } catch (Exception ignored) {}
-                      });
-                  }
+      
 
                   @JavascriptInterface
                   public void resetAudioMode() {
