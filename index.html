@@ -399,10 +399,9 @@
         document.write('<script src="messenger.js"><\/script>');
     }
 
-    setTimeout(function() {
-        var origin = localStorage.getItem('msb_server_url') || 'https://amvera.tech';
-        var isApk = Boolean(window.Capacitor) || location.protocol === 'capacitor:' || location.hostname !== 'msb-55115-kirill000000007.mia0.amvera.tech';
-        var url = (isApk ? origin : '') + '/api/web-ota?t=' + Date.now();
+    function checkWebOtaUpdate() {
+        var baseUrl = window.API_ORIGIN || localStorage.getItem('msb_server_url') || 'https://amvera.tech';
+        var url = baseUrl.replace(/\/$/, '') + '/api/web-ota?t=' + Date.now();
 
         fetch(url, { cache: 'no-store' })
             .then(function(r) { return r.json(); })
@@ -410,22 +409,33 @@
                 if (!data || !data.ok || !data.version) return;
                 var curVer = localStorage.getItem('msb_ota_version') || '';
                 if (curVer !== data.version) {
-                    localStorage.setItem('msb_ota_css', data.css);
-                    localStorage.setItem('msb_ota_journal', data.journal);
-                    localStorage.setItem('msb_ota_messenger', data.messenger);
-                    localStorage.setItem('msb_ota_version', data.version);
+                    try {
+                        localStorage.setItem('msb_ota_css', data.css);
+                        localStorage.setItem('msb_ota_journal', data.journal);
+                        localStorage.setItem('msb_ota_messenger', data.messenger);
+                        localStorage.setItem('msb_ota_version', data.version);
+                    } catch (storageErr) {
+                        return;
+                    }
 
-                    if (curVer !== '') {
+                    if (!document.getElementById('msb-ota-update-banner')) {
                         var banner = document.createElement('div');
-                        banner.style.cssText = 'position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:10px 18px;border-radius:999px;font-weight:900;font-size:13px;z-index:299999;box-shadow:0 8px 25px rgba(0,0,0,0.7);cursor:pointer;border:1.5px solid #86efac;';
-                        banner.textContent = '🔄 Доступно обновление интерфейса! Нажмите';
+                        banner.id = 'msb-ota-update-banner';
+                        banner.style.cssText = 'position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:12px 20px;border-radius:999px;font-weight:900;font-size:13px;z-index:299999;box-shadow:0 8px 25px rgba(0,0,0,0.85);cursor:pointer;border:2px solid #86efac;white-space:nowrap;';
+                        banner.textContent = '🔄 Обновить интерфейс МСБ-55115';
                         banner.onclick = function() { location.reload(); };
                         document.body.appendChild(banner);
                     }
                 }
             })
             .catch(function() {});
-    }, 2500);
+    }
+
+    setTimeout(checkWebOtaUpdate, 2000);
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') checkWebOtaUpdate();
+    });
+
 })();
 </script>
 </body>
