@@ -1,4 +1,5 @@
 name: Сборка Android APK (МСБ-55115 + FCM)
+
 on:
   push:
     branches: [ main, master ]
@@ -22,6 +23,16 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+
+      - name: Кэш Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Синхронизация google-services.json и capacitor.config.json
         run: |
@@ -117,8 +128,19 @@ jobs:
               s = s[:idx] + patch + "\n}\n"
               open(p, "w", encoding="utf-8").write(s)
               print("Successfully replaced onCreateInputConnection in:", p)
+
+          import os
+          mirror = "maven { url \"https://googleapis.com\" }\n        "
+          for fname in ["android/build.gradle", "android/settings.gradle"]:
+              if os.path.exists(fname):
+                  txt = open(fname, encoding="utf-8").read()
+                  if "mavenCentral()" in txt and "://googleapis.com" not in txt:
+                      txt = txt.replace("mavenCentral()", mirror + "mavenCentral()")
+                      open(fname, "w", encoding="utf-8").write(txt)
+                      print("Добавлено зеркало Maven в:", fname)
           '
           cp google-services.json android/app/google-services.json
+
 
           if ! grep -q "com.google.gms:google-services" android/build.gradle; then
             sed -i 's/dependencies {/dependencies {\n        classpath "com.google.gms:google-services:4.4.2"/' android/build.gradle
