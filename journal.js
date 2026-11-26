@@ -3350,7 +3350,14 @@ window.endMsbAudioCall = function(notifyRemote, reason) {
     msbCall.iceQueue = [];
     var modal = document.getElementById('msb-audio-call-modal');
     if (modal) modal.style.display = 'none';
+    if (msbCall.callOnlyMode) {
+        msbCall.callOnlyMode = false;
+        if (window.MsbNative && typeof window.MsbNative.minimizeApp === 'function') {
+            try { window.MsbNative.minimizeApp(); } catch (e) {}
+        }
+    }
 };
+
 
 window.handleMsbAudioCallWS = async function(msg) {
     if (!msg || !msg.from) return;
@@ -3419,12 +3426,21 @@ window.handleMsbAudioCallWS = async function(msg) {
 window.onNativeCallIntent = function(callerName, action) {
     if (!callerName) return;
     var me = getMsbCallerName();
-    if (typeof openMessengerWindow === 'function') {
-        openMessengerWindow(callerName);
-    }
+
     if (action === 'decline') {
         window.endMsbAudioCall(true, 'declined');
         return;
+    }
+
+    // Если нажали "Ответить" из шторки — включаем режим "Только экран звонка"
+    if (action === 'accept') {
+        msbCall.callOnlyMode = true;
+        var splash = document.getElementById('splash-screen');
+        if (splash) splash.style.display = 'none';
+        var msgModal = document.getElementById('messenger-modal');
+        if (msgModal) msgModal.style.display = 'none';
+    } else if (typeof openMessengerWindow === 'function') {
+        openMessengerWindow(callerName);
     }
 
     connectWS(true);
@@ -3432,6 +3448,8 @@ window.onNativeCallIntent = function(callerName, action) {
     if (msbCall.state === 'idle') {
         msbCall.partner = callerName;
         msbCall.state = 'incoming';
+        var modal = ensureMsbCallModal();
+        modal.style.background = '#020617';
         showMsbCallModal(callerName, action === 'accept' ? '🔄 Соединение...' : '📲 Входящий аудиозвонок...', action !== 'accept');
     }
 
@@ -3478,4 +3496,3 @@ window.onNativeCallIntent = function(callerName, action) {
     }, 300);
     setTimeout(function() { clearInterval(fastPoll); }, 10000);
 };
-
