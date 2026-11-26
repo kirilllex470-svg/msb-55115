@@ -1,5 +1,4 @@
 name: Сборка Android APK (МСБ-55115 + FCM)
-
 on:
   push:
     branches: [ main, master ]
