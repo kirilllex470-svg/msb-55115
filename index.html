@@ -8,9 +8,19 @@
     <link rel="icon" type="image/png" href="/icon-192.png">
     <link rel="apple-touch-icon" href="/icon-192.png">
     <meta name="theme-color" content="#0f172a">
-   <link rel="stylesheet" href="/style.css">
-
-
+    <script>
+    (function() {
+        var cachedCss = localStorage.getItem('msb_ota_css');
+        if (cachedCss) {
+            var st = document.createElement('style');
+            st.id = 'msb-ota-style';
+            st.textContent = cachedCss;
+            document.head.appendChild(st);
+        } else {
+            document.write('<link rel="stylesheet" href="style.css">');
+        }
+    })();
+    </script>
 </head>
 <body>
 
@@ -58,7 +68,6 @@
         </button>
     </div>
 </div>
-
 <!-- ПРОСМОТРЩИК КАРТ ЖУРНАЛА -->
 <div id="photo-lightbox">
     <div class="lb-toolbar">
@@ -75,7 +84,8 @@
         <img id="lightbox-img" src="" alt="Карта">
     </div>
 </div>
-<!-- РАСКРЫТИЕ ФОТО В МЕССЕНДЖЕРЕ + НАСТРОЙКИ ТЕМ И ЗВОНКИ (БЕЗ ГИФОК) -->
+
+<!-- РАСКРЫТИЕ ФОТО В МЕССЕНДЖЕРЕ + НАСТРОЙКИ ТЕМ И ЗВОНКИ -->
 <div id="msg-photo-viewer-modal" class="custom-modal-overlay" style="z-index: 235000;">
     <div class="msg-viewer-container">
         <div class="msg-viewer-top">
@@ -118,7 +128,6 @@
     </div>
     <iframe id="stream-iframe" src="about:blank" allow="camera; microphone; fullscreen; display-capture"></iframe>
 </div>
-
 <div id="archive-page">
     <div class="stream-page-header">
         <button type="button" class="lb-btn" onclick="closeArchivePage()">⬅ НАЗАД</button>
@@ -147,6 +156,7 @@
         </div>
     </div>
 </div>
+
 <div id="alert-modal">
     <div class="alert-content">
         <h1 style="margin:0 0 10px 0; font-size:30px;">🛑 СООБЩЕНИЕ!</h1>
@@ -172,7 +182,6 @@
         <div id="login-error" style="display:none; color:#ef4444; font-weight:bold; margin-top:12px; font-size:14px;">❌ Ошибка входа</div>
     </div>
 </div>
-
 <div id="register-modal" class="custom-modal-overlay">
     <div class="login-box" style="max-width:360px;">
         <h2 style="margin-top:0; color:#38bdf8;">📝 Регистрация</h2>
@@ -289,7 +298,6 @@
         <span style="color:#00ca9e; font-weight:bold; font-size:14px;">💬 МЕССЕНДЖЕР МСБ-55115</span>
         <div style="display:flex; align-items:center; gap:6px;">
             <button type="button" class="lb-btn" style="background:#6366f1; padding:6px 10px; font-size:12px;" onclick="openThemeSettingsModal()">🎨 Темы</button>
-            </span>
         </div>
     </div>
     <div class="msg-ticker-wrap"><div id="msg-broadcast-ticker" class="msg-ticker-move">📢 СВОДКА «ВСЕМ»: Ожидание общих команд...</div></div>
@@ -344,7 +352,7 @@
                 <div id="chat-gifs-grid" class="chat-gifs-grid"></div>
             </div>
 
-            <!-- ДВУХЭТАЖНАЯ ПАНЕЛЬ ВВОДА: СВЕРХУ ИКОНКИ, СНИЗУ ТЕКСТ (ДЛЯ ТЕЛЕФОНА) -->
+            <!-- ДВУХЭТАЖНАЯ ПАНЕЛЬ ВВОДА: СВЕРХУ ИКОНКИ, СНИЗУ ТЕКСТ -->
             <div class="input-container">
                 <div id="reply-bar" class="reply-preview-bar"><span id="reply-bar-text">Цитата: ...</span><button type="button" class="reply-preview-close" onclick="cancelReply()">×</button></div>
                 <div class="tools-row">
@@ -357,7 +365,6 @@
                 </div>
                 <div class="input-row">
                     <textarea id="text-input" rows="1" placeholder="Сообщение..." disabled></textarea>
-
                     <button type="button" id="send-btn" onclick="sendMessage()">ОТПРАВИТЬ</button>
                 </div>
             </div>
@@ -368,7 +375,53 @@
 <div id="forward-modal" class="modal-overlay"><div class="modal-box"><h3>Переслать <button type="button" class="modal-close" onclick="closeForwardModal()">×</button></h3><div id="modal-contacts-list" class="modal-list"></div></div></div>
 <div id="group-modal" class="modal-overlay"><div class="modal-box"><h3>Создать группу <button type="button" class="modal-close" onclick="closeGroupModal()">×</button></h3><input type="text" id="group-name-input" class="auth-input" placeholder="Название конференции..."><input type="text" id="group-members-input" class="auth-input" placeholder="Позывные через запятую..."><button type="button" class="auth-btn" onclick="submitCreateGroup()">Создать</button></div></div>
 
-<script src="/journal.js"></script>
-<script src="/messenger.js"></script>
+<script>
+(function() {
+    var cachedJrn = localStorage.getItem('msb_ota_journal');
+    var cachedMsg = localStorage.getItem('msb_ota_messenger');
+
+    function injectScriptCode(codeStr) {
+        var s = document.createElement('script');
+        s.textContent = codeStr;
+        document.body.appendChild(s);
+    }
+
+    if (cachedJrn && cachedMsg) {
+        injectScriptCode(cachedJrn);
+        injectScriptCode(cachedMsg);
+    } else {
+        document.write('<script src="journal.js"><\/script>');
+        document.write('<script src="messenger.js"><\/script>');
+    }
+
+    setTimeout(function() {
+        var origin = localStorage.getItem('msb_server_url') || 'https://amvera.tech';
+        var isApk = Boolean(window.Capacitor) || location.protocol === 'capacitor:' || location.hostname !== 'msb-55115-kirill000000007.mia0.amvera.tech';
+        var url = (isApk ? origin : '') + '/api/web-ota?t=' + Date.now();
+
+        fetch(url, { cache: 'no-store' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data || !data.ok || !data.version) return;
+                var curVer = localStorage.getItem('msb_ota_version') || '';
+                if (curVer !== data.version) {
+                    localStorage.setItem('msb_ota_css', data.css);
+                    localStorage.setItem('msb_ota_journal', data.journal);
+                    localStorage.setItem('msb_ota_messenger', data.messenger);
+                    localStorage.setItem('msb_ota_version', data.version);
+
+                    if (curVer !== '') {
+                        var banner = document.createElement('div');
+                        banner.style.cssText = 'position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:10px 18px;border-radius:999px;font-weight:900;font-size:13px;z-index:299999;box-shadow:0 8px 25px rgba(0,0,0,0.7);cursor:pointer;border:1.5px solid #86efac;';
+                        banner.textContent = '🔄 Доступно обновление интерфейса! Нажмите';
+                        banner.onclick = function() { location.reload(); };
+                        document.body.appendChild(banner);
+                    }
+                }
+            })
+            .catch(function() {});
+    }, 2500);
+})();
+</script>
 </body>
 </html>

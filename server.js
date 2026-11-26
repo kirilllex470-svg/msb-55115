@@ -584,9 +584,28 @@ const server = http.createServer(function(req, res) {
         return sendJsonCompressed(req, res, 200, { alerts: unreadAlerts }, 'no-store');
     }
 
+     if (req.method === 'GET' && urlPath === '/api/web-ota') {
+        try {
+            const cssText = fs.readFileSync(path.join(__dirname, 'style.css'), 'utf-8');
+            const jrnText = fs.readFileSync(path.join(__dirname, 'journal.js'), 'utf-8');
+            const msgText = fs.readFileSync(path.join(__dirname, 'messenger.js'), 'utf-8');
+            const verHash = crypto.createHash('md5').update(cssText + jrnText + msgText).digest('hex');
+            return sendJsonCompressed(req, res, 200, {
+                ok: true,
+                version: verHash,
+                css: cssText,
+                journal: jrnText,
+                messenger: msgText
+            }, 'no-store');
+        } catch (e) {
+            return sendJsonCompressed(req, res, 500, { ok: false }, 'no-store');
+        }
+    }
+
     if (req.method === 'GET' && urlPath === '/api/ping') {
         return sendJsonCompressed(req, res, 200, { ok: true, bootId: SERVER_BOOT_ID, ts: Date.now() }, 'no-store');
     }
+
 
 
      if (req.method === 'POST' && urlPath === '/api/fcm/register') {
