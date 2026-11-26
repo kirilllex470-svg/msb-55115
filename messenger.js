@@ -2772,9 +2772,25 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
             }
         } catch (e) { contentHTML = '<div class="msg-text">Поврежденный файл</div>'; }
 
+     } else if (msg.type === 'missed_call') {
+        var callTargetName = isMy ? (msg.target || currentPartner || '') : (msg.sender || currentPartner || '');
+        var safeCallTarget = String(callTargetName).replace(/'/g, "\\'");
+        var missedTitle = isMy ? '📵 Недозвон (абонент не ответил)' : '📵 Пропущенный вызов';
+        contentHTML =
+            '<div class="msb-missed-call-card" onclick="triggerCallInDev(\'Аудиозвонок\', \'' + safeCallTarget + '\')">' +
+                '<div class="msb-missed-call-top">' +
+                    '<span class="msb-missed-ico">📵</span>' +
+                    '<div class="msb-missed-info">' +
+                        '<div class="msb-missed-title">' + missedTitle + '</div>' +
+                        '<div class="msb-missed-sub">Нажмите, чтобы перезвонить</div>' +
+                    '</div>' +
+                '</div>' +
+                '<button type="button" class="msb-missed-callback-btn">📞 Позвонить</button>' +
+            '</div>';
     } else {
         contentHTML = '<div class="msg-text">' + renderMessageTextWithLiveEmojis(msg.text) + '</div>';
     }
+
 
     var editedBadge = msg.edited
         ? '<span class="msg-edited-tag">(изм.)</span>'

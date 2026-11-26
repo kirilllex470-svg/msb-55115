@@ -3003,8 +3003,18 @@ function startMsbRing(isIncoming) {
             stopMsbRing();
             return;
         }
-        if (isIncoming) playSoundById('nice1', true);
-        else playToneNotes([{ f: 425, t: 0, d: 0.8, v: 0.2, type: 'sine' }]);
+        if (isIncoming) {
+            playSoundById('nice1', true);
+        } else {
+            // Громкий серьезный двухтональный сигнал спецсвязи при наборе
+            playToneNotes([
+                { f: 440, t: 0.00, d: 0.42, v: 0.85, type: 'triangle' },
+                { f: 480, t: 0.00, d: 0.42, v: 0.65, type: 'sawtooth' },
+                { f: 440, t: 0.52, d: 0.55, v: 0.85, type: 'triangle' },
+                { f: 480, t: 0.52, d: 0.55, v: 0.65, type: 'sawtooth' }
+            ]);
+        }
+
 
         // Начинаем проверять статус на сервере только через 5 секунд после старта набора (когда call_offer точно ушёл)
         if (Date.now() - ringStartedAt < 5000) return;
@@ -3274,8 +3284,22 @@ window.startMsbAudioCall = async function(targetName) {
         sendMsbCallWS({ type: 'call_offer', callId: msbCall.callId, from: me, to: partner, sdp: pc.localDescription });
 
         msbCall.waitTimer = setTimeout(function() {
-            if (msbCall.state === 'calling') window.endMsbAudioCall(true, 'timeout');
+            if (msbCall.state === 'calling') {
+                stopMsbRing();
+                playToneNotes([
+                    { f: 480, t: 0.00, d: 0.22, v: 0.8, type: 'sawtooth' },
+                    { f: 360, t: 0.26, d: 0.22, v: 0.8, type: 'sawtooth' },
+                    { f: 280, t: 0.52, d: 0.35, v: 0.85, type: 'sawtooth' }
+                ]);
+                var stEl = document.getElementById('msb-call-status');
+                if (stEl) {
+                    stEl.style.color = '#ef4444';
+                    stEl.textContent = '📵 Боец МСБ-55115 недоступен';
+                }
+                window.endMsbAudioCall(true, 'timeout', 3000);
+            }
         }, 45000);
+
     } catch (rtcErr) {
         alert('❌ Ошибка установки аудиоканала: ' + (rtcErr && rtcErr.message ? rtcErr.message : 'сбой'));
         window.endMsbAudioCall(true, 'error');
@@ -3362,12 +3386,13 @@ window.toggleMsbCallSpeaker = function() {
     syncMsbCallControls();
 };
 
-window.endMsbAudioCall = function(notifyRemote, reason) {
+window.endMsbAudioCall = function(notifyRemote, reason, closeDelayMs) {
     var me = getMsbCallerName();
     var prevPartner = msbCall.partner;
     stopMsbRing();
     if (msbCall.timer) { clearInterval(msbCall.timer); msbCall.timer = null; }
     if (msbCall.waitTimer) { clearTimeout(msbCall.waitTimer); msbCall.waitTimer = null; }
+    if (msbCall.discTimer) { clearTimeout(msbCall.discTimer); msbCall.discTimer = null; }
   if (notifyRemote && prevPartner && me) {
       var endObj = { type: 'call_end', from: me, to: prevPartner, reason: reason || 'hangup' };
       sendMsbCallWS(endObj);
@@ -3402,7 +3427,22 @@ window.endMsbAudioCall = function(notifyRemote, reason) {
     msbCall.callId = '';
     msbCall.iceQueue = [];
     var modal = document.getElementById('msb-audio-call-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        if (closeDelayMs && closeDelayMs > 0) {
+            setTimeout(function() {
+                if (msbCall.state === 'idle') {
+                    modal.style.display = 'none';
+                    var stReset = document.getElementById('msb-call-status');
+                    if (stReset) stReset.style.color = '#facc15';
+                }
+            }, closeDelayMs);
+        } else {
+            modal.style.display = 'none';
+            var stResetNow = document.getElementById('msb-call-status');
+            if (stResetNow) stResetNow.style.color = '#facc15';
+        }
+    }
+
     if (msbCall.callOnlyMode) {
         msbCall.callOnlyMode = false;
         if (window.MsbNative && typeof window.MsbNative.minimizeApp === 'function') {

@@ -1461,9 +1461,15 @@ const server = http.createServer(function(req, res) {
               let fromUser = String(data.from || '').trim();
               if (fromUser.toLowerCase() === 'админ') fromUser = 'муравей';
               const fromKey = fromUser.toLowerCase();
-
+              const pendingEntry = pendingCalls[targetKey] || (fromKey ? pendingCalls[fromKey] : null);
               delete pendingCalls[targetKey];
               if (fromKey) delete pendingCalls[fromKey];
+              if (pendingEntry && (data.reason === 'timeout' || data.reason === 'declined' || data.reason === 'hangup')) {
+                  const origCaller = pendingEntry.fromKey || fromUser;
+                  const origReceiver = (origCaller.toLowerCase() === targetKey) ? fromUser : targetKey;
+                  recordMissedCallInChat(origCaller, origReceiver);
+              }
+
 
               const rawPacket = JSON.stringify({
                   type: 'call_end',
@@ -2083,7 +2089,46 @@ function broadcastAlert(sender, color, timeStr, target, text) {
 }
 
 
+function recordMissedCallInChat(callerName, targetName) {
+    const fromClean = String(callerName || '').trim();
+    const toClean = String(targetName || '').trim();
+    if (!fromClean || !toClean || fromClean.toLowerCase() === toClean.toLowerCase()) return;
+
+    const uTarget = usersDB[toClean.toLowerCase()];
+    const realToName = uTarget ? uTarget.username : toClean;
+    const uFrom = usersDB[fromClean.toLowerCase()];
+    const realFromName = uFrom ? uFrom.username : fromClean;
+
+    const sorted = [realFromName.toLowerCase(), realToName.toLowerCase()].sort();
+    const pair = sorted.join(',');
+    const roomId = pair + '_' + pair;
+
+    if (!Array.isArray(roomsDB[roomId])) roomsDB[roomId] = [];
+    const lastInRoom = roomsDB[roomId].at(-1);
+    if (lastInRoom && lastInRoom.type === 'missed_call' && (Date.now() - Number(lastInRoom.timestamp || 0) < 4000)) {
+        return; // Защита от дубля, если одновременно пришли WS и HTTP call_end
+    }
+
+    const timeStr = getServerDateTime();
+    const missedObj = {
+        id: crypto.randomBytes(8).toString('hex'),
+        sender: realFromName,
+        target: realToName,
+        text: '📵 Пропущенный аудиозвонок',
+        type: 'missed_call',
+        time: timeStr,
+        timestamp: Date.now()
+    };
+    roomsDB[roomId].push(missedObj);
+    if (roomsDB[roomId].length > 150) roomsDB[roomId].shift();
+    writeJSON(CHAT_ROOMS_FILE, roomsDB, true);
+
+    broadcastWS({ type: 'chat_new_msg', room: roomId, msg: missedObj });
+    sendChatBackgroundPushOnly(realFromName, realToName, '📵 Пропущенный аудиозвонок');
+}
+
 const pendingCalls = {};
+
 
 wss.on('connection', function(ws) {
 
@@ -2214,13 +2259,20 @@ if (msg.type && msg.type.indexOf('call_') === 0) {
         };
     } else if (msg.type === 'call_ice' && pendingCalls[targetKey]) {
         pendingCalls[targetKey].iceList.push(msg);
-    } else if (
-        msg.type === 'call_answer' ||
-        msg.type === 'call_end'
-    ) {
+    } else if (msg.type === 'call_answer') {
         delete pendingCalls[targetKey];
         delete pendingCalls[fromKey];
+    } else if (msg.type === 'call_end') {
+        const pendingEntry = pendingCalls[targetKey] || pendingCalls[fromKey];
+        delete pendingCalls[targetKey];
+        delete pendingCalls[fromKey];
+        if (pendingEntry && (msg.reason === 'timeout' || msg.reason === 'declined' || msg.reason === 'hangup')) {
+            const origCaller = pendingEntry.fromKey || fromUser;
+            const origReceiver = (origCaller.toLowerCase() === targetKey) ? fromUser : targetKey;
+            recordMissedCallInChat(origCaller, origReceiver);
+        }
     }
+
 
 
     const rawPacket = JSON.stringify(msg);
