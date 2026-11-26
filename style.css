@@ -2595,15 +2595,8 @@ body.theme-cosmic .other-msg .bubble {
     filter: none !important;
 }
 
-.friend-avatar-online {
-    animation: none !important;
-    will-change: auto !important;
-}
-
 .msb-typing-active,
-.friend-typing-green {
-    text-shadow: none !important;
-}
+
 /* === ЗАЩИТА ОТ ПОДЁРГИВАНИЙ ЛЕНТЫ ЧАТА === */
 #messages {
     overflow-anchor: none !important;
