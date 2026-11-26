@@ -2650,9 +2650,13 @@ function fetchMessages() {
                 mDiv.appendChild(fragC);
                 lastMessagesCount = cachedMsgs.length;
                 mDiv.scrollTop = mDiv.scrollHeight;
+                requestAnimationFrame(function() { mDiv.scrollTop = mDiv.scrollHeight; });
+                setTimeout(function() { if (currentRoomId === requestedRoom) mDiv.scrollTop = mDiv.scrollHeight; }, 80);
+                setTimeout(function() { if (currentRoomId === requestedRoom) mDiv.scrollTop = mDiv.scrollHeight; }, 240);
             }
         } catch (e) {}
     }
+
 
     isFetchingMessages = true;
     msgFetchAbortCtrl = new AbortController();
@@ -2750,11 +2754,17 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
             rowsArr.forEach(function(r) { mDiv.appendChild(r); });
         }
         mDiv.scrollTop = mDiv.scrollHeight;
+        requestAnimationFrame(function() { mDiv.scrollTop = mDiv.scrollHeight; });
+        setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 120);
+    } else if (lastMessagesCount <= 0) {
+        requestAnimationFrame(function() { mDiv.scrollTop = mDiv.scrollHeight; });
+        setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 120);
     }
     lastMessagesCount = Math.max(lastMessagesCount, data.length);
     renderPendingBubbles();
     if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) markChatAsRead(currentRoomId);
 }
+
 
 function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
 
