@@ -157,7 +157,7 @@ jobs:
               "FOREGROUND_SERVICE_MICROPHONE",
               "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
               "REQUEST_INSTALL_PACKAGES", "USE_FULL_SCREEN_INTENT"
-        ]
+          ]
 
           tag = "<uses-permission android:name=\"android.permission.{}\" />"
           perms = "\n    ".join([tag.format(n) for n in names])
