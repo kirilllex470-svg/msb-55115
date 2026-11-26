@@ -3146,8 +3146,14 @@ function onMsbCallConnected() {
     if (msbCall.waitTimer) { clearTimeout(msbCall.waitTimer); msbCall.waitTimer = null; }
     if (window.MsbNative && typeof window.MsbNative.setSpeakerphone === 'function') {
         try { window.MsbNative.setSpeakerphone(msbCall.speaker); } catch (e) {}
+        setTimeout(function() {
+            if (msbCall.state === 'connected' && window.MsbNative) {
+                try { window.MsbNative.setSpeakerphone(msbCall.speaker); } catch (e) {}
+            }
+        }, 450);
     }
     var a = document.getElementById('msb-remote-call-audio');
+
     if (a && a.paused && a.srcObject) a.play().catch(function() {});
     msbCall.startTs = Date.now();
     document.getElementById('msb-call-status').textContent = '🟢 На связи • 00:00';
