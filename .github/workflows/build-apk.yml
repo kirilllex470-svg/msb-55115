@@ -992,54 +992,87 @@ jobs:
                       return false;
                   }
 
+                  private Runnable audioKeepTask = null;
+
                   private void applySpeakerRoute(android.media.AudioManager am, boolean on) {
                       if (am == null) return;
-                      am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                          if (on) {
+                      if (on) {
+                          // Громкая связь: отпускаем голосовой захват и включаем полную громкость стереодинамиков (MODE_NORMAL)
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                              try { am.clearCommunicationDevice(); } catch (Exception ignored) {}
+                          }
+                          am.setMode(android.media.AudioManager.MODE_NORMAL);
+                          am.setSpeakerphoneOn(true);
+                          setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
+                      } else {
+                          // Режим «Телефон» (только верхний динамик у уха): жестко переводим систему в голосовой вызов
+                          am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+                          am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+                          am.setSpeakerphoneOn(false);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                               for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
-                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) {
                                       am.setCommunicationDevice(dev);
                                       break;
                                   }
                               }
-                          } else {
-                              am.clearCommunicationDevice();
                           }
+                          setVolumeControlStream(android.media.AudioManager.STREAM_VOICE_CALL);
                       }
-                      am.setSpeakerphoneOn(on);
                   }
 
                   @JavascriptInterface
                   public void setSpeakerphone(final boolean on) {
                       runOnUiThread(() -> {
                           try {
-                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                              if (am != null) {
-                                  am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-                                  applySpeakerRoute(am, on);
-                                  getWindow().getDecorView().postDelayed(() -> {
-                                      try { applySpeakerRoute(am, on); } catch (Exception ignored) {}
-                                  }, 300);
+                              final android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am == null) return;
+                              if (audioKeepTask != null) {
+                                  getWindow().getDecorView().removeCallbacks(audioKeepTask);
+                                  audioKeepTask = null;
+                              }
+                              applySpeakerRoute(am, on);
+
+                              // Если выбран режим «Телефон» (у уха) — повторяем привязку через 300 и 900 мс, чтобы Chromium не сбросил обратно в стерео
+                              if (!on) {
+                                  audioKeepTask = new Runnable() {
+                                      int count = 0;
+                                      @Override
+                                      public void run() {
+                                          try { applySpeakerRoute(am, false); } catch (Exception ignored) {}
+                                          if (++count < 3) {
+                                              getWindow().getDecorView().postDelayed(this, 500);
+                                          }
+                                      }
+                                  };
+                                  getWindow().getDecorView().postDelayed(audioKeepTask, 300);
                               }
                           } catch (Exception ignored) {}
                       });
                   }
-
-      
 
                   @JavascriptInterface
                   public void resetAudioMode() {
                       runOnUiThread(() -> {
                           try {
+                              if (audioKeepTask != null) {
+                                  getWindow().getDecorView().removeCallbacks(audioKeepTask);
+                                  audioKeepTask = null;
+                              }
                               android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
                               if (am != null) {
+                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                      try { am.clearCommunicationDevice(); } catch (Exception ignored) {}
+                                  }
                                   am.setSpeakerphoneOn(false);
                                   am.setMode(android.media.AudioManager.MODE_NORMAL);
+                                  am.abandonAudioFocus(null);
                               }
+                              setVolumeControlStream(android.media.AudioManager.USE_DEFAULT_STREAM_TYPE);
                           } catch (Exception ignored) {}
                       });
                   }
+
 
                   @JavascriptInterface
                   public void stopNativeRingtone() {
