@@ -2910,4 +2910,38 @@ body.theme-cosmic #messenger-modal .friend-item .friend-call-mini:first-of-type,
 .msg-ticker-wrap {
     contain: layout style !important;
 }
+/* === ФИНАЛЬНЫЙ БУСТ 60+ FPS ДЛЯ ANDROID WEBVIEW === */
+
+/* Не тратим видеопамять на сообщения и карточки друзей за пределами экрана */
+#messages .message-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 62px;
+}
+
+#messenger-modal .friend-item {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 64px;
+    transition: none !important;
+}
+
+/* Отключаем просчёт 300 смайликов, пока панель закрыта */
+.tg-emoji-drawer[style*="none"] .tg-emoji-item.live-preview {
+    animation: none !important;
+}
+.tg-emoji-grid {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 180px;
+}
+
+/* Пауза всех бесконечных анимаций списка друзей, когда на телефоне открыт сам чат (.sidebar.hidden) */
+.sidebar.hidden .friend-avatar-online,
+.sidebar.hidden .friend-call-mini,
+.sidebar.hidden .friend-typing-green {
+    animation-play-state: paused !important;
+}
+
+/* Облегчаем градиентный фон чата от тяжёлой перерисовки сетки при скролле */
+#messenger-modal #messages {
+    background-attachment: local !important;
+}
 

@@ -1547,18 +1547,32 @@ function renderFriends() {
         var lastTextVal = friend.lastMessage || friend.lastMsg || '';
         var lastTimeVal = friend.time || friend.lastTime || '';
         if (!lastTextVal || lastTextVal === 'Нет сообщений') {
-            try {
-                var locRaw = localStorage.getItem('msb_cache_room_' + activeId);
-                var locArr = locRaw ? JSON.parse(locRaw) : [];
-                if (locArr.length > 0) {
-                    var lm = locArr[locArr.length - 1];
-                    lastTextVal = lm.type === 'audio' ? '🎙️ Голосовое' :
-                                  lm.type === 'video' ? '🎥 Кружок' :
-                                  lm.type === 'file' ? '📎 Файл' : (lm.text || '');
-                    lastTimeVal = lm.time || lastTimeVal;
-                }
-            } catch (e) {}
+            if (!window._msbLastMsgMem) window._msbLastMsgMem = {};
+            var memHit = window._msbLastMsgMem[activeId];
+            if (!memHit) {
+                try {
+                    var locRaw = localStorage.getItem('msb_cache_room_' + activeId);
+                    var locArr = locRaw ? JSON.parse(locRaw) : [];
+                    if (locArr.length > 0) {
+                        var lm = locArr[locArr.length - 1];
+                        memHit = {
+                            txt: lm.type === 'audio' ? '🎙️ Голосовое' :
+                                 lm.type === 'video' ? '🎥 Кружок' :
+                                 lm.type === 'file' ? '📎 Файл' : (lm.text || ''),
+                            tm: lm.time || ''
+                        };
+                        window._msbLastMsgMem[activeId] = memHit;
+                    } else {
+                        window._msbLastMsgMem[activeId] = { empty: true };
+                    }
+                } catch (e) {}
+            }
+            if (memHit && !memHit.empty) {
+                lastTextVal = memHit.txt || lastTextVal;
+                lastTimeVal = memHit.tm || lastTimeVal;
+            }
         }
+
 
         var hasUnread = (friend.unread > 0 && !isActive);
         var badgeHTML = hasUnread ? ('<div class="unread-badge">' + friend.unread + '</div>') : '';
@@ -3340,7 +3354,11 @@ function updateTotalUnreadBadge() {
 }
 
 window.addEventListener('online', function() { clearNetworkErrorBanner(); flushOutboxQueue(); if (currentRoomId) { fetchMessages(); markChatAsRead(currentRoomId); } });
-setInterval(function() { if (msbOutboxQueue.length > 0) flushOutboxQueue(); }, 1200);
+setInterval(function() {
+    if (msbOutboxQueue.length > 0 && document.visibilityState === 'visible') {
+        flushOutboxQueue();
+    }
+}, 3500);
 window.selectChat = selectChat; window.closeChatMobile = closeChatMobile; window.sendMessage = sendMessage;
 window.toggleVoiceRecord = toggleVoiceRecord; window.toggleVideoRecord = toggleVideoRecord; window.uploadAnyFile = uploadAnyFile;
 window.uploadMyAvatar = uploadMyAvatar; window.deleteFriend = deleteFriend; window.openCreateGroupModal = openCreateGroupModal;
