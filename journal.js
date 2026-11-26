@@ -2995,6 +2995,9 @@ function ensureMsbCallModal() {
 
 function startMsbRing(isIncoming) {
     stopMsbRing();
+    var ringStartedAt = Date.now();
+    var missCount = 0;
+
     var beep = function() {
         if (msbCall.state !== 'calling' && msbCall.state !== 'incoming') {
             stopMsbRing();
@@ -3003,14 +3006,22 @@ function startMsbRing(isIncoming) {
         if (isIncoming) playSoundById('nice1', true);
         else playToneNotes([{ f: 425, t: 0, d: 0.8, v: 0.2, type: 'sine' }]);
 
-        // Проверяем по HTTP, не сброшен ли уже звонок при плохом интернете
+        // Начинаем проверять статус на сервере только через 5 секунд после старта набора (когда call_offer точно ушёл)
+        if (Date.now() - ringStartedAt < 5000) return;
+
         var checkTarget = isIncoming ? getMsbCallerName() : msbCall.partner;
         if (checkTarget) {
             fetch('/api/call/status?target=' + encodeURIComponent(checkTarget) + '&callId=' + encodeURIComponent(msbCall.callId || '') + '&t=' + Date.now())
                 .then(function(r) { return r.json(); })
                 .then(function(st) {
-                    if (st && st.ok && st.ringing === false && (msbCall.state === 'calling' || msbCall.state === 'incoming')) {
-                        window.endMsbAudioCall(false, 'ended');
+                    if (st && st.ok && st.ringing === false) {
+                        missCount++;
+                        // Завершаем только если 2 проверки подряд подтвердили сброс и разговор ещё не начался
+                        if (missCount >= 2 && (msbCall.state === 'calling' || msbCall.state === 'incoming') && !msbCall.pc?.remoteDescription) {
+                            window.endMsbAudioCall(false, 'ended');
+                        }
+                    } else {
+                        missCount = 0;
                     }
                 })
                 .catch(function() {});
@@ -3019,6 +3030,7 @@ function startMsbRing(isIncoming) {
     beep();
     msbCall.ringTimer = setInterval(beep, 2600);
 }
+
 
 
 function stopMsbRing() {
