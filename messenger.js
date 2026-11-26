@@ -804,13 +804,14 @@ function updateTopBackButtonVisibility() {
 }
 
 function handleUnifiedMessengerBack() {
+    if (typeof resetChatArea === 'function') {
+        resetChatArea();
+    }
     var sidebar = document.getElementById('app-sidebar');
     if (sidebar) {
         sidebar.classList.remove('hidden');
     }
-    if (typeof resetChatArea === 'function' && window.innerWidth > 768) {
-        resetChatArea();
-    }
+
     updateTopBackButtonVisibility();
     lastFriendsRenderSig = '';
     loadFriendsAndRequests(true);
@@ -940,13 +941,10 @@ function flushOutboxQueue() {
             forwardedFrom: item.forwardedFrom || null
         };
 
-        if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
-            try {
-                ws.send(JSON.stringify(Object.assign({ type: 'chat_send_ws', msgType: payloadObj.type }, payloadObj)));
-            } catch (e) {}
-        } else if (typeof connectWS === 'function') {
-            connectWS(false);
+        if (typeof ws === 'undefined' || !ws || ws.readyState !== WebSocket.OPEN) {
+            if (typeof connectWS === 'function') connectWS(false);
         }
+
 
         var isShortText = (payloadObj.type === 'text') &&
             !payloadObj.forwardedFrom &&
@@ -1687,32 +1685,19 @@ function selectChat(itemObj) {
     renderFriends();
 
     renderPendingBubbles();
-    requestAnimationFrame(function() {
-        fetchMessages();
-        markChatAsRead(currentRoomId);
-        if (typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN) {
-            try {
-                ws.send(JSON.stringify({
-                    type: 'get_room_history',
-                    room: currentRoomId,
-                    user: chatUser
-                }));
-            } catch (e) {}
-        }
-    });
+    fetchMessages();
+    markChatAsRead(currentRoomId);
 }
 
 
 function closeChatMobile() {
+    resetChatArea();
     var sb = document.getElementById('app-sidebar');
     if (sb) sb.classList.remove('hidden');
     updateTopBackButtonVisibility();
     lastFriendsRenderSig = '';
     loadFriendsAndRequests(true);
 }
-
-
-
 
 (function initChatLeftSwipeToFriends() {
     var touchStartX = 0;
@@ -2598,6 +2583,9 @@ function fetchMessages() {
     }).catch(function() { isFetchingMessages = false; });
 }
 function applyMessagesToDOM(mDiv, data, isModalOpen) {
+    data = data.slice().sort(function(a, b) {
+        return Number(a.timestamp || 0) - Number(b.timestamp || 0);
+    });
     if (data.length === 0) {
         var hasLocalPending = msbOutboxQueue.some(function(p) { return p && p.room === currentRoomId; });
         if (lastMessagesCount !== 0 && !hasLocalPending && renderedMsgIds.size === 0) {
@@ -2622,7 +2610,6 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
         if (renderedMsgIds.has(msg.id)) {
             var existingRow = mDiv.querySelector('.message-row[data-msg-id="' + msg.id + '"]');
             if (existingRow) {
-                // Синхронизируем текст, если сообщение было исправлено, пока телефон был без сети
                 if ((!msg.type || msg.type === 'text') && existingRow.getAttribute('data-raw-text') !== String(msg.text || '')) {
                     existingRow.setAttribute('data-raw-text', String(msg.text || ''));
                     var txtBox = existingRow.querySelector('.msg-text');
@@ -2640,12 +2627,20 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
         addedNew = true;
         renderSingleRow(frag, msg, isMy, checkIcon);
     });
-    if (addedNew) mDiv.appendChild(frag);
+    if (addedNew) {
+        mDiv.appendChild(frag);
+        var rowsArr = Array.from(mDiv.querySelectorAll('.message-row:not(.msb-pending-row)'));
+        rowsArr.sort(function(r1, r2) {
+            return Number(r1.getAttribute('data-ts') || 0) - Number(r2.getAttribute('data-ts') || 0);
+        });
+        rowsArr.forEach(function(r) { mDiv.appendChild(r); });
+    }
     lastMessagesCount = Math.max(lastMessagesCount, data.length);
     renderPendingBubbles();
     if (addedNew) setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 30);
     if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) markChatAsRead(currentRoomId);
 }
+
 
 function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
     if (msg.clientMsgId) {
@@ -2657,9 +2652,16 @@ function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
         msbOutboxQueue = msbOutboxQueue.filter(function(item) { return item && item.lid !== msg.clientMsgId; });
         saveTextOutboxToStorage();
     }
+    if (msg.clientMsgId) {
+        var dupByClient = document.querySelector('.message-row[data-client-id="' + msg.clientMsgId + '"]');
+        if (dupByClient && dupByClient.getAttribute('data-msg-id') !== String(msg.id)) {
+            dupByClient.remove();
+        }
+    }
     var row = document.createElement('div');
     row.className = 'message-row ' + (isMy ? 'my-msg' : 'other-msg');
     row.setAttribute('data-msg-id', msg.id);
+    row.setAttribute('data-ts', String(msg.timestamp || 0));
     row.setAttribute('data-raw-text', String(msg.text || ''));
 
 
