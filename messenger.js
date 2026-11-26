@@ -1203,14 +1203,17 @@ function openMessengerWindow(targetPartnerName) {
             });
             if (foundFriend) {
                 selectChat(foundFriend);
+                return;
             } else if (cleanName && cleanName.toLowerCase() !== chatUser.toLowerCase() && cleanName !== 'АДМИН') {
                 selectChat({ name: cleanName, isGroup: false, avatar: '', online: true });
+                return;
             }
         } catch (err) {}
     }
-    fetchMessages();
+    if (currentRoomId) fetchMessages();
     loadFriendsAndRequests(true);
 }
+
 window.openMessengerWindow = openMessengerWindow;
 
 function closeMessengerWindow() {
@@ -2694,18 +2697,25 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
         renderSingleRow(frag, msg, isMy, checkIcon);
     });
     if (addedNew) {
+        var prevLastRow = mDiv.querySelector('.message-row:not(.msb-pending-row):last-of-type');
+        var prevLastTs = prevLastRow ? Number(prevLastRow.getAttribute('data-ts') || 0) : 0;
+        var firstNewEl = frag.firstElementChild;
+        var firstNewTs = firstNewEl ? Number(firstNewEl.getAttribute('data-ts') || 0) : 0;
+
         mDiv.appendChild(frag);
-        var rowsArr = Array.from(mDiv.querySelectorAll('.message-row:not(.msb-pending-row)'));
-        rowsArr.sort(function(r1, r2) {
-            return Number(r1.getAttribute('data-ts') || 0) - Number(r2.getAttribute('data-ts') || 0);
-        });
-        rowsArr.forEach(function(r) { mDiv.appendChild(r); });
+
+        if (prevLastTs > 0 && firstNewTs > 0 && firstNewTs < prevLastTs) {
+            var rowsArr = Array.from(mDiv.querySelectorAll('.message-row:not(.msb-pending-row)'));
+            rowsArr.sort(function(r1, r2) {
+                return Number(r1.getAttribute('data-ts') || 0) - Number(r2.getAttribute('data-ts') || 0);
+            });
+            rowsArr.forEach(function(r) { mDiv.appendChild(r); });
+        }
+        mDiv.scrollTop = mDiv.scrollHeight;
     }
     lastMessagesCount = Math.max(lastMessagesCount, data.length);
     renderPendingBubbles();
-    if (addedNew) setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 30);
-    if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) markChatAsRead(currentRoomId);
-}
+
 
 
 function renderSingleRow(parentContainer, msg, isMy, checkIcon) {
