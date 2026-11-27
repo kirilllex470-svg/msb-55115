@@ -1693,11 +1693,11 @@ const server = http.createServer(function(req, res) {
         return sendJsonCompressed(req, res, 200, { ok: true, videos: mixedList }, 'no-store');
     }
     if (req.method === 'POST' && urlPath === '/api/channels/pull-now') {
-        return pullRandomReelsFromPlatforms().then(function() {
-            const mixedList = channelsVideosDB.slice().sort(function() { return Math.random() - 0.5; });
-            return sendJsonCompressed(req, res, 200, { ok: true, videos: mixedList }, 'no-store');
-        });
+        pullRandomReelsFromPlatforms().catch(function() {});
+        const mixedList = channelsVideosDB.slice().sort(function() { return Math.random() - 0.5; });
+        return sendJsonCompressed(req, res, 200, { ok: true, videos: mixedList }, 'no-store');
     }
+
 
 
     if (req.method === 'POST' && urlPath === '/api/channels/upload') {
