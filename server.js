@@ -343,7 +343,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v42';",
+    "const SHELL_CACHE = 'msb55115-shell-v43';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1980,9 +1980,11 @@ function broadcastAlert(sender, color, timeStr, target, text) {
     const themePalettes = {
         military: { accentColor: '#22c55e' },
         rocket:   { accentColor: '#f97316' },
-        cosmic:   { accentColor: '#a855f7' }
+        cosmic:   { accentColor: '#a855f7' },
+        neon:     { accentColor: '#ec4899' },
+        ocean:    { accentColor: '#06b6d4' },
+        sunset:   { accentColor: '#f59e0b' }
     };
-
     let rawSenderStr = String(sender || 'АДМИН').trim();
     let parsedCallsign = rawSenderStr.replace(/^👥\s*/, '').trim();
     let parsedUnit = '';

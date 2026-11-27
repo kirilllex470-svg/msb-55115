@@ -1757,7 +1757,10 @@ function createCleanBigAvatarIcon(senderName, themeName, callback) {
     const palettes = {
         military: { bg1: '#102a1a', bg2: '#06120b', text: '#4ade80' },
         rocket:   { bg1: '#2e140d', bg2: '#120704', text: '#fb923c' },
-        cosmic:   { bg1: '#1c1242', bg2: '#090618', text: '#c084fc' }
+        cosmic:   { bg1: '#1c1242', bg2: '#090618', text: '#c084fc' },
+        neon:     { bg1: '#2e0836', bg2: '#090314', text: '#f472b6' },
+        ocean:    { bg1: '#082f49', bg2: '#021322', text: '#22d3ee' },
+        sunset:   { bg1: '#3b1506', bg2: '#140602', text: '#fbbf24' }
     };
     const pal = palettes[meta.id] || palettes.military;
     const size = 576;
@@ -2191,16 +2194,23 @@ function getMsbThemeMeta(themeName) {
     const t = themeName || localStorage.getItem('msb_app_theme') || 'military';
     if (t === 'rocket') return { id: 'rocket', color: '#f97316', bgColor: '#2e140d', badge: '🚀', label: 'РАКЕТНЫЙ' };
     if (t === 'cosmic') return { id: 'cosmic', color: '#a855f7', bgColor: '#1c1242', badge: '🌌', label: 'КОСМОС' };
+    if (t === 'neon')   return { id: 'neon',   color: '#ec4899', bgColor: '#2e0836', badge: '💎', label: 'КИБЕР-НЕОН' };
+    if (t === 'ocean')  return { id: 'ocean',  color: '#06b6d4', bgColor: '#082f49', badge: '🌊', label: 'ОКЕАН' };
+    if (t === 'sunset') return { id: 'sunset', color: '#f59e0b', bgColor: '#3b1506', badge: '🌅', label: 'ЗАКАТ' };
     return { id: 'military', color: '#22c55e', bgColor: '#102a1a', badge: '🪖', label: 'ВОЕННЫЙ' };
 }
 
 
 function setAppTheme(themeName, skipSync) {
-    const clean = (themeName === 'rocket' || themeName === 'cosmic') ? themeName : 'military';
-    document.body.classList.remove('theme-military', 'theme-rocket', 'theme-cosmic');
+    const allThemes = Array.of('military', 'rocket', 'cosmic', 'neon', 'ocean', 'sunset');
+    const clean = allThemes.includes(themeName) ? themeName : 'military';
+    document.body.classList.remove(
+        'theme-military', 'theme-rocket', 'theme-cosmic',
+        'theme-neon', 'theme-ocean', 'theme-sunset'
+    );
     document.body.classList.add('theme-' + clean);
     localStorage.setItem('msb_app_theme', clean);
-    Array.of('military', 'rocket', 'cosmic').forEach(function(t) {
+    allThemes.forEach(function(t) {
         const b = document.getElementById('theme-btn-' + t);
         if (b) b.classList.toggle('active', t === clean);
     });
@@ -2212,6 +2222,7 @@ function setAppTheme(themeName, skipSync) {
         sendFcmTokenToServer();
     }
 }
+
 
 
 function toggleChatGifDrawer() {

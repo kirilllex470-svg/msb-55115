@@ -2953,3 +2953,334 @@ body.theme-cosmic #messages {
 .sidebar.hidden .friend-typing-green {
     animation-play-state: paused !important;
 }
+/* === ЧАСТЬ 1: БАЗОВЫЕ ПЕРЕМЕННЫЕ И ЖИВОЙ ФОН ЧАТА МСБ55115 === */
+body.theme-neon {
+    --bg: #0b0416;
+    --panel: #1d0a30;
+    --accent: #ec4899;
+    --text: #fdf2f8;
+    --border: #5b1865;
+    --danger: #f43f5e;
+}
+
+body.theme-ocean {
+    --bg: #031525;
+    --panel: #082b47;
+    --accent: #06b6d4;
+    --text: #ecfeff;
+    --border: #155e75;
+    --danger: #ef4444;
+}
+
+body.theme-sunset {
+    --bg: #180904;
+    --panel: #331409;
+    --accent: #f59e0b;
+    --text: #fffbeb;
+    --border: #78350f;
+    --danger: #dc2626;
+}
+
+@keyframes msbCivilBgDrift {
+    0%   { background-position: 0px 0px, 0% 0%; }
+    50%  { background-position: 110px -80px, 100% 100%; }
+    100% { background-position: 220px -160px, 0% 0%; }
+}
+
+#messenger-modal #messages.is-scrolling {
+    animation-play-state: paused !important;
+}
+/* === ЧАСТЬ 2: ТЕМА 💎 КИБЕР-НЕОН === */
+body.theme-neon #messenger-modal #messages {
+    --wm-neon: url("data:image/svg+xml,%3Csvg xmlns='http://w3.org' width='220' height='160'%3E%3Cg transform='rotate(-16 110 80)'%3E%3Ctext x='110' y='82' text-anchor='middle' font-family='monospace' font-weight='900' font-size='21' fill='rgba(236,72,153,0.14)' stroke='rgba(34,211,238,0.18)' stroke-width='0.7'%3EМСБ55115%3C/text%3E%3C/g%3E%3C/svg%3E");
+    background-color: #0b0317 !important;
+    background-image:
+        var(--wm-neon),
+        radial-gradient(
+            circle at 20% 25%,
+            rgba(236, 72, 153, 0.28) 0%,
+            rgba(6, 182, 212, 0.16) 45%,
+            #070210 90%
+        ) !important;
+    background-size: 220px 160px, 180% 180% !important;
+    animation: msbCivilBgDrift 22s linear infinite !important;
+}
+
+body.theme-neon .my-msg .bubble {
+    background: linear-gradient(145deg, #db2777 0%, #9333ea 60%, #4c1d95 100%) !important;
+    border-color: #f472b6 !important;
+}
+
+body.theme-neon .other-msg .bubble {
+    background: linear-gradient(145deg, #27103d 0%, #150826 70%, #0b0416 100%) !important;
+    border-color: #22d3ee !important;
+}
+
+body.theme-neon #messenger-modal .sidebar,
+body.theme-neon #msb-unified-topbar {
+    background: linear-gradient(180deg, #24093a 0%, #090312 100%) !important;
+    border-color: rgba(236, 72, 153, 0.45) !important;
+}
+
+body.theme-neon #messenger-modal .search-container {
+    background: rgba(45, 12, 68, 0.78) !important;
+    border-bottom: 1px solid rgba(236, 72, 153, 0.32) !important;
+}
+
+body.theme-neon #messenger-modal .search-input {
+    background: #11041f !important;
+    border: 1px solid rgba(236, 72, 153, 0.55) !important;
+    color: #fdf2f8 !important;
+}
+
+body.theme-neon #messenger-modal .add-friend-btn,
+body.theme-neon #messenger-modal .create-group-btn {
+    background: linear-gradient(135deg, rgba(219, 39, 119, 0.42), rgba(88, 28, 135, 0.7)) !important;
+    border: 1px solid #f472b6 !important;
+    color: #fbcfe8 !important;
+}
+
+body.theme-neon #messenger-modal .friend-item {
+    background: linear-gradient(145deg, rgba(52, 14, 78, 0.88), rgba(16, 5, 28, 0.94)) !important;
+    border: 1px solid rgba(236, 72, 153, 0.35) !important;
+}
+
+body.theme-neon #messenger-modal .friend-item.active {
+    background: linear-gradient(135deg, rgba(219, 39, 119, 0.48), rgba(107, 33, 168, 0.75)) !important;
+    border: 1.5px solid #22d3ee !important;
+}
+
+body.theme-neon #messenger-modal .chat-header,
+body.theme-neon .msb-unified-back-btn,
+body.theme-neon .msb-profile-pill,
+body.theme-neon .notifications-window {
+    background: linear-gradient(135deg, rgba(46, 10, 68, 0.94), rgba(14, 4, 26, 0.96)) !important;
+    border-color: rgba(236, 72, 153, 0.6) !important;
+}
+
+body.theme-neon .tg-input-capsule,
+body.theme-neon .video-round {
+    border-color: #ec4899 !important;
+}
+
+body.theme-neon .tg-inside-send-btn,
+body.theme-neon .msb-radial-tools-row .media-btn,
+body.theme-neon .msb-round-ctrl-btn.send-round-btn {
+    background: linear-gradient(135deg, #ec4899, #7e22ce) !important;
+    border-color: #f9a8d4 !important;
+}
+
+body.theme-neon .bank-pin-screen {
+    --pin-main: #ec4899;
+    --pin-glow: rgba(236, 72, 153, 0.5);
+    --pin-bg-top: #2b093d;
+    --pin-bg-bot: #090212;
+    --pin-btn-bg: rgba(131, 24, 67, 0.42);
+}
+
+body.theme-neon .msb-themed-card,
+body.theme-neon #login-overlay,
+body.theme-neon #register-modal {
+    --t-main: #ec4899;
+    --t-accent: #9333ea;
+    --t-glow: rgba(236, 72, 153, 0.4);
+    --t-bg1: #2a0a3d;
+    --t-bg2: #0a0314;
+    --t-inp: #07020e;
+}
+/* === ЧАСТЬ 3: ТЕМА 🌊 ОКЕАН === */
+body.theme-ocean #messenger-modal #messages {
+    --wm-ocean: url("data:image/svg+xml,%3Csvg xmlns='http://w3.org' width='220' height='160'%3E%3Cg transform='rotate(-14 110 80)'%3E%3Ctext x='110' y='82' text-anchor='middle' font-family='monospace' font-weight='900' font-size='21' fill='rgba(34,211,238,0.14)' stroke='rgba(56,189,248,0.18)' stroke-width='0.7'%3EМСБ55115%3C/text%3E%3C/g%3E%3C/svg%3E");
+    background-color: #031525 !important;
+    background-image:
+        var(--wm-ocean),
+        radial-gradient(
+            circle at 75% 20%,
+            rgba(6, 182, 212, 0.30) 0%,
+            rgba(2, 132, 199, 0.18) 50%,
+            #020c17 92%
+        ) !important;
+    background-size: 220px 160px, 180% 180% !important;
+    animation: msbCivilBgDrift 26s linear infinite !important;
+}
+
+body.theme-ocean .my-msg .bubble {
+    background: linear-gradient(145deg, #0891b2 0%, #0284c7 60%, #1e3a8a 100%) !important;
+    border-color: #67e8f9 !important;
+}
+
+body.theme-ocean .other-msg .bubble {
+    background: linear-gradient(145deg, #0c3554 0%, #072138 70%, #031221 100%) !important;
+    border-color: #06b6d4 !important;
+}
+
+body.theme-ocean #messenger-modal .sidebar,
+body.theme-ocean #msb-unified-topbar {
+    background: linear-gradient(180deg, #062c49 0%, #020e1a 100%) !important;
+    border-color: rgba(6, 182, 212, 0.45) !important;
+}
+
+body.theme-ocean #messenger-modal .search-container {
+    background: rgba(8, 47, 73, 0.78) !important;
+    border-bottom: 1px solid rgba(6, 182, 212, 0.32) !important;
+}
+
+body.theme-ocean #messenger-modal .search-input {
+    background: #031525 !important;
+    border: 1px solid rgba(6, 182, 212, 0.55) !important;
+    color: #ecfeff !important;
+}
+
+body.theme-ocean #messenger-modal .add-friend-btn,
+body.theme-ocean #messenger-modal .create-group-btn {
+    background: linear-gradient(135deg, rgba(8, 145, 178, 0.45), rgba(30, 58, 138, 0.7)) !important;
+    border: 1px solid #22d3ee !important;
+    color: #cffafe !important;
+}
+
+body.theme-ocean #messenger-modal .friend-item {
+    background: linear-gradient(145deg, rgba(12, 54, 86, 0.88), rgba(4, 20, 36, 0.94)) !important;
+    border: 1px solid rgba(6, 182, 212, 0.35) !important;
+}
+
+body.theme-ocean #messenger-modal .friend-item.active {
+    background: linear-gradient(135deg, rgba(8, 145, 178, 0.48), rgba(29, 78, 216, 0.72)) !important;
+    border: 1.5px solid #67e8f9 !important;
+}
+
+body.theme-ocean #messenger-modal .chat-header,
+body.theme-ocean .msb-unified-back-btn,
+body.theme-ocean .msb-profile-pill,
+body.theme-ocean .notifications-window {
+    background: linear-gradient(135deg, rgba(8, 47, 73, 0.94), rgba(3, 18, 34, 0.96)) !important;
+    border-color: rgba(6, 182, 212, 0.6) !important;
+}
+
+body.theme-ocean .tg-input-capsule,
+body.theme-ocean .video-round {
+    border-color: #06b6d4 !important;
+}
+
+body.theme-ocean .tg-inside-send-btn,
+body.theme-ocean .msb-radial-tools-row .media-btn,
+body.theme-ocean .msb-round-ctrl-btn.send-round-btn {
+    background: linear-gradient(135deg, #06b6d4, #0284c7) !important;
+    border-color: #67e8f9 !important;
+}
+
+body.theme-ocean .bank-pin-screen {
+    --pin-main: #06b6d4;
+    --pin-glow: rgba(6, 182, 212, 0.5);
+    --pin-bg-top: #083344;
+    --pin-bg-bot: #020d18;
+    --pin-btn-bg: rgba(14, 116, 144, 0.42);
+}
+
+body.theme-ocean .msb-themed-card,
+body.theme-ocean #login-overlay,
+body.theme-ocean #register-modal {
+    --t-main: #06b6d4;
+    --t-accent: #0284c7;
+    --t-glow: rgba(6, 182, 212, 0.4);
+    --t-bg1: #082f49;
+    --t-bg2: #02101d;
+    --t-inp: #010a13;
+}
+/* === ЧАСТЬ 4: ТЕМА 🌅 ЗАКАТ === */
+body.theme-sunset #messenger-modal #messages {
+    --wm-sunset: url("data:image/svg+xml,%3Csvg xmlns='http://w3.org' width='220' height='160'%3E%3Cg transform='rotate(-15 110 80)'%3E%3Ctext x='110' y='82' text-anchor='middle' font-family='monospace' font-weight='900' font-size='21' fill='rgba(251,191,36,0.14)' stroke='rgba(244,63,94,0.18)' stroke-width='0.7'%3EМСБ55115%3C/text%3E%3C/g%3E%3C/svg%3E");
+    background-color: #180804 !important;
+    background-image:
+        var(--wm-sunset),
+        radial-gradient(
+            circle at 50% 80%,
+            rgba(245, 158, 11, 0.26) 0%,
+            rgba(225, 29, 72, 0.18) 48%,
+            #100406 92%
+        ) !important;
+    background-size: 220px 160px, 180% 180% !important;
+    animation: msbCivilBgDrift 24s linear infinite !important;
+}
+
+body.theme-sunset .my-msg .bubble {
+    background: linear-gradient(145deg, #d97706 0%, #e11d48 65%, #881337 100%) !important;
+    border-color: #fcd34d !important;
+}
+
+body.theme-sunset .other-msg .bubble {
+    background: linear-gradient(145deg, #3d1814 0%, #240c0b 70%, #130505 100%) !important;
+    border-color: #f59e0b !important;
+}
+
+body.theme-sunset #messenger-modal .sidebar,
+body.theme-sunset #msb-unified-topbar {
+    background: linear-gradient(180deg, #36130b 0%, #120504 100%) !important;
+    border-color: rgba(245, 158, 11, 0.45) !important;
+}
+
+body.theme-sunset #messenger-modal .search-container {
+    background: rgba(62, 21, 14, 0.78) !important;
+    border-bottom: 1px solid rgba(245, 158, 11, 0.32) !important;
+}
+
+body.theme-sunset #messenger-modal .search-input {
+    background: #190705 !important;
+    border: 1px solid rgba(245, 158, 11, 0.55) !important;
+    color: #fffbeb !important;
+}
+
+body.theme-sunset #messenger-modal .add-friend-btn,
+body.theme-sunset #messenger-modal .create-group-btn {
+    background: linear-gradient(135deg, rgba(217, 119, 6, 0.45), rgba(159, 18, 57, 0.7)) !important;
+    border: 1px solid #fbbf24 !important;
+    color: #fde68a !important;
+}
+
+body.theme-sunset #messenger-modal .friend-item {
+    background: linear-gradient(145deg, rgba(66, 23, 17, 0.88), rgba(22, 7, 7, 0.94)) !important;
+    border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+
+body.theme-sunset #messenger-modal .friend-item.active {
+    background: linear-gradient(135deg, rgba(217, 119, 6, 0.48), rgba(190, 18, 60, 0.72)) !important;
+    border: 1.5px solid #fcd34d !important;
+}
+
+body.theme-sunset #messenger-modal .chat-header,
+body.theme-sunset .msb-unified-back-btn,
+body.theme-sunset .msb-profile-pill,
+body.theme-sunset .notifications-window {
+    background: linear-gradient(135deg, rgba(58, 20, 14, 0.94), rgba(19, 6, 6, 0.96)) !important;
+    border-color: rgba(245, 158, 11, 0.6) !important;
+}
+
+body.theme-sunset .tg-input-capsule,
+body.theme-sunset .video-round {
+    border-color: #f59e0b !important;
+}
+
+body.theme-sunset .tg-inside-send-btn,
+body.theme-sunset .msb-radial-tools-row .media-btn,
+body.theme-sunset .msb-round-ctrl-btn.send-round-btn {
+    background: linear-gradient(135deg, #f59e0b, #e11d48) !important;
+    border-color: #fde68a !important;
+}
+
+body.theme-sunset .bank-pin-screen {
+    --pin-main: #f59e0b;
+    --pin-glow: rgba(245, 158, 11, 0.5);
+    --pin-bg-top: #3b140b;
+    --pin-bg-bot: #110404;
+    --pin-btn-bg: rgba(180, 83, 9, 0.42);
+}
+
+body.theme-sunset .msb-themed-card,
+body.theme-sunset #login-overlay,
+body.theme-sunset #register-modal {
+    --t-main: #f59e0b;
+    --t-accent: #e11d48;
+    --t-glow: rgba(245, 158, 11, 0.4);
+    --t-bg1: #38130c;
+    --t-bg2: #120505;
+    --t-inp: #0b0303;
+}
