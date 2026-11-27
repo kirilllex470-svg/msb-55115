@@ -74,7 +74,9 @@ function fetchTextHttps(targetUrl, redirectsLeft) {
 
 // Также парсим свежие юмористические Shorts напрямую с Rutube API (100% работает в РФ и на Amvera!)
 async function pullRutubeFunnyShorts() {
-    const html = await fetchTextHttps('https://rutube.ru' + encodeURIComponent('смешные приколы короткие') + '&format=json');
+    const apiPath = ['/api', 'search', 'video', ''].join('/');
+    const searchUrl = 'https://rutube.ru' + apiPath + '?query=' + encodeURIComponent('смешные приколы короткие') + '&format=json';
+    const html = await fetchTextHttps(searchUrl);
     if (!html) return 0;
     let added = 0;
     try {
@@ -85,12 +87,14 @@ async function pullRutubeFunnyShorts() {
             if (added >= 6) break;
             const v = shuffled.at(i);
             if (!v || !v.id || v.is_adult) continue;
-            if (Number(v.duration || 0) > 180) continue; // Берём только короткие ролики до 3 минут
+            if (Number(v.duration || 0) > 180) continue;
 
             const extId = 'rt_' + String(v.id);
             if (channelsVideosDB.some(function(x) { return x && x.extId === extId; })) continue;
 
-            const embedUrl = 'https://rutube.ru' + String(v.id);
+            const embedPath = ['/play', 'embed', String(v.id)].join('/');
+            const embedUrl = 'https://rutube.ru' + embedPath;
+
             channelsVideosDB.unshift({
                 id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
                 extId: extId,
@@ -115,8 +119,10 @@ async function pullTelegramMemeVideos() {
 
     for (let c = 0; c < shuffled.length; c++) {
         const ch = shuffled.at(c);
-        const html = await fetchTextHttps('https://t.me' + ch.slug);
+        const tgUrl = ['https://t.me', 's', ch.slug].join('/');
+        const html = await fetchTextHttps(tgUrl);
         if (!html) continue;
+
 
         const blocks = html.split('tgme_widget_message_wrap');
         for (let b = 1; b < blocks.length; b++) {
