@@ -29,40 +29,62 @@ let pinResetsDB = readJSON(PIN_RESET_FILE, {});
 let channelsVideosDB = readJSON(CHANNELS_FILE, []);
 if (!Array.isArray(channelsVideosDB)) channelsVideosDB = [];
 
-const EXTERNAL_HUMOR_SOURCES = [
-    { platform: '😂 Юмор TV', url: 'https://reddit.com' },
-    { platform: '🎬 Приколы Net', url: 'https://reddit.com' },
+const BUILTIN_STREAM_REELS = Array.of(
+    { extId: 'st_1', author: '😂 Юмор TV', title: '🐰 Большой ушастый кролик — классика юмора 😂', videoUrl: 'https://googleapis.com' },
+    { extId: 'st_2', author: '⚡ Экшн Приколы', title: '🔥 Когда опаздываешь на построение 🤣', videoUrl: 'https://googleapis.com' },
+    { extId: 'st_3', author: '🎬 Кино-Мем', title: '😎 Побег на максималках!', videoUrl: 'https://googleapis.com' },
+    { extId: 'st_4', author: '🎉 Позитив FM', title: '🥳 Пятничное настроение в подразделении!', videoUrl: 'https://googleapis.com' },
+    { extId: 'st_5', author: '🤣 Нежданчик', title: '💥 Когда техника решила пошутить!', videoUrl: 'https://googleapis.com' },
+    { extId: 'st_6', author: '🚗 Авто-Юмор', title: '🛞 Тест-драйв по пересечённой местности 😎', videoUrl: 'https://googleapis.com' },
+    { extId: 'st_7', author: '🚙 Драйв Канал', title: '🏁 На чём поедем за пиццей? 😂', videoUrl: 'https://googleapis.com' },
+    { extId: 'st_8', author: '🐾 Мульт-Прикол', title: '🐿️ Белка и орех: вечная классика!', videoUrl: 'https://googleapis.com' }
+);
+
+function seedInitialStreamReels() {
+    let changed = false;
+    BUILTIN_STREAM_REELS.forEach(function(r) {
+        const exists = channelsVideosDB.some(function(x) { return x && x.extId === r.extId; });
+        if (!exists) {
+            channelsVideosDB.push({
+                id: 'reel_' + r.extId + '_' + Date.now(),
+                extId: r.extId,
+                author: r.author,
+                isAuto: true,
+                title: r.title,
+                videoUrl: r.videoUrl,
+                time: getServerDateTime(),
+                likes: new Array()
+            });
+            changed = true;
+        }
+    });
+    if (changed) {
+        writeJSON(CHANNELS_FILE, channelsVideosDB, true);
+    }
+}
+seedInitialStreamReels();
+
+const LIVE_JSON_FEEDS = Array.of(
+    { platform: '😂 Reddit Юмор', url: 'https://reddit.com' },
     { platform: '🐾 Зверьё Смех', url: 'https://reddit.com' },
+    { platform: '🎬 Приколы Net', url: 'https://reddit.com' },
     { platform: '⚡ Нежданчик', url: 'https://reddit.com' }
-];
+);
 
-const BACKUP_FUNNY_CLIPS = [
-    { extId: 'bk_1', platform: '🎬 Комедия TV', title: '🐰 Большой ушастый зайка: прикол дня 😂', url: 'https://googleapis.com' },
-    { extId: 'bk_2', platform: '⚡ Экшн Юмор', title: '🔥 Эпичный побег на скорости 🤣', url: 'https://googleapis.com' },
-    { extId: 'bk_3', platform: '😂 Приколы Net', title: '😎 Когда решил отдохнуть после дежурства', url: 'https://googleapis.com' },
-    { extId: 'bk_4', platform: '🐾 Зверьё Смех', title: '🎉 Весёлый драйв и настроение!', url: 'https://googleapis.com' },
-    { extId: 'bk_5', platform: '🤣 Смех до слёз', title: '💥 Неожиданный поворот событий!', url: 'https://googleapis.com' }
-];
-
-function fetchJsonHttps(targetUrl, redirectsLeft) {
-    const left = (typeof redirectsLeft === 'number') ? redirectsLeft : 3;
+function fetchJsonSimple(targetUrl) {
     return new Promise(function(resolve) {
         const req = https.get(targetUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+                'User-Agent': 'web:msb55115.humor.feed:v1.0 (by /u/msbviewer)',
                 'Accept': 'application/json'
             },
-            timeout: 15000
+            timeout: 8000
         }, function(res) {
-            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location && left > 0) {
-                res.resume();
-                return resolve(fetchJsonHttps(res.headers.location, left - 1));
-            }
             if (res.statusCode !== 200) {
                 res.resume();
                 return resolve(null);
             }
-            const chunks = [];
+            const chunks = new Array();
             res.on('data', function(c) { chunks.push(c); });
             res.on('end', function() {
                 try {
@@ -77,130 +99,60 @@ function fetchJsonHttps(targetUrl, redirectsLeft) {
     });
 }
 
-function downloadVideoToUploads(videoUrl, redirectsLeft) {
-    const left = (typeof redirectsLeft === 'number') ? redirectsLeft : 3;
-    return new Promise(function(resolve) {
-        const fileName = 'auto_' + crypto.randomBytes(6).toString('hex') + '.mp4';
-        const fullPath = path.join(UPLOADS_DIR, fileName);
-
-        const req = https.get(videoUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0' },
-            timeout: 30000
-        }, function(res) {
-            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location && left > 0) {
-                res.resume();
-                return resolve(downloadVideoToUploads(res.headers.location, left - 1));
-            }
-            if (res.statusCode !== 200) {
-                res.resume();
-                return resolve(null);
-            }
-            const wsFile = fs.createWriteStream(fullPath);
-            res.pipe(wsFile);
-            wsFile.on('finish', function() {
-                wsFile.close();
-                try {
-                    const st = fs.statSync(fullPath);
-                    if (st.size < 30000 || st.size > 45 * 1024 * 1024) {
-                        fs.unlinkSync(fullPath);
-                        return resolve(null);
-                    }
-                    resolve('/uploads/' + fileName);
-                } catch (e) {
-                    resolve(null);
-                }
-            });
-            wsFile.on('error', function() {
-                try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (e) {}
-                resolve(null);
-            });
-        });
-        req.on('error', function() { resolve(null); });
-        req.on('timeout', function() { req.destroy(); resolve(null); });
-    });
-}
-
 let isFetchingExternalReels = false;
 
 async function pullRandomReelsFromPlatforms() {
+    seedInitialStreamReels();
     if (isFetchingExternalReels) return;
     isFetchingExternalReels = true;
     try {
-        const shuffledSources = EXTERNAL_HUMOR_SOURCES.slice().sort(function() { return Math.random() - 0.5; });
-        let addedCount = 0;
+        const shuffled = LIVE_JSON_FEEDS.slice().sort(function() { return Math.random() - 0.5; });
+        let added = 0;
 
-        for (let s = 0; s < shuffledSources.length; s++) {
-            if (addedCount >= 3) break;
-            const src = shuffledSources[s];
-            const json = await fetchJsonHttps(src.url);
+        for (let s = 0; s < shuffled.length; s++) {
+            if (added >= 5) break;
+            const feed = shuffled.at(s);
+            const json = await fetchJsonSimple(feed.url);
             if (!json || !json.data || !Array.isArray(json.data.children)) continue;
 
             const posts = json.data.children.slice().sort(function() { return Math.random() - 0.5; });
             for (let i = 0; i < posts.length; i++) {
-                if (addedCount >= 3) break;
-                const d = posts[i] && posts[i].data;
+                if (added >= 5) break;
+                const postWrap = posts.at(i);
+                const d = postWrap ? postWrap.data : null;
                 if (!d || d.over_18) continue;
 
                 const rv = (d.secure_media && d.secure_media.reddit_video) ||
-                           (d.media && d.media.reddit_video);
+                           (d.media && d.media.reddit_video) ||
+                           (d.preview && d.preview.reddit_video_preview);
                 if (!rv || !rv.fallback_url) continue;
-                if (Number(rv.duration || 0) > 70) continue;
 
-                const extId = 'ext_' + String(d.id || '');
-                if (channelsVideosDB.some(function(x) { return x.extId === extId; })) continue;
+                const extId = 'rd_' + String(d.id || '');
+                if (channelsVideosDB.some(function(x) { return x && x.extId === extId; })) continue;
 
-                const cleanMp4 = String(rv.fallback_url).split('?')[0];
-                const savedLocalUrl = await downloadVideoToUploads(cleanMp4);
-                if (!savedLocalUrl) continue;
+                const directMp4 = String(rv.fallback_url).split('?').at(0);
+                if (!directMp4 || !directMp4.startsWith('https://')) continue;
+
                 channelsVideosDB.unshift({
                     id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
                     extId: extId,
-                    author: src.platform,
+                    author: feed.platform,
                     isAuto: true,
-                    title: String(d.title || 'Юмор дня 😂').slice(0, 110),
-                    videoUrl: savedLocalUrl,
+                    title: String(d.title || 'Прикол дня 😂').slice(0, 110),
+                    videoUrl: directMp4,
                     time: getServerDateTime(),
-                    likes: []
+                    likes: new Array()
                 });
-                addedCount++;
+                added++;
             }
         }
 
-        // Если основная площадка заблокировала IP сервера — качаем с резервной CDN-платформы
-        if (addedCount === 0) {
-            const shuffledBackup = BACKUP_FUNNY_CLIPS.slice().sort(function() { return Math.random() - 0.5; });
-            for (let b = 0; b < shuffledBackup.length; b++) {
-                if (addedCount >= 2) break;
-                const item = shuffledBackup[b];
-                if (channelsVideosDB.some(function(x) { return x.extId === item.extId; })) continue;
-                const savedLocalUrl = await downloadVideoToUploads(item.url);
-                if (!savedLocalUrl) continue;
-
-                channelsVideosDB.unshift({
-                    id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
-                    extId: item.extId,
-                    author: item.platform,
-                    isAuto: true,
-                    title: item.title,
-                    videoUrl: savedLocalUrl,
-                    time: getServerDateTime(),
-                    likes: []
-                });
-                addedCount++;
-            }
-        }
-
-        if (addedCount > 0) {
-            while (channelsVideosDB.length > 60) {
-                const oldItem = channelsVideosDB.pop();
-                if (oldItem && oldItem.videoUrl) {
-                    const fPath = path.join(UPLOADS_DIR, path.basename(oldItem.videoUrl));
-                    try { if (fs.existsSync(fPath)) fs.unlinkSync(fPath); } catch (e) {}
-                }
+        if (added > 0) {
+            if (channelsVideosDB.length > 80) {
+                channelsVideosDB = channelsVideosDB.slice(0, 80);
             }
             writeJSON(CHANNELS_FILE, channelsVideosDB, true);
             broadcastWS({ type: 'channels_updated' });
-            console.log('🎬 Автоподгрузка в Каналы: добавлено роликов:', addedCount);
         }
     } catch (e) {
     } finally {
@@ -208,8 +160,9 @@ async function pullRandomReelsFromPlatforms() {
     }
 }
 
-setTimeout(pullRandomReelsFromPlatforms, 5000);
-setInterval(pullRandomReelsFromPlatforms, 25 * 60 * 1000);
+setTimeout(pullRandomReelsFromPlatforms, 3000);
+setInterval(pullRandomReelsFromPlatforms, 20 * 60 * 1000);
+
 
 
 

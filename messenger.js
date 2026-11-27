@@ -3870,19 +3870,13 @@ function toggleChannelUploadBox() {
 
 function pullMoreChannelReels() {
     var listEl = document.getElementById('msb-channels-feed-list');
-    if (listEl && listEl.querySelectorAll('.msb-reel-card').length === 0) {
-        listEl.innerHTML = '<div class="chat-placeholder">⏳ Загружаем свежие ролики с платформ... Подождите 3–5 сек</div>';
+    if (listEl) {
+        listEl.innerHTML = '<div class="chat-placeholder">🎲 Переключаем волну эфира...</div>';
     }
     fetch('/api/channels/pull-now', { method: 'POST' })
-        .then(function(r) { return r.json(); })
-        .then(function() {
-            loadMsbChannelsFeed();
-        })
-        .catch(function() {
-            loadMsbChannelsFeed();
-        });
+        .then(function() { loadMsbChannelsFeed(); })
+        .catch(function() { loadMsbChannelsFeed(); });
 }
-
 
 function uploadChannelVideo() {
     var me = getActiveChatIdentity();
@@ -3895,36 +3889,34 @@ function uploadChannelVideo() {
     if (!fileInp || !fileInp.files || fileInp.files.length === 0) {
         return alert('Выберите видеоролик с устройства!');
     }
-    var file = fileInp.files[0];
+    var file = fileInp.files.item(0);
+    if (!file) return alert('Файл не выбран!');
     if (file.size > 60 * 1024 * 1024) {
         return alert('Ролик слишком большой (максимум 60 МБ). Выберите короткое видео!');
     }
+
     var title = (titleInp && titleInp.value.trim()) ? titleInp.value.trim() : 'Юмор МСБ-55115 😂';
     if (statusEl) {
         statusEl.style.display = 'block';
         statusEl.style.color = '#facc15';
-        statusEl.textContent = '⏳ Загрузка ролика на сервер...';
+        statusEl.textContent = '⏳ Отправка ролика на сервер...';
     }
     if (sendBtn) sendBtn.disabled = true;
 
-    var baseUrl = (typeof API_ORIGIN !== 'undefined' && API_ORIGIN) ? API_ORIGIN : '';
-    var upUrl = baseUrl + '/api/channels/upload' +
+    var upUrl = '/api/channels/upload' +
         '?sender=' + encodeURIComponent(me) +
         '&title=' + encodeURIComponent(title) +
         '&filename=' + encodeURIComponent(file.name || 'reel.mp4');
 
     fetch(upUrl, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/octet-stream',
-            'x-sender': encodeURIComponent(me),
-            'x-title': encodeURIComponent(title),
-            'x-filename': encodeURIComponent(file.name || 'reel.mp4')
-        },
+        headers: { 'Content-Type': 'application/octet-stream' },
         body: file
     })
-
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
     .then(function(d) {
         if (d && d.ok) {
             fileInp.value = '';
@@ -3933,19 +3925,20 @@ function uploadChannelVideo() {
             toggleChannelUploadBox();
             loadMsbChannelsFeed();
         } else {
-            throw new Error('Upload failed');
+            throw new Error('Save failed');
         }
     })
     .catch(function() {
         if (statusEl) {
             statusEl.style.color = '#ef4444';
-            statusEl.textContent = '❌ Ошибка загрузки ролика';
+            statusEl.textContent = '❌ Ошибка загрузки ролика на сервер';
         }
     })
     .finally(function() {
         if (sendBtn) sendBtn.disabled = false;
     });
 }
+
 
 function loadMsbChannelsFeed() {
     var listEl = document.getElementById('msb-channels-feed-list');
