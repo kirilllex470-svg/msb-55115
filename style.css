@@ -2934,16 +2934,39 @@ body.theme-cosmic #messenger-modal .friend-item .friend-call-mini:first-of-type,
     contain: layout style !important;
 }
 
-/* 3. Быстрый фон чата по темам (без мелкой 28px сетки, тормозящей скролл) */
+/* 3. Родные текстурные фоны чата для 3 военных тем */
 body.theme-military #messages {
-    background: radial-gradient(circle at 50% 40%, #0d2818 0%, #05110a 100%) !important;
+    background-color: #06130c !important;
+    background-image:
+        radial-gradient(circle at 50% 50%, rgba(34, 197, 94, 0.14) 0%, transparent 65%),
+        linear-gradient(rgba(34, 197, 94, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 197, 94, 0.08) 1px, transparent 1px) !important;
+    background-size: 100% 100%, 28px 28px, 28px 28px !important;
 }
+
 body.theme-rocket #messages {
-    background: radial-gradient(circle at 50% 40%, #2b110b 0%, #110604 100%) !important;
+    background-color: #140705 !important;
+    background-image:
+        radial-gradient(circle at 50% 85%, rgba(249, 115, 22, 0.20) 0%, transparent 60%),
+        repeating-linear-gradient(
+            45deg,
+            rgba(239, 68, 68, 0.05) 0px,
+            rgba(239, 68, 68, 0.05) 2px,
+            transparent 2px,
+            transparent 14px
+        ) !important;
+    background-size: 100% 100%, auto !important;
 }
+
 body.theme-cosmic #messages {
-    background: radial-gradient(circle at 50% 40%, #181038 0%, #060412 100%) !important;
+    background-color: #050312 !important;
+    background-image:
+        radial-gradient(circle at 20% 25%, rgba(139, 92, 246, 0.24) 0%, transparent 45%),
+        radial-gradient(circle at 80% 70%, rgba(14, 165, 233, 0.22) 0%, transparent 50%),
+        radial-gradient(white 1px, transparent 1px) !important;
+    background-size: 100% 100%, 100% 100%, 50px 50px !important;
 }
+
 
 /* 4. Умная пауза фоновых анимаций во время скролла и в скрытых панелях */
 .tg-emoji-drawer[style*="none"] .tg-emoji-item.live-preview,
