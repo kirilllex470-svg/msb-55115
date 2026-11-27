@@ -3949,24 +3949,32 @@ function loadMsbChannelsFeed() {
     fetch('/api/channels/list?t=' + Date.now())
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            var items = (d && Array.isArray(d.videos)) ? d.videos : [];
+            var items = (d && Array.isArray(d.videos)) ? d.videos : new Array();
             if (items.length === 0) {
-                listEl.innerHTML = '<div class="chat-placeholder">📡 Загружаем смешные ролики с платформ... Нажмите «🎲 Эфир» или «➕ Свой»!</div>';
+                listEl.innerHTML = '<div class="chat-placeholder">📡 Нажмите кнопку «🎲 Эфир» сверху — подгружаем свежие русские приколы из Telegram и Rutube!</div>';
                 return;
             }
             listEl.innerHTML = '';
             items.forEach(function(item) {
                 var card = document.createElement('div');
                 card.className = 'msb-reel-card';
-                var likesArr = Array.isArray(item.likes) ? item.likes : [];
+                var likesArr = Array.isArray(item.likes) ? item.likes : new Array();
                 var isLiked = me && likesArr.includes(me);
                 var canDel = isAdm || (me && String(item.author || '').trim().toLowerCase() === me);
                 var vidSrc = window.resolveMsbMediaUrl ? window.resolveMsbMediaUrl(item.videoUrl) : item.videoUrl;
-                var sourceBadge = item.isAuto ? '<span class="msb-reel-auto-pill">АВТО-ЭФИР</span>' : '';
+                var sourceBadge = item.isAuto ? '<span class="msb-reel-auto-pill">АВТО-ЭФИР</span>' : '<span class="msb-reel-auto-pill" style="color:#4ade80;border-color:#4ade80;">НАШ БОЕЦ</span>';
 
                 var delHtml = canDel
                     ? '<button type="button" class="msb-reel-del-btn" onclick="deleteChannelVideo(\'' + item.id + '\')" title="Удалить">🗑️</button>'
                     : '';
+
+                var isIframe = (item.mediaKind === 'iframe') ||
+                               String(vidSrc).indexOf('rutube.ru/play/embed/') !== -1 ||
+                               String(vidSrc).indexOf('://vk.com') !== -1;
+
+                var playerHtml = isIframe
+                    ? '<iframe class="msb-reel-iframe" src="' + vidSrc + '" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy"></iframe>'
+                    : '<video class="msb-reel-video" src="' + vidSrc + '" controls playsinline preload="metadata" onplay="pauseOtherChannelVideos(this)"></video>';
 
                 card.innerHTML = [
                     '<div class="msb-reel-header">',
@@ -3978,7 +3986,7 @@ function loadMsbChannelsFeed() {
                     delHtml,
                     '</div>',
                     '<div class="msb-reel-title">' + escapeEdgeHtml(item.title || '') + '</div>',
-                    '<video class="msb-reel-video" src="' + vidSrc + '#t=0.001" controls playsinline preload="metadata" onplay="pauseOtherChannelVideos(this)"></video>',
+                    playerHtml,
                     '<div class="msb-reel-footer">',
                     '  <button type="button" class="msb-reel-like-btn ' + (isLiked ? 'liked' : '') + '" onclick="toggleChannelVideoLike(\'' + item.id + '\', this)">',
                     '    ' + (isLiked ? '❤️' : '🤍') + ' ' + likesArr.length,
@@ -3990,6 +3998,7 @@ function loadMsbChannelsFeed() {
         })
         .catch(function() {});
 }
+
 
 function pauseOtherChannelVideos(activeVid) {
     var listEl = document.getElementById('msb-channels-feed-list');

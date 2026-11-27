@@ -29,130 +29,163 @@ let pinResetsDB = readJSON(PIN_RESET_FILE, {});
 let channelsVideosDB = readJSON(CHANNELS_FILE, []);
 if (!Array.isArray(channelsVideosDB)) channelsVideosDB = [];
 
-const BUILTIN_STREAM_REELS = Array.of(
-    { extId: 'st_1', author: '😂 Юмор TV', title: '🐰 Большой ушастый кролик — классика юмора 😂', videoUrl: 'https://googleapis.com' },
-    { extId: 'st_2', author: '⚡ Экшн Приколы', title: '🔥 Когда опаздываешь на построение 🤣', videoUrl: 'https://googleapis.com' },
-    { extId: 'st_3', author: '🎬 Кино-Мем', title: '😎 Побег на максималках!', videoUrl: 'https://googleapis.com' },
-    { extId: 'st_4', author: '🎉 Позитив FM', title: '🥳 Пятничное настроение в подразделении!', videoUrl: 'https://googleapis.com' },
-    { extId: 'st_5', author: '🤣 Нежданчик', title: '💥 Когда техника решила пошутить!', videoUrl: 'https://googleapis.com' },
-    { extId: 'st_6', author: '🚗 Авто-Юмор', title: '🛞 Тест-драйв по пересечённой местности 😎', videoUrl: 'https://googleapis.com' },
-    { extId: 'st_7', author: '🚙 Драйв Канал', title: '🏁 На чём поедем за пиццей? 😂', videoUrl: 'https://googleapis.com' },
-    { extId: 'st_8', author: '🐾 Мульт-Прикол', title: '🐿️ Белка и орех: вечная классика!', videoUrl: 'https://googleapis.com' }
+
+// Открытые русскоязычные Telegram-каналы с короткими видеоприколами и мемами
+const TG_MEME_CHANNELS = Array.of(
+    { name: '😂 Смешные Видео TG', slug: 'smeshnie_video' },
+    { name: '🤣 Видео Приколы TG', slug: 'video_prikoly' },
+    { name: '🎬 Мемы и Юмор TG',   slug: 'memy_video' },
+    { name: '🐾 Котики и Смех TG', slug: 'kotiki_video' },
+    { name: '⚡ Угарные Ролики TG', slug: 'ugarnie_video' },
+    { name: '🔥 Топ Приколы TG',   slug: 'prikoly_top' }
 );
 
-function seedInitialStreamReels() {
-    let changed = false;
-    BUILTIN_STREAM_REELS.forEach(function(r) {
-        const exists = channelsVideosDB.some(function(x) { return x && x.extId === r.extId; });
-        if (!exists) {
-            channelsVideosDB.push({
-                id: 'reel_' + r.extId + '_' + Date.now(),
-                extId: r.extId,
-                author: r.author,
-                isAuto: true,
-                title: r.title,
-                videoUrl: r.videoUrl,
-                time: getServerDateTime(),
-                likes: new Array()
-            });
-            changed = true;
-        }
-    });
-    if (changed) {
-        writeJSON(CHANNELS_FILE, channelsVideosDB, true);
-    }
-}
-seedInitialStreamReels();
-
-const LIVE_JSON_FEEDS = Array.of(
-    { platform: '😂 Reddit Юмор', url: 'https://reddit.com' },
-    { platform: '🐾 Зверьё Смех', url: 'https://reddit.com' },
-    { platform: '🎬 Приколы Net', url: 'https://reddit.com' },
-    { platform: '⚡ Нежданчик', url: 'https://reddit.com' }
-);
-
-function fetchJsonSimple(targetUrl) {
+function fetchTextHttps(targetUrl, redirectsLeft) {
+    const left = (typeof redirectsLeft === 'number') ? redirectsLeft : 4;
     return new Promise(function(resolve) {
         const req = https.get(targetUrl, {
             headers: {
-                'User-Agent': 'web:msb55115.humor.feed:v1.0 (by /u/msbviewer)',
-                'Accept': 'application/json'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36',
+                'Accept-Language': 'ru-RU,ru;q=0.9'
             },
-            timeout: 8000
+            timeout: 12000
         }, function(res) {
+            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location && left > 0) {
+                res.resume();
+                const nextUrl = res.headers.location.startsWith('http')
+                    ? res.headers.location
+                    : ('https://t.me' + res.headers.location);
+                return resolve(fetchTextHttps(nextUrl, left - 1));
+            }
             if (res.statusCode !== 200) {
                 res.resume();
-                return resolve(null);
+                return resolve('');
             }
             const chunks = new Array();
             res.on('data', function(c) { chunks.push(c); });
             res.on('end', function() {
-                try {
-                    resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-                } catch (e) {
-                    resolve(null);
-                }
+                resolve(Buffer.concat(chunks).toString('utf8'));
             });
         });
-        req.on('error', function() { resolve(null); });
-        req.on('timeout', function() { req.destroy(); resolve(null); });
+        req.on('error', function() { resolve(''); });
+        req.on('timeout', function() { req.destroy(); resolve(''); });
     });
+}
+
+// Также парсим свежие юмористические Shorts напрямую с Rutube API (100% работает в РФ и на Amvera!)
+async function pullRutubeFunnyShorts() {
+    const html = await fetchTextHttps('https://rutube.ru' + encodeURIComponent('смешные приколы короткие') + '&format=json');
+    if (!html) return 0;
+    let added = 0;
+    try {
+        const data = JSON.parse(html);
+        const results = (data && Array.isArray(data.results)) ? data.results : new Array();
+        const shuffled = results.slice().sort(function() { return Math.random() - 0.5; });
+        for (let i = 0; i < shuffled.length; i++) {
+            if (added >= 6) break;
+            const v = shuffled.at(i);
+            if (!v || !v.id || v.is_adult) continue;
+            if (Number(v.duration || 0) > 180) continue; // Берём только короткие ролики до 3 минут
+
+            const extId = 'rt_' + String(v.id);
+            if (channelsVideosDB.some(function(x) { return x && x.extId === extId; })) continue;
+
+            const embedUrl = 'https://rutube.ru' + String(v.id);
+            channelsVideosDB.unshift({
+                id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
+                extId: extId,
+                author: '📺 Rutube Юмор',
+                isAuto: true,
+                mediaKind: 'iframe',
+                title: String(v.title || 'Прикол с Rutube 😂').slice(0, 110),
+                videoUrl: embedUrl,
+                time: getServerDateTime(),
+                likes: new Array()
+            });
+            added++;
+        }
+    } catch (e) {}
+    return added;
+}
+
+// Парсим прямые MP4-ролики из публичных Telegram-каналов (t.me/s/...)
+async function pullTelegramMemeVideos() {
+    const shuffled = TG_MEME_CHANNELS.slice().sort(function() { return Math.random() - 0.5; }).slice(0, 3);
+    let added = 0;
+
+    for (let c = 0; c < shuffled.length; c++) {
+        const ch = shuffled.at(c);
+        const html = await fetchTextHttps('https://t.me' + ch.slug);
+        if (!html) continue;
+
+        const blocks = html.split('tgme_widget_message_wrap');
+        for (let b = 1; b < blocks.length; b++) {
+            if (added >= 6) break;
+            const blk = blocks.at(b) || '';
+            const vidMatch = blk.match(/<video[^>]+src="([^"]+\.mp4[^"]*)"/i);
+            if (!vidMatch) continue;
+            const mp4Url = vidMatch.at(1);
+            if (!mp4Url || !mp4Url.startsWith('https://')) continue;
+
+            const idMatch = blk.match(/data-post="([^"]+)"/);
+            const extId = 'tg_' + (idMatch ? idMatch.at(1).replace('/', '_') : crypto.createHash('md5').update(mp4Url).digest('hex').slice(0, 10));
+            if (channelsVideosDB.some(function(x) { return x && x.extId === extId; })) continue;
+
+            let caption = 'Свежий прикол из Telegram 😂';
+            const txtMatch = blk.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/i);
+            if (txtMatch && txtMatch.at(1)) {
+                const cleanTxt = txtMatch.at(1)
+                    .replace(/<br\s*\/?>/gi, ' ')
+                    .replace(/<[^>]+>/g, '')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'")
+                    .replace(/&amp;/g, '&')
+                    .trim();
+                if (cleanTxt.length > 2 && !cleanTxt.includes('http')) {
+                    caption = cleanTxt.slice(0, 110);
+                }
+            }
+
+            channelsVideosDB.unshift({
+                id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
+                extId: extId,
+                author: ch.name,
+                isAuto: true,
+                mediaKind: 'video',
+                title: caption,
+                videoUrl: mp4Url,
+                time: getServerDateTime(),
+                likes: new Array()
+            });
+            added++;
+        }
+    }
+    return added;
 }
 
 let isFetchingExternalReels = false;
 
 async function pullRandomReelsFromPlatforms() {
-    seedInitialStreamReels();
     if (isFetchingExternalReels) return;
     isFetchingExternalReels = true;
     try {
-        const shuffled = LIVE_JSON_FEEDS.slice().sort(function() { return Math.random() - 0.5; });
-        let added = 0;
+        // Сначала вычищаем старые нерабочие зарубежные ссылки googleapis/reddit, если они остались в JSON
+        channelsVideosDB = channelsVideosDB.filter(function(item) {
+            if (!item || !item.videoUrl) return false;
+            if (item.videoUrl.includes('googleapis.com') || item.videoUrl.includes('redd.it')) return false;
+            return true;
+        });
 
-        for (let s = 0; s < shuffled.length; s++) {
-            if (added >= 5) break;
-            const feed = shuffled.at(s);
-            const json = await fetchJsonSimple(feed.url);
-            if (!json || !json.data || !Array.isArray(json.data.children)) continue;
+        const addedRt = await pullRutubeFunnyShorts();
+        const addedTg = await pullTelegramMemeVideos();
 
-            const posts = json.data.children.slice().sort(function() { return Math.random() - 0.5; });
-            for (let i = 0; i < posts.length; i++) {
-                if (added >= 5) break;
-                const postWrap = posts.at(i);
-                const d = postWrap ? postWrap.data : null;
-                if (!d || d.over_18) continue;
-
-                const rv = (d.secure_media && d.secure_media.reddit_video) ||
-                           (d.media && d.media.reddit_video) ||
-                           (d.preview && d.preview.reddit_video_preview);
-                if (!rv || !rv.fallback_url) continue;
-
-                const extId = 'rd_' + String(d.id || '');
-                if (channelsVideosDB.some(function(x) { return x && x.extId === extId; })) continue;
-
-                const directMp4 = String(rv.fallback_url).split('?').at(0);
-                if (!directMp4 || !directMp4.startsWith('https://')) continue;
-
-                channelsVideosDB.unshift({
-                    id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
-                    extId: extId,
-                    author: feed.platform,
-                    isAuto: true,
-                    title: String(d.title || 'Прикол дня 😂').slice(0, 110),
-                    videoUrl: directMp4,
-                    time: getServerDateTime(),
-                    likes: new Array()
-                });
-                added++;
-            }
+        if (channelsVideosDB.length > 80) {
+            channelsVideosDB = channelsVideosDB.slice(0, 80);
         }
-
-        if (added > 0) {
-            if (channelsVideosDB.length > 80) {
-                channelsVideosDB = channelsVideosDB.slice(0, 80);
-            }
-            writeJSON(CHANNELS_FILE, channelsVideosDB, true);
+        writeJSON(CHANNELS_FILE, channelsVideosDB, true);
+        if (addedRt + addedTg > 0) {
             broadcastWS({ type: 'channels_updated' });
+            console.log('📡 Каналы МСБ: подгружено с Rutube:', addedRt, '| из Telegram:', addedTg);
         }
     } catch (e) {
     } finally {
@@ -160,9 +193,8 @@ async function pullRandomReelsFromPlatforms() {
     }
 }
 
-setTimeout(pullRandomReelsFromPlatforms, 3000);
+setTimeout(pullRandomReelsFromPlatforms, 2000);
 setInterval(pullRandomReelsFromPlatforms, 20 * 60 * 1000);
-
 
 
 

@@ -3399,3 +3399,11 @@ body.theme-sunset #register-modal {
     cursor: pointer;
     opacity: 0.75;
 }
+.msb-reel-iframe {
+    width: 100%;
+    height: 310px;
+    border-radius: 14px;
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    display: block;
+}
