@@ -1048,10 +1048,15 @@ function handleWsIncomingEvent(event) {
         updateStreamUI();
         return;
     }
-       if (msg.type === 'apk_updated') {
+    if (msg.type === 'apk_updated') {
         if (typeof checkApkRemoteUpdate === 'function') checkApkRemoteUpdate(true);
         return;
     }
+    if (msg.type === 'channels_updated') {
+        if (typeof loadMsbChannelsFeed === 'function') loadMsbChannelsFeed();
+        return;
+    }
+
     if (msg.type === 'users_updated') {
         if (currentUser === ADMIN_NAME) fetchAdminUsersList();
         refreshMyPermissionsFromServer();

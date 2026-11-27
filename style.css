@@ -3276,3 +3276,126 @@ body.theme-sunset #register-modal {
     --t-bg2: #120505;
     --t-inp: #0b0303;
 }
+/* === РАЗДЕЛ «КАНАЛЫ» (АВТО-ЭФИР + ЗАГРУЗКА РОЛИКОВ) === */
+.msb-channel-add-btn {
+    padding: 7px 11px;
+    background: linear-gradient(135deg, var(--accent), #0284c7);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.msb-channel-upload-box {
+    background: var(--panel);
+    border-bottom: 1.5px solid var(--accent);
+    padding: 12px 14px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.msb-channels-feed-list {
+    flex: 1;
+    width: 100%;
+    max-width: 540px;
+    margin: 0 auto;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-sizing: border-box;
+    -webkit-overflow-scrolling: touch;
+}
+
+.msb-reel-card {
+    background: var(--panel);
+    border: 1.5px solid var(--border);
+    border-radius: 18px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+
+.msb-reel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.msb-reel-author {
+    font-weight: 800;
+    font-size: 14px;
+    color: var(--accent);
+    margin-right: 6px;
+}
+
+.msb-reel-auto-pill {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 900;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(56, 189, 248, 0.18);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    color: #38bdf8;
+    margin-right: 6px;
+}
+
+.msb-reel-time {
+    font-size: 11px;
+    color: #94a3b8;
+    font-family: monospace;
+}
+
+.msb-reel-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.35;
+}
+
+.msb-reel-video {
+    width: 100%;
+    max-height: 62vh;
+    border-radius: 14px;
+    background: #000000;
+    object-fit: contain;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.msb-reel-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 2px;
+}
+
+.msb-reel-like-btn {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(15, 23, 42, 0.7);
+    color: #f8fafc;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.msb-reel-like-btn.liked {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: #f87171;
+    color: #fecaca;
+}
+
+.msb-reel-del-btn {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0.75;
+}

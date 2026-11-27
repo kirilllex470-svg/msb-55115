@@ -3806,6 +3806,11 @@ function openMsbDevTab(tabTitle) {
     var drop = document.getElementById('msb-plus-dropdown');
     if (drop) drop.classList.remove('open');
 
+    if (String(tabTitle).indexOf('Каналы') !== -1) {
+        openMsbChannelsFeedModal();
+        return;
+    }
+
     var titleEl = document.getElementById('msb-dev-tab-title');
     var modal = document.getElementById('msb-dev-tab-modal');
     if (titleEl) titleEl.textContent = tabTitle;
@@ -3814,6 +3819,215 @@ function openMsbDevTab(tabTitle) {
     msbExtraClockTimer = setInterval(updateMsbDevClock, 1000);
     if (modal) modal.style.display = 'flex';
 }
+
+function openMsbChannelsFeedModal() {
+    var modal = document.getElementById('msb-channels-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'msb-channels-modal';
+        modal.className = 'msb-work-fullscreen-modal';
+        modal.style.zIndex = '232000';
+        modal.innerHTML = [
+            '<div class="msb-work-window-header">',
+            '  <span style="font-weight:900; font-size:15px; color:#f8fafc;">📡 КАНАЛЫ • ЭФИР</span>',
+            '  <div style="display:flex; gap:6px; align-items:center;">',
+            '    <button type="button" class="msb-channel-add-btn" onclick="pullMoreChannelReels()" title="Подгрузить свежие и перемешать">🎲 Эфир</button>',
+            '    <button type="button" class="msb-channel-add-btn" onclick="toggleChannelUploadBox()">➕ Свой</button>',
+            '    <button type="button" class="msb-work-close-btn" onclick="closeMsbChannelsModal()">✖</button>',
+            '  </div>',
+            '</div>',
+            '<div id="msb-channel-upload-box" class="msb-channel-upload-box" style="display:none;">',
+            '  <input type="text" id="msb-channel-title-inp" class="search-input" placeholder="Подпись к ролику (например: Прикол 😂)..." style="width:100%; margin-bottom:8px;">',
+            '  <div style="display:flex; gap:8px; align-items:center;">',
+            '    <input type="file" id="msb-channel-file-inp" accept="video/*" style="flex:1; color:#cbd5e1; font-size:12px;">',
+            '    <button type="button" id="msb-channel-send-btn" class="msb-channel-add-btn" onclick="uploadChannelVideo()">📤 Залить</button>',
+            '  </div>',
+            '  <div id="msb-channel-upload-status" style="display:none; margin-top:8px; font-size:12px; color:#facc15; font-weight:bold;"></div>',
+            '</div>',
+            '<div id="msb-channels-feed-list" class="msb-channels-feed-list"></div>'
+        ].join('');
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+    loadMsbChannelsFeed();
+}
+
+function closeMsbChannelsModal() {
+    var modal = document.getElementById('msb-channels-modal');
+    if (modal) {
+        modal.querySelectorAll('video').forEach(function(v) {
+            try { v.pause(); } catch (e) {}
+        });
+        modal.style.display = 'none';
+    }
+}
+
+function toggleChannelUploadBox() {
+    var box = document.getElementById('msb-channel-upload-box');
+    if (!box) return;
+    box.style.display = (box.style.display === 'none') ? 'block' : 'none';
+}
+
+function pullMoreChannelReels() {
+    fetch('/api/channels/pull-now', { method: 'POST' }).catch(function() {});
+    loadMsbChannelsFeed();
+}
+
+function uploadChannelVideo() {
+    var me = getActiveChatIdentity();
+    if (!me) return alert('Сначала войдите под своим позывным!');
+    var fileInp = document.getElementById('msb-channel-file-inp');
+    var titleInp = document.getElementById('msb-channel-title-inp');
+    var statusEl = document.getElementById('msb-channel-upload-status');
+    var sendBtn = document.getElementById('msb-channel-send-btn');
+
+    if (!fileInp || !fileInp.files || fileInp.files.length === 0) {
+        return alert('Выберите видеоролик с устройства!');
+    }
+    var file = fileInp.files[0];
+    if (file.size > 45 * 1024 * 1024) {
+        return alert('Ролик слишком большой (максимум 45 МБ). Выберите короткое видео!');
+    }
+
+    var title = (titleInp && titleInp.value.trim()) ? titleInp.value.trim() : 'Юмор МСБ-55115 😂';
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#facc15';
+        statusEl.textContent = '⏳ Загрузка ролика на сервер...';
+    }
+    if (sendBtn) sendBtn.disabled = true;
+
+    fetch('/api/channels/upload', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/octet-stream',
+            'x-sender': encodeURIComponent(me),
+            'x-title': encodeURIComponent(title),
+            'x-filename': encodeURIComponent(file.name || 'reel.mp4')
+        },
+        body: file
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d && d.ok) {
+            fileInp.value = '';
+            if (titleInp) titleInp.value = '';
+            if (statusEl) statusEl.style.display = 'none';
+            toggleChannelUploadBox();
+            loadMsbChannelsFeed();
+        } else {
+            throw new Error('Upload failed');
+        }
+    })
+    .catch(function() {
+        if (statusEl) {
+            statusEl.style.color = '#ef4444';
+            statusEl.textContent = '❌ Ошибка загрузки ролика';
+        }
+    })
+    .finally(function() {
+        if (sendBtn) sendBtn.disabled = false;
+    });
+}
+
+function loadMsbChannelsFeed() {
+    var listEl = document.getElementById('msb-channels-feed-list');
+    if (!listEl) return;
+    var me = String(getActiveChatIdentity() || '').trim().toLowerCase();
+    var isAdm = (typeof currentUser !== 'undefined' && currentUser === 'АДМИН') || (me === 'муравей');
+
+    fetch('/api/channels/list?t=' + Date.now())
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            var items = (d && Array.isArray(d.videos)) ? d.videos : [];
+            if (items.length === 0) {
+                listEl.innerHTML = '<div class="chat-placeholder">📡 Загружаем смешные ролики с платформ... Нажмите «🎲 Эфир» или «➕ Свой»!</div>';
+                return;
+            }
+            listEl.innerHTML = '';
+            items.forEach(function(item) {
+                var card = document.createElement('div');
+                card.className = 'msb-reel-card';
+                var likesArr = Array.isArray(item.likes) ? item.likes : [];
+                var isLiked = me && likesArr.includes(me);
+                var canDel = isAdm || (me && String(item.author || '').trim().toLowerCase() === me);
+                var vidSrc = window.resolveMsbMediaUrl ? window.resolveMsbMediaUrl(item.videoUrl) : item.videoUrl;
+                var sourceBadge = item.isAuto ? '<span class="msb-reel-auto-pill">АВТО-ЭФИР</span>' : '';
+
+                var delHtml = canDel
+                    ? '<button type="button" class="msb-reel-del-btn" onclick="deleteChannelVideo(\'' + item.id + '\')" title="Удалить">🗑️</button>'
+                    : '';
+
+                card.innerHTML = [
+                    '<div class="msb-reel-header">',
+                    '  <div>',
+                    '    <span class="msb-reel-author">' + escapeEdgeHtml(item.author || 'Боец') + '</span>',
+                    sourceBadge,
+                    '    <span class="msb-reel-time">' + escapeEdgeHtml(item.time || '') + '</span>',
+                    '  </div>',
+                    delHtml,
+                    '</div>',
+                    '<div class="msb-reel-title">' + escapeEdgeHtml(item.title || '') + '</div>',
+                    '<video class="msb-reel-video" src="' + vidSrc + '#t=0.001" controls playsinline preload="metadata" onplay="pauseOtherChannelVideos(this)"></video>',
+                    '<div class="msb-reel-footer">',
+                    '  <button type="button" class="msb-reel-like-btn ' + (isLiked ? 'liked' : '') + '" onclick="toggleChannelVideoLike(\'' + item.id + '\', this)">',
+                    '    ' + (isLiked ? '❤️' : '🤍') + ' ' + likesArr.length,
+                    '  </button>',
+                    '</div>'
+                ].join('');
+                listEl.appendChild(card);
+            });
+        })
+        .catch(function() {});
+}
+
+function pauseOtherChannelVideos(activeVid) {
+    var listEl = document.getElementById('msb-channels-feed-list');
+    if (!listEl) return;
+    listEl.querySelectorAll('video').forEach(function(v) {
+        if (v !== activeVid) {
+            try { v.pause(); } catch (e) {}
+        }
+    });
+}
+
+function toggleChannelVideoLike(videoId, btnEl) {
+    var me = getActiveChatIdentity();
+    if (!me) return;
+    fetch('/api/channels/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: videoId, user: me })
+    }).then(function() {
+        if (btnEl) {
+            var likedNow = !btnEl.classList.contains('liked');
+            btnEl.classList.toggle('liked', likedNow);
+            var num = parseInt(btnEl.textContent.replace(/\D+/g, ''), 10) || 0;
+            num = likedNow ? (num + 1) : Math.max(0, num - 1);
+            btnEl.textContent = (likedNow ? '❤️ ' : '🤍 ') + num;
+        }
+    }).catch(function() {});
+}
+
+function deleteChannelVideo(videoId) {
+    if (!confirm('Удалить этот видеоролик из канала?')) return;
+    fetch('/api/channels/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: videoId })
+    }).then(function() { loadMsbChannelsFeed(); }).catch(function() {});
+}
+
+window.openMsbChannelsFeedModal = openMsbChannelsFeedModal;
+window.closeMsbChannelsModal = closeMsbChannelsModal;
+window.toggleChannelUploadBox = toggleChannelUploadBox;
+window.pullMoreChannelReels = pullMoreChannelReels;
+window.uploadChannelVideo = uploadChannelVideo;
+window.loadMsbChannelsFeed = loadMsbChannelsFeed;
+window.pauseOtherChannelVideos = pauseOtherChannelVideos;
+window.toggleChannelVideoLike = toggleChannelVideoLike;
+window.deleteChannelVideo = deleteChannelVideo;
+
 
 function closeMsbDevTab() {
     var modal = document.getElementById('msb-dev-tab-modal');

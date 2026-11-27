@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -23,7 +24,157 @@ const REQUESTS_FILE = path.join(storagePath, 'requests.json');
 const READS_FILE = path.join(storagePath, 'last_read.json');
 const PIN_RESET_FILE = path.join(storagePath, 'pin_resets.json');
 const UPLOADS_DIR = path.join(storagePath, 'uploads');
+const CHANNELS_FILE = path.join(storagePath, 'channels_videos.json');
 let pinResetsDB = readJSON(PIN_RESET_FILE, {});
+let channelsVideosDB = readJSON(CHANNELS_FILE, []);
+if (!Array.isArray(channelsVideosDB)) channelsVideosDB = [];
+
+const EXTERNAL_HUMOR_SOURCES = [
+    { platform: '😂 Юмор TV', url: 'https://reddit.com' },
+    { platform: '🎬 Приколы Net', url: 'https://reddit.com' },
+    { platform: '🐾 Зверьё Смех', url: 'https://reddit.com' },
+    { platform: '⚡ Нежданчик', url: 'https://reddit.com' },
+    { platform: '🤣 Смех до слёз', url: 'https://reddit.com' }
+];
+
+function fetchJsonHttps(targetUrl) {
+    return new Promise(function(resolve) {
+        const req = https.get(targetUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MSB55115Bot/1.0)' },
+            timeout: 12000
+        }, function(res) {
+            if (res.statusCode !== 200) {
+                res.resume();
+                return resolve(null);
+            }
+            const chunks = [];
+            res.on('data', function(c) { chunks.push(c); });
+            res.on('end', function() {
+                try {
+                    resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        });
+        req.on('error', function() { resolve(null); });
+        req.on('timeout', function() { req.destroy(); resolve(null); });
+    });
+}
+
+function downloadVideoToUploads(videoUrl, audioUrl) {
+    return new Promise(function(resolve) {
+        const fileName = 'auto_' + crypto.randomBytes(6).toString('hex') + '.mp4';
+        const fullPath = path.join(UPLOADS_DIR, fileName);
+        const wsFile = fs.createWriteStream(fullPath);
+
+        const req = https.get(videoUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            timeout: 25000
+        }, function(res) {
+            if (res.statusCode !== 200) {
+                res.resume();
+                wsFile.close();
+                try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (e) {}
+                return resolve(null);
+            }
+            res.pipe(wsFile);
+            wsFile.on('finish', function() {
+                wsFile.close();
+                try {
+                    const st = fs.statSync(fullPath);
+                    if (st.size < 40000 || st.size > 35 * 1024 * 1024) {
+                        fs.unlinkSync(fullPath);
+                        return resolve(null);
+                    }
+                    resolve('/uploads/' + fileName);
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        });
+        req.on('error', function() {
+            wsFile.close();
+            try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (e) {}
+            resolve(null);
+        });
+        req.on('timeout', function() {
+            req.destroy();
+            resolve(null);
+        });
+    });
+}
+
+let isFetchingExternalReels = false;
+
+async function pullRandomReelsFromPlatforms() {
+    if (isFetchingExternalReels) return;
+    isFetchingExternalReels = true;
+    try {
+        // Выбираем 2 случайные платформы за один цикл
+        const shuffledSources = EXTERNAL_HUMOR_SOURCES.slice().sort(function() { return Math.random() - 0.5; }).slice(0, 2);
+        let addedCount = 0;
+
+        for (let s = 0; s < shuffledSources.length; s++) {
+            const src = shuffledSources[s];
+            const json = await fetchJsonHttps(src.url);
+            if (!json || !json.data || !Array.isArray(json.data.children)) continue;
+
+            const posts = json.data.children.slice().sort(function() { return Math.random() - 0.5; });
+            for (let i = 0; i < posts.length; i++) {
+                if (addedCount >= 3) break;
+                const d = posts[i] && posts[i].data;
+                if (!d || d.over_18) continue;
+
+                const rv = (d.secure_media && d.secure_media.reddit_video) ||
+                           (d.media && d.media.reddit_video);
+                if (!rv || !rv.fallback_url) continue;
+                if (Number(rv.duration || 0) > 65) continue;
+
+                const extId = 'ext_' + String(d.id || '');
+                if (channelsVideosDB.some(function(x) { return x.extId === extId; })) continue;
+
+                const cleanMp4 = String(rv.fallback_url).split('?')[0];
+                const savedLocalUrl = await downloadVideoToUploads(cleanMp4);
+                if (!savedLocalUrl) continue;
+
+                channelsVideosDB.unshift({
+                    id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
+                    extId: extId,
+                    author: src.platform,
+                    isAuto: true,
+                    title: String(d.title || 'Юмор дня 😂').slice(0, 110),
+                    videoUrl: savedLocalUrl,
+                    time: getServerDateTime(),
+                    likes: []
+                });
+                addedCount++;
+            }
+        }
+
+        if (addedCount > 0) {
+            // Храним не более 60 роликов, удаляя самые старые файлы с диска
+            while (channelsVideosDB.length > 60) {
+                const oldItem = channelsVideosDB.pop();
+                if (oldItem && oldItem.videoUrl) {
+                    const fPath = path.join(UPLOADS_DIR, path.basename(oldItem.videoUrl));
+                    try { if (fs.existsSync(fPath)) fs.unlinkSync(fPath); } catch (e) {}
+                }
+            }
+            writeJSON(CHANNELS_FILE, channelsVideosDB, true);
+            broadcastWS({ type: 'channels_updated' });
+            console.log('🎬 Автоподгрузка в Каналы: добавлено новых роликов:', addedCount);
+        }
+    } catch (e) {
+    } finally {
+        isFetchingExternalReels = false;
+    }
+}
+
+// Запускаем первую автоподгрузку через 8 сек после старта сервера и далее каждые 25 минут
+setTimeout(pullRandomReelsFromPlatforms, 8000);
+setInterval(pullRandomReelsFromPlatforms, 25 * 60 * 1000);
+
 
 if (!fs.existsSync(UPLOADS_DIR)) {
     try {
@@ -343,7 +494,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v45';",
+    "const SHELL_CACHE = 'msb55115-shell-v46';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1514,7 +1665,88 @@ const server = http.createServer(function(req, res) {
     }
 
 
+        if (req.method === 'GET' && urlPath === '/api/channels/list') {
+        // Возвращаем ролики в рандомном порядке для живой трансляции
+        const mixedList = channelsVideosDB.slice().sort(function() { return Math.random() - 0.5; });
+        return sendJsonCompressed(req, res, 200, { ok: true, videos: mixedList }, 'no-store');
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/channels/pull-now') {
+        pullRandomReelsFromPlatforms();
+        return sendJsonCompressed(req, res, 200, { ok: true });
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/channels/upload') {
+        const sender = decodeURIComponent(req.headers['x-sender'] || 'Боец');
+        const title = decodeURIComponent(req.headers['x-title'] || 'Юмор МСБ-55115');
+        const origName = decodeURIComponent(req.headers['x-filename'] || 'video.mp4');
+        const ext = (path.extname(origName) || '.mp4').toLowerCase();
+        const allowed = ['.mp4', '.webm', '.mov', '.m4v'];
+        const safeExt = allowed.includes(ext) ? ext : '.mp4';
+        const fileName = 'reel_' + crypto.randomBytes(6).toString('hex') + safeExt;
+        const fullPath = path.join(UPLOADS_DIR, fileName);
+
+        const wsVid = fs.createWriteStream(fullPath);
+        req.pipe(wsVid);
+        wsVid.on('finish', function() {
+            const newItem = {
+                id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
+                author: sender,
+                isAuto: false,
+                title: title.slice(0, 120),
+                videoUrl: '/uploads/' + fileName,
+                time: getServerDateTime(),
+                likes: []
+            };
+            channelsVideosDB.unshift(newItem);
+            writeJSON(CHANNELS_FILE, channelsVideosDB, true);
+            broadcastWS({ type: 'channels_updated' });
+            return sendJsonCompressed(req, res, 200, { ok: true, item: newItem });
+        });
+        wsVid.on('error', function() {
+            res.writeHead(500);
+            res.end(JSON.stringify({ ok: false }));
+        });
+        return;
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/channels/like') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.id && data.user) {
+                const item = channelsVideosDB.find(function(v) { return v.id === data.id; });
+                if (item) {
+                    if (!Array.isArray(item.likes)) item.likes = [];
+                    const uKey = String(data.user).trim().toLowerCase();
+                    const idx = item.likes.indexOf(uKey);
+                    if (idx === -1) item.likes.push(uKey);
+                    else item.likes.splice(idx, 1);
+                    writeJSON(CHANNELS_FILE, channelsVideosDB);
+                }
+            }
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+
+    if (req.method === 'POST' && urlPath === '/api/channels/delete') {
+        return readBodyJSON(req, function(err, data) {
+            if (!err && data && data.id) {
+                const idx = channelsVideosDB.findIndex(function(v) { return v.id === data.id; });
+                if (idx !== -1) {
+                    const removed = channelsVideosDB.splice(idx, 1);
+                    if (removed && removed[0] && removed[0].videoUrl) {
+                        const oldF = path.join(UPLOADS_DIR, path.basename(removed[0].videoUrl));
+                        try { if (fs.existsSync(oldF)) fs.unlinkSync(oldF); } catch (e) {}
+                    }
+                    writeJSON(CHANNELS_FILE, channelsVideosDB, true);
+                    broadcastWS({ type: 'channels_updated' });
+                }
+            }
+            return sendJsonCompressed(req, res, 200, { ok: true });
+        });
+    }
+
     fs.readFile(path.join(__dirname, 'index.html'), function(err, data) {
+
 
 
         if (err) {
