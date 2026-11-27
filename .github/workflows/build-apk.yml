@@ -484,6 +484,9 @@ jobs:
                   String t = sp.getString("theme_id", "military");
                   if ("rocket".equals(t)) return Color.parseColor("#2e140d");
                   if ("cosmic".equals(t)) return Color.parseColor("#1c1242");
+                  if ("neon".equals(t))   return Color.parseColor("#2e0836");
+                  if ("ocean".equals(t))  return Color.parseColor("#082f49");
+                  if ("sunset".equals(t)) return Color.parseColor("#3b1506");
                   return Color.parseColor("#102a1a");
               }
 
@@ -492,10 +495,13 @@ jobs:
                   String t = sp.getString("theme_id", "military");
                   if ("rocket".equals(t)) return Color.parseColor("#f97316");
                   if ("cosmic".equals(t)) return Color.parseColor("#a855f7");
+                  if ("neon".equals(t))   return Color.parseColor("#ec4899");
+                  if ("ocean".equals(t))  return Color.parseColor("#06b6d4");
+                  if ("sunset".equals(t)) return Color.parseColor("#f59e0b");
                   return Color.parseColor("#22c55e");
               }
 
-              public static Bitmap prepareLargeCleanAvatar(Bitmap src) {
+               public static Bitmap prepareLargeCleanAvatar(Bitmap src) {
                   if (src == null) return null;
                   int targetSize = 96;
                   int minSide = Math.min(src.getWidth(), src.getHeight());
