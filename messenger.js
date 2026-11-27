@@ -3885,10 +3885,9 @@ function uploadChannelVideo() {
         return alert('Выберите видеоролик с устройства!');
     }
     var file = fileInp.files[0];
-    if (file.size > 45 * 1024 * 1024) {
-        return alert('Ролик слишком большой (максимум 45 МБ). Выберите короткое видео!');
+    if (file.size > 60 * 1024 * 1024) {
+        return alert('Ролик слишком большой (максимум 60 МБ). Выберите короткое видео!');
     }
-
     var title = (titleInp && titleInp.value.trim()) ? titleInp.value.trim() : 'Юмор МСБ-55115 😂';
     if (statusEl) {
         statusEl.style.display = 'block';
@@ -3897,7 +3896,13 @@ function uploadChannelVideo() {
     }
     if (sendBtn) sendBtn.disabled = true;
 
-    fetch('/api/channels/upload', {
+    var baseUrl = (typeof API_ORIGIN !== 'undefined' && API_ORIGIN) ? API_ORIGIN : '';
+    var upUrl = baseUrl + '/api/channels/upload' +
+        '?sender=' + encodeURIComponent(me) +
+        '&title=' + encodeURIComponent(title) +
+        '&filename=' + encodeURIComponent(file.name || 'reel.mp4');
+
+    fetch(upUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/octet-stream',
@@ -3907,6 +3912,7 @@ function uploadChannelVideo() {
         },
         body: file
     })
+
     .then(function(r) { return r.json(); })
     .then(function(d) {
         if (d && d.ok) {

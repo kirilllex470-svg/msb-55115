@@ -33,16 +33,31 @@ const EXTERNAL_HUMOR_SOURCES = [
     { platform: '😂 Юмор TV', url: 'https://reddit.com' },
     { platform: '🎬 Приколы Net', url: 'https://reddit.com' },
     { platform: '🐾 Зверьё Смех', url: 'https://reddit.com' },
-    { platform: '⚡ Нежданчик', url: 'https://reddit.com' },
-    { platform: '🤣 Смех до слёз', url: 'https://reddit.com' }
+    { platform: '⚡ Нежданчик', url: 'https://reddit.com' }
 ];
 
-function fetchJsonHttps(targetUrl) {
+const BACKUP_FUNNY_CLIPS = [
+    { extId: 'bk_1', platform: '🎬 Комедия TV', title: '🐰 Большой ушастый зайка: прикол дня 😂', url: 'https://googleapis.com' },
+    { extId: 'bk_2', platform: '⚡ Экшн Юмор', title: '🔥 Эпичный побег на скорости 🤣', url: 'https://googleapis.com' },
+    { extId: 'bk_3', platform: '😂 Приколы Net', title: '😎 Когда решил отдохнуть после дежурства', url: 'https://googleapis.com' },
+    { extId: 'bk_4', platform: '🐾 Зверьё Смех', title: '🎉 Весёлый драйв и настроение!', url: 'https://googleapis.com' },
+    { extId: 'bk_5', platform: '🤣 Смех до слёз', title: '💥 Неожиданный поворот событий!', url: 'https://googleapis.com' }
+];
+
+function fetchJsonHttps(targetUrl, redirectsLeft) {
+    const left = (typeof redirectsLeft === 'number') ? redirectsLeft : 3;
     return new Promise(function(resolve) {
         const req = https.get(targetUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MSB55115Bot/1.0)' },
-            timeout: 12000
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+                'Accept': 'application/json'
+            },
+            timeout: 15000
         }, function(res) {
+            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location && left > 0) {
+                res.resume();
+                return resolve(fetchJsonHttps(res.headers.location, left - 1));
+            }
             if (res.statusCode !== 200) {
                 res.resume();
                 return resolve(null);
@@ -62,28 +77,31 @@ function fetchJsonHttps(targetUrl) {
     });
 }
 
-function downloadVideoToUploads(videoUrl, audioUrl) {
+function downloadVideoToUploads(videoUrl, redirectsLeft) {
+    const left = (typeof redirectsLeft === 'number') ? redirectsLeft : 3;
     return new Promise(function(resolve) {
         const fileName = 'auto_' + crypto.randomBytes(6).toString('hex') + '.mp4';
         const fullPath = path.join(UPLOADS_DIR, fileName);
-        const wsFile = fs.createWriteStream(fullPath);
 
         const req = https.get(videoUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 25000
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0' },
+            timeout: 30000
         }, function(res) {
+            if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location && left > 0) {
+                res.resume();
+                return resolve(downloadVideoToUploads(res.headers.location, left - 1));
+            }
             if (res.statusCode !== 200) {
                 res.resume();
-                wsFile.close();
-                try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (e) {}
                 return resolve(null);
             }
+            const wsFile = fs.createWriteStream(fullPath);
             res.pipe(wsFile);
             wsFile.on('finish', function() {
                 wsFile.close();
                 try {
                     const st = fs.statSync(fullPath);
-                    if (st.size < 40000 || st.size > 35 * 1024 * 1024) {
+                    if (st.size < 30000 || st.size > 45 * 1024 * 1024) {
                         fs.unlinkSync(fullPath);
                         return resolve(null);
                     }
@@ -92,16 +110,13 @@ function downloadVideoToUploads(videoUrl, audioUrl) {
                     resolve(null);
                 }
             });
+            wsFile.on('error', function() {
+                try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (e) {}
+                resolve(null);
+            });
         });
-        req.on('error', function() {
-            wsFile.close();
-            try { if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath); } catch (e) {}
-            resolve(null);
-        });
-        req.on('timeout', function() {
-            req.destroy();
-            resolve(null);
-        });
+        req.on('error', function() { resolve(null); });
+        req.on('timeout', function() { req.destroy(); resolve(null); });
     });
 }
 
@@ -111,11 +126,11 @@ async function pullRandomReelsFromPlatforms() {
     if (isFetchingExternalReels) return;
     isFetchingExternalReels = true;
     try {
-        // Выбираем 2 случайные платформы за один цикл
-        const shuffledSources = EXTERNAL_HUMOR_SOURCES.slice().sort(function() { return Math.random() - 0.5; }).slice(0, 2);
+        const shuffledSources = EXTERNAL_HUMOR_SOURCES.slice().sort(function() { return Math.random() - 0.5; });
         let addedCount = 0;
 
         for (let s = 0; s < shuffledSources.length; s++) {
+            if (addedCount >= 3) break;
             const src = shuffledSources[s];
             const json = await fetchJsonHttps(src.url);
             if (!json || !json.data || !Array.isArray(json.data.children)) continue;
@@ -129,12 +144,12 @@ async function pullRandomReelsFromPlatforms() {
                 const rv = (d.secure_media && d.secure_media.reddit_video) ||
                            (d.media && d.media.reddit_video);
                 if (!rv || !rv.fallback_url) continue;
-                if (Number(rv.duration || 0) > 65) continue;
+                if (Number(rv.duration || 0) > 70) continue;
 
                 const extId = 'ext_' + String(d.id || '');
                 if (channelsVideosDB.some(function(x) { return x.extId === extId; })) continue;
 
-                const cleanMp4 = String(rv.fallback_url).split('?')[0];
+                const cleanMp4 = String(rv.fallback_url).split('?');
                 const savedLocalUrl = await downloadVideoToUploads(cleanMp4);
                 if (!savedLocalUrl) continue;
 
@@ -152,8 +167,31 @@ async function pullRandomReelsFromPlatforms() {
             }
         }
 
+        // Если основная площадка заблокировала IP сервера — качаем с резервной CDN-платформы
+        if (addedCount === 0) {
+            const shuffledBackup = BACKUP_FUNNY_CLIPS.slice().sort(function() { return Math.random() - 0.5; });
+            for (let b = 0; b < shuffledBackup.length; b++) {
+                if (addedCount >= 2) break;
+                const item = shuffledBackup[b];
+                if (channelsVideosDB.some(function(x) { return x.extId === item.extId; })) continue;
+                const savedLocalUrl = await downloadVideoToUploads(item.url);
+                if (!savedLocalUrl) continue;
+
+                channelsVideosDB.unshift({
+                    id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
+                    extId: item.extId,
+                    author: item.platform,
+                    isAuto: true,
+                    title: item.title,
+                    videoUrl: savedLocalUrl,
+                    time: getServerDateTime(),
+                    likes: []
+                });
+                addedCount++;
+            }
+        }
+
         if (addedCount > 0) {
-            // Храним не более 60 роликов, удаляя самые старые файлы с диска
             while (channelsVideosDB.length > 60) {
                 const oldItem = channelsVideosDB.pop();
                 if (oldItem && oldItem.videoUrl) {
@@ -163,7 +201,7 @@ async function pullRandomReelsFromPlatforms() {
             }
             writeJSON(CHANNELS_FILE, channelsVideosDB, true);
             broadcastWS({ type: 'channels_updated' });
-            console.log('🎬 Автоподгрузка в Каналы: добавлено новых роликов:', addedCount);
+            console.log('🎬 Автоподгрузка в Каналы: добавлено роликов:', addedCount);
         }
     } catch (e) {
     } finally {
@@ -171,9 +209,9 @@ async function pullRandomReelsFromPlatforms() {
     }
 }
 
-// Запускаем первую автоподгрузку через 8 сек после старта сервера и далее каждые 25 минут
-setTimeout(pullRandomReelsFromPlatforms, 8000);
+setTimeout(pullRandomReelsFromPlatforms, 5000);
 setInterval(pullRandomReelsFromPlatforms, 25 * 60 * 1000);
+
 
 
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -494,7 +532,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v46';",
+    "const SHELL_CACHE = 'msb55115-shell-v47';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -631,7 +669,7 @@ function readBodyJSON(req, cb) {
 const server = http.createServer(function(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-update-secret, x-chunk-index, x-total-chunks, x-version-code, x-version-name');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-update-secret, x-chunk-index, x-total-chunks, x-version-code, x-version-name, x-sender, x-title, x-filename');
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
         return res.end();
@@ -1677,9 +1715,10 @@ const server = http.createServer(function(req, res) {
     }
 
     if (req.method === 'POST' && urlPath === '/api/channels/upload') {
-        const sender = decodeURIComponent(req.headers['x-sender'] || 'Боец');
-        const title = decodeURIComponent(req.headers['x-title'] || 'Юмор МСБ-55115');
-        const origName = decodeURIComponent(req.headers['x-filename'] || 'video.mp4');
+        const uObj = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+        const sender = decodeURIComponent(uObj.searchParams.get('sender') || req.headers['x-sender'] || 'Боец');
+        const title = decodeURIComponent(uObj.searchParams.get('title') || req.headers['x-title'] || 'Юмор МСБ-55115');
+        const origName = decodeURIComponent(uObj.searchParams.get('filename') || req.headers['x-filename'] || 'video.mp4');
         const ext = (path.extname(origName) || '.mp4').toLowerCase();
         const allowed = ['.mp4', '.webm', '.mov', '.m4v'];
         const safeExt = allowed.includes(ext) ? ext : '.mp4';
