@@ -149,10 +149,9 @@ async function pullRandomReelsFromPlatforms() {
                 const extId = 'ext_' + String(d.id || '');
                 if (channelsVideosDB.some(function(x) { return x.extId === extId; })) continue;
 
-                const cleanMp4 = String(rv.fallback_url).split('?');
+                const cleanMp4 = String(rv.fallback_url).split('?')[0];
                 const savedLocalUrl = await downloadVideoToUploads(cleanMp4);
                 if (!savedLocalUrl) continue;
-
                 channelsVideosDB.unshift({
                     id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
                     extId: extId,
@@ -532,7 +531,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v47';",
+    "const SHELL_CACHE = 'msb55115-shell-v48';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1708,11 +1707,13 @@ const server = http.createServer(function(req, res) {
         const mixedList = channelsVideosDB.slice().sort(function() { return Math.random() - 0.5; });
         return sendJsonCompressed(req, res, 200, { ok: true, videos: mixedList }, 'no-store');
     }
-
     if (req.method === 'POST' && urlPath === '/api/channels/pull-now') {
-        pullRandomReelsFromPlatforms();
-        return sendJsonCompressed(req, res, 200, { ok: true });
+        return pullRandomReelsFromPlatforms().then(function() {
+            const mixedList = channelsVideosDB.slice().sort(function() { return Math.random() - 0.5; });
+            return sendJsonCompressed(req, res, 200, { ok: true, videos: mixedList }, 'no-store');
+        });
     }
+
 
     if (req.method === 'POST' && urlPath === '/api/channels/upload') {
         const uObj = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));

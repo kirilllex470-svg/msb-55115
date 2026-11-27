@@ -3869,9 +3869,20 @@ function toggleChannelUploadBox() {
 }
 
 function pullMoreChannelReels() {
-    fetch('/api/channels/pull-now', { method: 'POST' }).catch(function() {});
-    loadMsbChannelsFeed();
+    var listEl = document.getElementById('msb-channels-feed-list');
+    if (listEl && listEl.querySelectorAll('.msb-reel-card').length === 0) {
+        listEl.innerHTML = '<div class="chat-placeholder">⏳ Загружаем свежие ролики с платформ... Подождите 3–5 сек</div>';
+    }
+    fetch('/api/channels/pull-now', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+            loadMsbChannelsFeed();
+        })
+        .catch(function() {
+            loadMsbChannelsFeed();
+        });
 }
+
 
 function uploadChannelVideo() {
     var me = getActiveChatIdentity();
