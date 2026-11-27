@@ -2190,6 +2190,44 @@ function makeAnimatedSvgGif(cat, idx, title) {
     return dataUrl;
 }
 
+function buildMsbChatTileUrl(fillCol, strokeCol) {
+    const c = document.createElement('canvas');
+    c.width = 240;
+    c.height = 160;
+    const ctx = c.getContext('2d');
+    ctx.save();
+    ctx.translate(120, 80);
+    ctx.rotate(-0.26);
+    ctx.font = '900 25px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = fillCol;
+    ctx.fillText('МСБ55115', 0, 0);
+    ctx.globalAlpha = 0.65;
+    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = strokeCol;
+    ctx.strokeText('МСБ55115', 0, 0);
+    ctx.restore();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = strokeCol;
+    ctx.beginPath();
+    ctx.arc(34, 32, 3, 0, Math.PI * 2);
+    ctx.arc(204, 128, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    return 'url("' + c.toDataURL('image/png') + '")';
+}
+
+function applyCivilLiveWatermark() {
+    const root = document.documentElement;
+    if (!root.getAttribute('data-msb-wm-ready')) {
+        root.setAttribute('data-msb-wm-ready', '1');
+        root.style.setProperty('--msb-wm-neon', buildMsbChatTileUrl('#ec4899', '#22d3ee'));
+        root.style.setProperty('--msb-wm-ocean', buildMsbChatTileUrl('#22d3ee', '#38bdf8'));
+        root.style.setProperty('--msb-wm-sunset', buildMsbChatTileUrl('#fbbf24', '#f43f5e'));
+    }
+}
+
 function getMsbThemeMeta(themeName) {
     const t = themeName || localStorage.getItem('msb_app_theme') || 'military';
     if (t === 'rocket') return { id: 'rocket', color: '#f97316', bgColor: '#2e140d', badge: '🚀', label: 'РАКЕТНЫЙ' };
@@ -2200,10 +2238,10 @@ function getMsbThemeMeta(themeName) {
     return { id: 'military', color: '#22c55e', bgColor: '#102a1a', badge: '🪖', label: 'ВОЕННЫЙ' };
 }
 
-
 function setAppTheme(themeName, skipSync) {
     const allThemes = Array.of('military', 'rocket', 'cosmic', 'neon', 'ocean', 'sunset');
     const clean = allThemes.includes(themeName) ? themeName : 'military';
+    applyCivilLiveWatermark();
     document.body.classList.remove(
         'theme-military', 'theme-rocket', 'theme-cosmic',
         'theme-neon', 'theme-ocean', 'theme-sunset'
@@ -2222,6 +2260,7 @@ function setAppTheme(themeName, skipSync) {
         sendFcmTokenToServer();
     }
 }
+
 
 
 
