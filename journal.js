@@ -2922,15 +2922,15 @@ var msbCall = {
 
 var DOT = String.fromCharCode(46);
 var MSB_RTC_CFG = {
-    iceCandidatePoolSize: 2,
+    iceCandidatePoolSize: 4,
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require',
     iceServers: [
         { urls: 'stun:' + ['74', '125', '250', '129'].join(DOT) + ':19302' },
-        { urls: 'stun:' + ['162', '159', '207', '0'].join(DOT) + ':3478' }
+        { urls: 'stun:' + ['162', '159', '207', '0'].join(DOT) + ':3478' },
+        { urls: 'stun:' + ['stun', 'l', 'google', 'com'].join(DOT) + ':19302' }
     ]
 };
-
-
-
 function getMsbCallerName() {
     var name = '';
     if (typeof getActiveChatIdentity === 'function') name = getActiveChatIdentity();
@@ -3081,9 +3081,11 @@ function startMsbRing(isIncoming) {
                     if (st && st.ok && st.ringing === false) {
                         missCount++;
                         // Завершаем только если 2 проверки подряд подтвердили сброс и разговор ещё не начался
-                        if (missCount >= 2 && (msbCall.state === 'calling' || msbCall.state === 'incoming') && !msbCall.pc?.remoteDescription) {
-                            window.endMsbAudioCall(false, 'ended');
-                        }
+// Внутри startMsbRing:
+if (missCount >= 3 && (msbCall.state === 'calling' || msbCall.state === 'incoming') && (!msbCall.pc || (!msbCall.pc.remoteDescription && msbCall.pc.signalingState === 'stable'))) {
+    window.endMsbAudioCall(false, 'ended');
+}
+
                     } else {
                         missCount = 0;
                     }
@@ -3216,13 +3218,15 @@ function createMsbPeer(partnerName) {
         if (ice === 'connected' || ice === 'completed') {
             if (msbCall.discTimer) { clearTimeout(msbCall.discTimer); msbCall.discTimer = null; }
             onMsbCallConnected();
-        } else if (ice === 'disconnected') {
-            if (msbCall.discTimer) clearTimeout(msbCall.discTimer);
-            msbCall.discTimer = setTimeout(function() {
-                if (msbCall.pc && (msbCall.pc.iceConnectionState === 'disconnected' || msbCall.pc.iceConnectionState === 'failed')) {
-                    window.endMsbAudioCall(true, 'network_fail');
-                }
-            }, 6000);
+// Внутри createMsbPeer -> oniceconnectionstatechange:
+} else if (ice === 'disconnected') {
+    if (msbCall.discTimer) clearTimeout(msbCall.discTimer);
+    msbCall.discTimer = setTimeout(function() {
+        if (msbCall.pc && (msbCall.pc.iceConnectionState === 'disconnected' || msbCall.pc.iceConnectionState === 'failed')) {
+            window.endMsbAudioCall(true, 'network_fail');
+        }
+    }, 20000);
+
         } else if (ice === 'failed') {
             window.endMsbAudioCall(true, 'network_fail');
         }

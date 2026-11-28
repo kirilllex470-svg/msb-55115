@@ -3044,8 +3044,7 @@ html body.theme-neon #messenger-modal #messages {
             #090214 90%
         ) !important;
     background-repeat: repeat, no-repeat !important;
-    background-size: 240px 160px, 200% 200% !important;
-    animation: msbLiveChatBg 18s linear infinite !important;
+    background-size: 240px 160px, 100% 100% !important;
 }
 
 body.theme-neon .my-msg .bubble {
@@ -3406,4 +3405,26 @@ body.theme-sunset #register-modal {
     background: #000000;
     border: 1px solid rgba(255, 255, 255, 0.14);
     display: block;
+}
+html body.theme-ocean #messages,
+html body.theme-ocean #messenger-modal #messages,
+html body.theme-sunset #messages,
+html body.theme-sunset #messenger-modal #messages {
+    animation: none !important;
+    background-size: 240px 160px, 100% 100% !important;
+}
+
+#messenger-modal #messages {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+.message-row {
+    contain: layout style;
+}
+
+@media (max-width: 768px) {
+    #app-sidebar.hidden ~ .chat-area .msg-ticker-move {
+        animation-play-state: paused !important;
+    }
 }
