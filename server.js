@@ -28,6 +28,12 @@ const CHANNELS_FILE = path.join(storagePath, 'channels_videos.json');
 let pinResetsDB = readJSON(PIN_RESET_FILE, {});
 let channelsVideosDB = readJSON(CHANNELS_FILE, []);
 if (!Array.isArray(channelsVideosDB)) channelsVideosDB = [];
+channelsVideosDB = channelsVideosDB.filter(function(item) {
+    if (!item || !item.videoUrl) return false;
+    if (!item.isAuto) return true;
+    return Boolean(item.verifiedAt && (Date.now() - item.verifiedAt < 24 * 3600 * 1000));
+});
+
 
 
 // Открытые русскоязычные Telegram-каналы с короткими видеоприколами и мемами
@@ -92,20 +98,23 @@ async function pullRutubeFunnyShorts() {
             const extId = 'rt_' + String(v.id);
             if (channelsVideosDB.some(function(x) { return x && x.extId === extId; })) continue;
 
-            const embedPath = ['/play', 'embed', String(v.id)].join('/');
-            const embedUrl = 'https://rutube.ru' + embedPath;
+            if (v.is_hidden || v.is_deleted || v.is_locked || v.is_livestream) continue;
+            const rawEmbed = v.embed_url ? String(v.embed_url) : ('https://rutube.ru' + ['/play', 'embed', String(v.id)].join('/'));
+            if (!rawEmbed.includes('/play/embed/')) continue;
 
             channelsVideosDB.unshift({
                 id: 'reel_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex'),
                 extId: extId,
-                author: '📺 Rutube Юмор',
+                author: '📺 ' + ((v.author && v.author.name) ? String(v.author.name).slice(0, 22) : 'Rutube Юмор'),
                 isAuto: true,
+                verifiedAt: Date.now(),
                 mediaKind: 'iframe',
                 title: String(v.title || 'Прикол с Rutube 😂').slice(0, 110),
-                videoUrl: embedUrl,
+                videoUrl: rawEmbed,
                 time: getServerDateTime(),
                 likes: new Array()
             });
+
             added++;
         }
     } catch (e) {}
@@ -175,12 +184,14 @@ async function pullRandomReelsFromPlatforms() {
     if (isFetchingExternalReels) return;
     isFetchingExternalReels = true;
     try {
-        // Сначала вычищаем старые нерабочие зарубежные ссылки googleapis/reddit, если они остались в JSON
+        // Оставляем ролики наших бойцов (!isAuto) и только свежие авто-ролики за последние 24 часа
         channelsVideosDB = channelsVideosDB.filter(function(item) {
             if (!item || !item.videoUrl) return false;
+            if (!item.isAuto) return true;
             if (item.videoUrl.includes('googleapis.com') || item.videoUrl.includes('redd.it')) return false;
-            return true;
+            return Boolean(item.verifiedAt && (Date.now() - item.verifiedAt < 24 * 3600 * 1000));
         });
+
 
         const addedRt = await pullRutubeFunnyShorts();
         const addedTg = await pullTelegramMemeVideos();
@@ -522,7 +533,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v56';",
+    "const SHELL_CACHE = 'msb55115-shell-v57';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",

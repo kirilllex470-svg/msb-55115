@@ -3868,63 +3868,22 @@ function toggleChannelUploadBox() {
     box.style.display = (box.style.display === 'none') ? 'block' : 'none';
 }
 
-var MSB_FALLBACK_RU_REELS = Array.of(
-    {
-        id: 'ru_fb_1',
-        author: '📺 Rutube Юмор',
-        isAuto: true,
-        mediaKind: 'iframe',
-        title: '😂 Смешные животные — подборка до слёз!',
-        videoUrl: 'https://rutube.ru' + ['/play', 'embed', 'c6589e64c4472060c8069311d6b99f08'].join('/'),
-        time: 'Эфир МСБ',
-        likes: new Array()
-    },
-    {
-        id: 'ru_fb_2',
-        author: '🤣 Приколы Дня',
-        isAuto: true,
-        mediaKind: 'iframe',
-        title: '🔥 Лучшие русские приколы и курьёзы недели',
-        videoUrl: 'https://rutube.ru' + ['/play', 'embed', 'f8f0f99d11e1bf5158c0c1028759b5c6'].join('/'),
-        time: 'Эфир МСБ',
-        likes: new Array()
-    },
-    {
-        id: 'ru_fb_3',
-        author: '🐾 Котики TV',
-        isAuto: true,
-        mediaKind: 'iframe',
-        title: '🐱 Коты против гравитации — смех гарантирован',
-        videoUrl: 'https://rutube.ru' + ['/play', 'embed', '4182817f26853602116455267a448902'].join('/'),
-        time: 'Эфир МСБ',
-        likes: new Array()
-    },
-    {
-        id: 'ru_fb_4',
-        author: '⚡ Угар FM',
-        isAuto: true,
-        mediaKind: 'iframe',
-        title: '😎 Армейский и жизненный юмор — короткие скетчи',
-        videoUrl: 'https://rutube.ru' + ['/play', 'embed', '9b9f53d2e89d117777e5d0dc64538876'].join('/'),
-        time: 'Эфир МСБ',
-        likes: new Array()
-    }
-);
+var MSB_FALLBACK_RU_REELS = new Array();
 
 var MSB_HUMOR_TOPICS = Array.of(
-    'смешные приколы короткие',
-    'смешные коты приколы',
-    'армейские приколы юмор',
-    'приколы до слез видео',
-    'смешные собаки шортс',
-    'русские приколы свежие'
+    'смешные приколы',
+    'приколы с животными',
+    'смешные коты',
+    'юмор скетчи',
+    'приколы до слез',
+    'веселые видео'
 );
 
 async function fetchClientRutubeShorts() {
     try {
         var q = MSB_HUMOR_TOPICS.at(Math.floor(Math.random() * MSB_HUMOR_TOPICS.length));
         var ctrl = new AbortController();
-        var timer = setTimeout(function() { ctrl.abort(); }, 4000);
+        var timer = setTimeout(function() { ctrl.abort(); }, 5000);
         var apiPath = ['/api', 'search', 'video', ''].join('/');
         var url = 'https://rutube.ru' + apiPath + '?query=' + encodeURIComponent(q) + '&format=json';
         var res = await fetch(url, { signal: ctrl.signal });
@@ -3934,25 +3893,27 @@ async function fetchClientRutubeShorts() {
         var results = (data && Array.isArray(data.results)) ? data.results : new Array();
         var out = new Array();
         results.forEach(function(v) {
-            if (!v || !v.id || v.is_adult) return;
-            if (Number(v.duration || 0) > 240) return;
-            var embPath = ['/play', 'embed', String(v.id)].join('/');
+            if (!v || !v.id || v.is_adult || v.is_hidden || v.is_deleted || v.is_locked || v.is_livestream) return;
+            if (Number(v.duration || 0) > 300) return;
+            var embUrl = v.embed_url ? String(v.embed_url) : ('https://rutube.ru' + ['/play', 'embed', String(v.id)].join('/'));
+            if (embUrl.indexOf('/play/embed/') === -1) return;
             out.push({
                 id: 'rt_live_' + String(v.id),
                 author: '📺 ' + ((v.author && v.author.name) ? String(v.author.name).slice(0, 22) : 'Rutube Юмор'),
                 isAuto: true,
                 mediaKind: 'iframe',
                 title: String(v.title || 'Прикол дня 😂').slice(0, 110),
-                videoUrl: 'https://rutube.ru' + embPath,
+                videoUrl: embUrl,
                 time: 'Прямой эфир',
                 likes: new Array()
             });
         });
-        return out.sort(function() { return Math.random() - 0.5; }).slice(0, 10);
+        return out.sort(function() { return Math.random() - 0.5; }).slice(0, 12);
     } catch (e) {
         return new Array();
     }
 }
+
 
 function pullMoreChannelReels() {
     var listEl = document.getElementById('msb-channels-feed-list');
@@ -3993,10 +3954,8 @@ async function loadMsbChannelsFeed(forceShuffle) {
     var userUploads = serverItems.filter(function(x) { return x && !x.isAuto; });
     var autoPool = serverItems.filter(function(x) { return x && x.isAuto; }).concat(clientLive);
 
-    if (autoPool.length === 0) {
-        autoPool = MSB_FALLBACK_RU_REELS.slice();
-    }
     autoPool.sort(function() { return Math.random() - 0.5; });
+
 
     var seenUrls = new Set();
     var finalFeed = new Array();
@@ -4007,6 +3966,11 @@ async function loadMsbChannelsFeed(forceShuffle) {
     });
 
     listEl.innerHTML = '';
+	    if (finalFeed.length === 0) {
+        listEl.innerHTML = '<div class="chat-placeholder">📡 Нажмите «🎲 Эфир» или загрузите свой ролик кнопкой «➕ Свой»!</div>';
+        return;
+    }
+
     finalFeed.slice(0, 25).forEach(function(item) {
         var card = document.createElement('div');
         card.className = 'msb-reel-card';
