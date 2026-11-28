@@ -4080,6 +4080,67 @@ function toggleChannelVideoLike(videoId, btnEl) {
     }).catch(function() {});
 }
 
+function uploadChannelVideo() {
+    var me = getActiveChatIdentity();
+    if (!me) return alert('Сначала войдите под своим позывным!');
+    var fileInp = document.getElementById('msb-channel-file-inp');
+    var titleInp = document.getElementById('msb-channel-title-inp');
+    var statusEl = document.getElementById('msb-channel-upload-status');
+    var sendBtn = document.getElementById('msb-channel-send-btn');
+
+    if (!fileInp || !fileInp.files || fileInp.files.length === 0) {
+        return alert('Выберите видеоролик с устройства!');
+    }
+    var file = fileInp.files.item(0);
+    if (!file) return alert('Файл не выбран!');
+    if (file.size > 60 * 1024 * 1024) {
+        return alert('Ролик слишком большой (максимум 60 МБ). Выберите короткое видео!');
+    }
+
+    var title = (titleInp && titleInp.value.trim()) ? titleInp.value.trim() : 'Юмор МСБ-55115 😂';
+    if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#facc15';
+        statusEl.textContent = '⏳ Отправка ролика на сервер...';
+    }
+    if (sendBtn) sendBtn.disabled = true;
+
+    var upUrl = '/api/channels/upload' +
+        '?sender=' + encodeURIComponent(me) +
+        '&title=' + encodeURIComponent(title) +
+        '&filename=' + encodeURIComponent(file.name || 'reel.mp4');
+
+    fetch(upUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file
+    })
+    .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
+    .then(function(d) {
+        if (d && d.ok) {
+            fileInp.value = '';
+            if (titleInp) titleInp.value = '';
+            if (statusEl) statusEl.style.display = 'none';
+            toggleChannelUploadBox();
+            loadMsbChannelsFeed();
+        } else {
+            throw new Error('Save failed');
+        }
+    })
+    .catch(function() {
+        if (statusEl) {
+            statusEl.style.color = '#ef4444';
+            statusEl.textContent = '❌ Ошибка загрузки ролика на сервер';
+        }
+    })
+    .finally(function() {
+        if (sendBtn) sendBtn.disabled = false;
+    });
+}
+
 function deleteChannelVideo(videoId) {
     if (!confirm('Удалить этот видеоролик из канала?')) return;
     fetch('/api/channels/delete', {
