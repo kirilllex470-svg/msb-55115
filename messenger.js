@@ -1467,7 +1467,7 @@ function loadFriendsAndRequests(lightweight) {
             }
             updateTotalUnreadBadge();
         }).catch(function() { isFetchingFriends = false; });
-
+}
 
 function renderRequests() {
     var box = document.getElementById('requests-box');

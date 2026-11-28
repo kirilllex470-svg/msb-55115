@@ -1185,11 +1185,7 @@ const server = http.createServer(function(req, res) {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
         const omitAvatars = myUrl.searchParams.get('noav') === '1';
-        if (!user) {
-            return sendJsonCompressed(req, res, 200, new Array());
-        }
-
-        if (!user) {
+          if (!user) {
             return sendJsonCompressed(req, res, 200, new Array());
         }
         const myLowerName = String(user).trim().toLowerCase();
