@@ -3407,18 +3407,3 @@ body.theme-sunset #register-modal {
     border: 1px solid rgba(255, 255, 255, 0.14);
     display: block;
 }
-/* === ЭНЕРГОСБЕРЕЖЕНИЕ И ПЛАВНОСТЬ НА СЛАБЫХ СМАРТФОНАХ === */
-#messenger-modal[style*="none"] *,
-body.msb-app-hidden * {
-    animation-play-state: paused !important;
-}
-
-#messages .message-row {
-    content-visibility: auto;
-    contain-intrinsic-size: 0 64px;
-}
-
-.friend-item {
-    content-visibility: auto;
-    contain-intrinsic-size: 0 62px;
-}
