@@ -880,20 +880,21 @@ jobs:
 
 
                       WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, windowInsets) -> {
-    Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-    Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
-    int bottomPad = Math.max(sysBars.bottom, ime.bottom);
-    if (v.getPaddingBottom() != bottomPad || v.getPaddingTop() != sysBars.top) {
-        v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
-        if (ime.bottom > 0) {
-            wv.post(() -> wv.evaluateJavascript(
-                "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
-            ));
-        }
-    }
-    return WindowInsetsCompat.CONSUMED;
-});
+                      ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, windowInsets) -> {
+                          Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+                          Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+                          int bottomPad = Math.max(sysBars.bottom, ime.bottom);
+                          if (v.getPaddingBottom() != bottomPad || v.getPaddingTop() != sysBars.top) {
+                              v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
+                              if (ime.bottom > 0) {
+                                  wv.post(() -> wv.evaluateJavascript(
+                                      "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
+                                  ));
+                              }
+                          }
+                          return WindowInsetsCompat.CONSUMED;
+                      });
+
 
 
                       WebSettings ws = wv.getSettings();
@@ -1033,45 +1034,22 @@ ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, window
                               }
                           }
                       }
-                      setVolumeControlStream(android.media.AudioManager.STREAM_VOICE_CALL);
-                  }
-
-                      am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-                      am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
-                      if (on) {
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                              for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
-                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
-                                      am.setCommunicationDevice(dev);
-                                      break;
-                                  }
-                              }
-                          }
-                          am.setSpeakerphoneOn(true);
-                      } else {
-                          am.setSpeakerphoneOn(false);
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                              for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
-                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) {
-                                      am.setCommunicationDevice(dev);
-                                      break;
-                                  }
-                              }
-                          }
-                      }
-                      setVolumeControlStream(android.media.AudioManager.STREAM_VOICE_CALL);
+                                         
+                                         setVolumeControlStream(android.media.AudioManager.STREAM_VOICE_CALL);
                   }
 
 
-@JavascriptInterface
-public void setSpeakerphone(final boolean on) {
-    runOnUiThread(() -> {
-        try {
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            final android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
-            if (am == null) return;
+
+                  @JavascriptInterface
+                  public void setSpeakerphone(final boolean on) {
+                      runOnUiThread(() -> {
+                          try {
+                              getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                              final android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                              if (am == null) return;
 
                               if (audioKeepTask != null) {
+
                                   getWindow().getDecorView().removeCallbacks(audioKeepTask);
                                   audioKeepTask = null;
                               }
@@ -1092,18 +1070,19 @@ public void setSpeakerphone(final boolean on) {
                       });
                   }
 
-@JavascriptInterface
-public void resetAudioMode() {
-    runOnUiThread(() -> {
-        try {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            if (audioKeepTask != null) {
-                getWindow().getDecorView().removeCallbacks(audioKeepTask);
-                audioKeepTask = null;
-            }
-            android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                  @JavascriptInterface
+                  public void resetAudioMode() {
+                      runOnUiThread(() -> {
+                          try {
+                              getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                              if (audioKeepTask != null) {
+                                  getWindow().getDecorView().removeCallbacks(audioKeepTask);
+                                  audioKeepTask = null;
+                              }
+                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
                               if (am != null) {
+
                                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                       try { am.clearCommunicationDevice(); } catch (Exception ignored) {}
                                   }
