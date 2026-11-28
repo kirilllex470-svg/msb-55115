@@ -872,21 +872,29 @@ jobs:
                   if (getBridge() != null && getBridge().getWebView() != null) {
                       WebView wv = getBridge().getWebView();
                       wv.setBackgroundColor(Color.parseColor("#0f172a"));
-                      wv.setLayerType(View.LAYER_TYPE_NONE, null);
+                      wv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                      wv.setOverScrollMode(View.OVER_SCROLL_NEVER);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          wv.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+                      }
+
 
                       WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-                      ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, windowInsets) -> {
-                          Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-                          Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
-                          int bottomPad = Math.max(sysBars.bottom, ime.bottom);
-                          v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
-                          if (ime.bottom > 0) {
-                              wv.post(() -> wv.evaluateJavascript(
-                                  "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
-                              ));
-                          }
-                          return WindowInsetsCompat.CONSUMED;
-                      });
+ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, windowInsets) -> {
+    Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+    Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+    int bottomPad = Math.max(sysBars.bottom, ime.bottom);
+    if (v.getPaddingBottom() != bottomPad || v.getPaddingTop() != sysBars.top) {
+        v.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomPad);
+        if (ime.bottom > 0) {
+            wv.post(() -> wv.evaluateJavascript(
+                "var m=document.getElementById('messages');if(m)m.scrollTop=m.scrollHeight;", null
+            ));
+        }
+    }
+    return WindowInsetsCompat.CONSUMED;
+});
+
 
                       WebSettings ws = wv.getSettings();
                       ws.setJavaScriptEnabled(true);
@@ -1002,18 +1010,19 @@ jobs:
 
                   private void applySpeakerRoute(android.media.AudioManager am, boolean on) {
                       if (am == null) return;
+                      am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+                      am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
                       if (on) {
-                          // Громкая связь: отпускаем голосовой захват и включаем полную громкость стереодинамиков (MODE_NORMAL)
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                              try { am.clearCommunicationDevice(); } catch (Exception ignored) {}
+                              for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
+                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                                      am.setCommunicationDevice(dev);
+                                      break;
+                                  }
+                              }
                           }
-                          am.setMode(android.media.AudioManager.MODE_NORMAL);
                           am.setSpeakerphoneOn(true);
-                          setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
                       } else {
-                          // Режим «Телефон» (только верхний динамик у уха): жестко переводим систему в голосовой вызов
-                          am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
-                          am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
                           am.setSpeakerphoneOn(false);
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                               for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
@@ -1023,49 +1032,77 @@ jobs:
                                   }
                               }
                           }
-                          setVolumeControlStream(android.media.AudioManager.STREAM_VOICE_CALL);
                       }
+                      setVolumeControlStream(android.media.AudioManager.STREAM_VOICE_CALL);
                   }
 
-                  @JavascriptInterface
-                  public void setSpeakerphone(final boolean on) {
-                      runOnUiThread(() -> {
-                          try {
-                              final android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
-                              if (am == null) return;
+                      am.requestAudioFocus(null, android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT);
+                      am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+                      if (on) {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                              for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
+                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                                      am.setCommunicationDevice(dev);
+                                      break;
+                                  }
+                              }
+                          }
+                          am.setSpeakerphoneOn(true);
+                      } else {
+                          am.setSpeakerphoneOn(false);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                              for (android.media.AudioDeviceInfo dev : am.getAvailableCommunicationDevices()) {
+                                  if (dev.getType() == android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) {
+                                      am.setCommunicationDevice(dev);
+                                      break;
+                                  }
+                              }
+                          }
+                      }
+                      setVolumeControlStream(android.media.AudioManager.STREAM_VOICE_CALL);
+                  }
+
+
+@JavascriptInterface
+public void setSpeakerphone(final boolean on) {
+    runOnUiThread(() -> {
+        try {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            final android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+            if (am == null) return;
+
                               if (audioKeepTask != null) {
                                   getWindow().getDecorView().removeCallbacks(audioKeepTask);
                                   audioKeepTask = null;
                               }
                               applySpeakerRoute(am, on);
 
-                              // Если выбран режим «Телефон» (у уха) — повторяем привязку через 300 и 900 мс, чтобы Chromium не сбросил обратно в стерео
+                              // Однократная мягкая проверка через 400 мс только если режим реально сбился
                               if (!on) {
-                                  audioKeepTask = new Runnable() {
-                                      int count = 0;
-                                      @Override
-                                      public void run() {
-                                          try { applySpeakerRoute(am, false); } catch (Exception ignored) {}
-                                          if (++count < 3) {
-                                              getWindow().getDecorView().postDelayed(this, 500);
+                                  audioKeepTask = () -> {
+                                      try {
+                                          if (am.isSpeakerphoneOn() || am.getMode() != android.media.AudioManager.MODE_IN_COMMUNICATION) {
+                                              applySpeakerRoute(am, false);
                                           }
-                                      }
+                                      } catch (Exception ignored) {}
                                   };
-                                  getWindow().getDecorView().postDelayed(audioKeepTask, 300);
+                                  getWindow().getDecorView().postDelayed(audioKeepTask, 400);
                               }
                           } catch (Exception ignored) {}
                       });
                   }
 
-                  @JavascriptInterface
-                  public void resetAudioMode() {
-                      runOnUiThread(() -> {
-                          try {
-                              if (audioKeepTask != null) {
-                                  getWindow().getDecorView().removeCallbacks(audioKeepTask);
-                                  audioKeepTask = null;
-                              }
-                              android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+@JavascriptInterface
+public void resetAudioMode() {
+    runOnUiThread(() -> {
+        try {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            if (audioKeepTask != null) {
+                getWindow().getDecorView().removeCallbacks(audioKeepTask);
+                audioKeepTask = null;
+            }
+            android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+
                               if (am != null) {
                                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                       try { am.clearCommunicationDevice(); } catch (Exception ignored) {}
