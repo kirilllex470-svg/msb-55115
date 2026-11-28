@@ -2697,36 +2697,9 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
     }
     var placeholder = mDiv.querySelector('.chat-placeholder');
     if (placeholder) placeholder.remove();
-
-    var totalLen = data.length;
-    var sliceStart = Math.max(0, totalLen - chatVisibleLimit);
-    var visibleData = data.slice(sliceStart);
-
-    var oldLoadBtn = document.getElementById('msb-load-older-btn');
-    if (sliceStart > 0) {
-        if (!oldLoadBtn) {
-            oldLoadBtn = document.createElement('button');
-            oldLoadBtn.id = 'msb-load-older-btn';
-            oldLoadBtn.type = 'button';
-            oldLoadBtn.style.cssText = 'margin:4px auto 10px auto;padding:7px 14px;border-radius:12px;border:1px solid rgba(56,189,248,0.4);background:rgba(15,23,42,0.85);color:#38bdf8;font-size:12px;font-weight:700;cursor:pointer;display:block;';
-            oldLoadBtn.onclick = function() {
-                var prevH = mDiv.scrollHeight;
-                chatVisibleLimit += 45;
-                renderedMsgIds.clear();
-                mDiv.innerHTML = '';
-                applyMessagesToDOM(mDiv, data, isModalOpen);
-                mDiv.scrollTop = mDiv.scrollHeight - prevH;
-            };
-            mDiv.insertBefore(oldLoadBtn, mDiv.firstChild);
-        }
-        oldLoadBtn.textContent = '⬆️ Показать ранние сообщения (' + sliceStart + ')';
-    } else if (oldLoadBtn) {
-        oldLoadBtn.remove();
-    }
-
     var addedNew = false, hasUnreadIncoming = false;
     var frag = document.createDocumentFragment();
-    visibleData.forEach(function(msg) {
+    data.forEach(function(msg) {
         var isMy = String(msg.sender || '').trim().toLowerCase() === String(chatUser || '').trim().toLowerCase();
         if (!isMy && !msg.read) hasUnreadIncoming = true;
         var checkIcon = isMy
@@ -2776,10 +2749,11 @@ function applyMessagesToDOM(mDiv, data, isModalOpen) {
         requestAnimationFrame(function() { mDiv.scrollTop = mDiv.scrollHeight; });
         setTimeout(function() { mDiv.scrollTop = mDiv.scrollHeight; }, 120);
     }
-    lastMessagesCount = Math.max(lastMessagesCount, totalLen);
+    lastMessagesCount = Math.max(lastMessagesCount, data.length);
     renderPendingBubbles();
     if (isModalOpen && (addedNew || hasUnreadIncoming) && currentPartner) markChatAsRead(currentRoomId);
 }
+
 
 
 
