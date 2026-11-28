@@ -1137,6 +1137,7 @@ window.addEventListener('online', function() {
 });
 
 document.addEventListener('visibilitychange', function() {
+    document.body.classList.toggle('msb-app-hidden', document.visibilityState === 'hidden');
     if (document.visibilityState === 'visible') {
         if (!ws || ws.readyState !== WebSocket.OPEN || (Date.now() - lastPongTime > 9000)) {
             connectWS(true);

@@ -533,7 +533,7 @@ const MANIFEST_JSON = JSON.stringify({
 });
 
 const SW_CODE = [
-    "const SHELL_CACHE = 'msb55115-shell-v57';",
+    "const SHELL_CACHE = 'msb55115-shell-v58';",
     "const MEDIA_CACHE = 'msb55115-media-v1';",
     "const SHELL_ASSETS = [",
     "    '/',",
@@ -1141,9 +1141,45 @@ const server = http.createServer(function(req, res) {
         });
         return;
     }
-    if (urlPath === '/api/friends/get' && req.method === 'GET') {
+    if (urlPath === '/api/messenger/sync' && req.method === 'GET') {
         const myUrl = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
         const user = myUrl.searchParams.get('user');
+        if (!user) {
+            return sendJsonCompressed(req, res, 200, { friends: [], requests: [], avatarHash: '' }, 'no-store');
+        }
+        const myLowerName = String(user).trim().toLowerCase();
+        markUserOnline(myLowerName);
+
+        const myFriends = Array.isArray(friendsDB[myLowerName]) ? friendsDB[myLowerName] : [];
+        const myReads = db.lastRead[myLowerName] || {};
+        const listData = myFriends.map(function(friendName) {
+            const sortedRoom = [myLowerName, String(friendName).trim().toLowerCase()].sort();
+            const pair = sortedRoom.join(',');
+            const roomId = pair + '_' + pair;
+            return buildChatPreviewItem(friendName, roomId, myLowerName, myReads[roomId] || 0, false, true);
+        });
+
+        Object.keys(groupsDB).forEach(function(groupId) {
+            const group = groupsDB[groupId];
+            const normGid = String(groupId).trim().toLowerCase();
+            if (group && Array.isArray(group.members) && group.members.some(function(m) {
+                return String(m).trim().toLowerCase() === myLowerName;
+            })) {
+                listData.push(buildChatPreviewItem(group.name, roomsDB[normGid] ? normGid : groupId, myLowerName, myReads[groupId] || 0, true, true));
+            }
+        });
+
+        const reqList = Array.isArray(requestsDB[myLowerName]) ? requestsDB[myLowerName] : [];
+        const uMe = usersDB[myLowerName] || {};
+        const avHash = uMe.avatar ? String(uMe.avatar.length) : '';
+
+        return sendJsonCompressed(req, res, 200, {
+            friends: listData,
+            requests: reqList,
+            avatarHash: avHash
+        }, 'no-store');
+    }
+
         const omitAvatars = myUrl.searchParams.get('noav') === '1';
         if (!user) {
             return sendJsonCompressed(req, res, 200, new Array());
@@ -1934,7 +1970,7 @@ function saveMultipartChatMsg(fields, fileBuffer, fileExt, originalFileName, req
         const durMatch = String(originalFileName || '').match(/voice_(\d+)s/i);
         const durTag = (type === 'audio' && durMatch) ? ('_voice_' + durMatch[1] + 's') : '';
         const fileName = type + durTag + '_' + crypto.randomBytes(6).toString('hex') + '.' + fileExt;
-        fs.writeFileSync(path.join(UPLOADS_DIR, fileName), fileBuffer);
+        fs.promises.writeFile(path.join(UPLOADS_DIR, fileName), fileBuffer).catch(function() {});
         finalContent = (type === 'file')
             ? JSON.stringify({ path: '/uploads/' + fileName, name: originalFileName })
             : ('/uploads/' + fileName);
