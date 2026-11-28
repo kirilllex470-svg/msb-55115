@@ -3406,13 +3406,25 @@ body.theme-sunset #register-modal {
     border: 1px solid rgba(255, 255, 255, 0.14);
     display: block;
 }
+@keyframes msbLightWatermarkFloat {
+    0%   { background-position: 0px 0px, 0 0; }
+    100% { background-position: 240px -160px, 0 0; }
+}
+
+html body.theme-neon #messages,
+html body.theme-neon #messenger-modal #messages,
 html body.theme-ocean #messages,
 html body.theme-ocean #messenger-modal #messages,
 html body.theme-sunset #messages,
 html body.theme-sunset #messenger-modal #messages {
-    animation: none !important;
     background-size: 240px 160px, 100% 100% !important;
+    animation: msbLightWatermarkFloat 14s linear infinite !important;
 }
+
+#messenger-modal #messages.is-scrolling {
+    animation-play-state: paused !important;
+}
+
 
 #messenger-modal #messages {
     transform: translateZ(0);
